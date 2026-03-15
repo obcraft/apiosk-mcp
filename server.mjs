@@ -1,9 +1,10 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import {
   ListToolsRequestSchema,
   CallToolRequestSchema
 } from "@modelcontextprotocol/sdk/types.js"
+import express from "express"
 
 const APIOSK_BASE = "https://gateway.apiosk.com/apis/v1"
 
@@ -59,5 +60,17 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   return { content: [{ type: "text", text: "Invalid action" }] }
 })
 
-const transport = new StdioServerTransport()
+const app = express()
+app.use(express.json())
+
+const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined })
 await server.connect(transport)
+
+app.all("/mcp", async (req, res) => {
+  await transport.handleRequest(req, res, req.body)
+})
+
+const PORT = process.env.PORT || 3000
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`MCP server listening on 0.0.0.0:${PORT}`)
+})
