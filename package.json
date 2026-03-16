@@ -1,16 +1,20 @@
 {
-  "name": "apiosk-mcp",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "apiosk-mcp-server",
+  "version": "1.0.1",
+  "description": "MCP server for Apiosk API gateway - explore and execute APIs",
+  "main": "index.mjs",
+  "bin": {
+    "apiosk-mcp": "./index.mjs",
+    "apiosk": "./index.mjs"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node server.mjs",
     "start": "node server.mjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": ["mcp", "apiosk", "api", "model-context-protocol"],
+  "author": "Apiosk",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
