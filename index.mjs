@@ -6,10 +6,11 @@ import {
   CallToolRequestSchema
 } from "@modelcontextprotocol/sdk/types.js"
 
-const APIOSK_BASE = process.env.APIOSK_BASE || "https://gateway.apiosk.com/v1/apis"
+const APIOSK_API_LIST = process.env.APIOSK_API_LIST || "https://gateway.apiosk.com/v1/apis"
+const APIOSK_GATEWAY = process.env.APIOSK_GATEWAY || "https://gateway.apiosk.com"
 
 const server = new Server(
-  { name: "apiosk-mcp", version: "1.0.1" },
+  { name: "apiosk-mcp", version: "1.1.0" },
   { capabilities: { tools: {} } }
 )
 
@@ -28,7 +29,7 @@ async function getApiList() {
   const pageSize = 100
 
   while (true) {
-    const r = await fetch(`${APIOSK_BASE}?limit=${pageSize}&offset=${currentOffset}`)
+    const r = await fetch(`${APIOSK_API_LIST}?limit=${pageSize}&offset=${currentOffset}`)
     const data = await r.json()
     allApis = allApis.concat(data.apis || [])
     if (!data.meta || allApis.length >= data.meta.total) break
@@ -48,14 +49,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
 
 ACTIONS:
 1. list - Browse available APIs (returns: id, name, description, price_usd, category, docs_url)
-2. inspect - Get full details for a specific API including documentation link
-3. execute - Run an API with payload
+2. inspect - Get full details for a specific API including endpoint paths
+3. execute - Run an API endpoint with payload
 
 WORKFLOW:
 1. Use 'list' to find APIs (optionally filter by search/category)
-2. Use 'inspect' with the API id to get details and docs_url
-3. Visit docs_url to understand required payload fields
-4. Use 'execute' with api id and payload to call the API`,
+2. Use 'inspect' with the API id to get details and available endpoints
+3. Use 'execute' with api slug, path, and payload to call the API
+
+EXAMPLE (Zeppay payment link):
+{
+  "action": "execute",
+  "api": "zeppay",
+  "path": "/api/payment-links",
+  "payload": {
+    "amount": "25",
+    "currency": "USD",
+    "destination_wallet": "0x..."
+  }
+}`,
       inputSchema: {
         type: "object",
         properties: {
@@ -71,6 +83,15 @@ WORKFLOW:
           payload: {
             type: "object",
             description: "Request payload for execute. Check docs_url for required fields."
+          },
+          path: {
+            type: "string",
+            description: "Endpoint path for execute (e.g., '/api/payment-links'). Required for execute."
+          },
+          method: {
+            type: "string",
+            enum: ["GET", "POST", "PUT", "DELETE"],
+            description: "HTTP method for execute (default: POST)"
           },
           search: {
             type: "string",
@@ -96,7 +117,7 @@ WORKFLOW:
 }))
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const { action, api, payload, limit, offset, search, category } = req.params.arguments || {}
+  const { action, api, payload, path, method, limit, offset, search, category } = req.params.arguments || {}
 
   try {
     if (action === "list") {
@@ -106,7 +127,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (search) params.set("search", search)
       if (category) params.set("category", category)
 
-      const r = await fetch(`${APIOSK_BASE}?${params}`)
+      const r = await fetch(`${APIOSK_API_LIST}?${params}`)
       const data = await r.json()
 
       const result = {
@@ -140,16 +161,37 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         }
       }
 
+      // Fetch endpoint details from the gateway
+      let endpoints = []
+      try {
+        const endpointRes = await fetch(`${APIOSK_GATEWAY}/${apiInfo.slug}`, {
+          headers: { "Accept": "application/json" }
+        })
+        if (endpointRes.ok) {
+          const endpointData = await endpointRes.json()
+          endpoints = endpointData.endpoints || []
+        }
+      } catch (e) {
+        // Ignore endpoint fetch errors
+      }
+
       const result = {
         ...apiInfo,
-        how_to_execute: {
+        endpoints: endpoints.map(ep => ({
+          method: ep.method,
+          path: ep.path,
+          price_usdc: ep.price_usdc,
+          payment_required: ep.payment_required,
+          full_url: ep.gateway_url
+        })),
+        how_to_execute: endpoints.length > 0 ? {
           action: "execute",
-          api: apiInfo.id,
-          payload: "See docs_url for required fields"
-        },
-        documentation: apiInfo.docs_url,
-        gateway_endpoint: apiInfo.gateway_url,
-        next_steps: `Visit ${apiInfo.docs_url} to see required payload fields, then use 'execute'.`
+          api: apiInfo.slug,
+          path: endpoints.find(e => e.method === "POST")?.path || endpoints[0]?.path,
+          method: "POST",
+          payload: "{ ... }"
+        } : null,
+        documentation: apiInfo.docs_url
       }
 
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
@@ -159,20 +201,35 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
       if (!api) {
         return { content: [{ type: "text", text: "Error: 'api' parameter required for execute" }], isError: true }
       }
+      if (!path) {
+        return { content: [{ type: "text", text: "Error: 'path' parameter required for execute. Use 'inspect' to see available endpoints." }], isError: true }
+      }
 
-      const r = await fetch(`${APIOSK_BASE}/${api}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload || {})
-      })
+      // Build the full gateway URL: https://gateway.apiosk.com/{api_slug}{path}
+      const endpointPath = path.startsWith('/') ? path : `/${path}`
+      const gatewayUrl = `${APIOSK_GATEWAY}/${api}${endpointPath}`
+      const httpMethod = method || "POST"
+
+      const fetchOptions = {
+        method: httpMethod,
+        headers: { "Content-Type": "application/json" }
+      }
+
+      // Only include body for methods that support it
+      if (["POST", "PUT", "PATCH"].includes(httpMethod) && payload) {
+        fetchOptions.body = JSON.stringify(payload)
+      }
+
+      const r = await fetch(gatewayUrl, fetchOptions)
       const text = await r.text()
 
       if (!r.ok) {
         let errorMsg = `Error ${r.status}: ${text || r.statusText}`
-        if (r.status === 401 || r.status === 403) {
-          errorMsg += "\n\nAuthentication failed. Check that owner_wallet is correct."
+        errorMsg += `\n\nRequest: ${httpMethod} ${gatewayUrl}`
+        if (r.status === 402) {
+          errorMsg += "\n\nPayment required. This endpoint requires x402 payment."
         } else if (r.status === 422) {
-          errorMsg += "\n\nValidation error. Check docs_url for required payload fields."
+          errorMsg += "\n\nValidation error. Check the required payload fields."
         }
         return { content: [{ type: "text", text: errorMsg }], isError: true }
       }
@@ -191,7 +248,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         text: `Invalid action '${action}'. Available actions:
 - list: Browse available APIs
 - inspect: Get API details (requires 'api' param)
-- execute: Run an API (requires 'api' and 'payload' with 'owner_wallet')`
+- execute: Run an API endpoint (requires 'api', 'path', and optionally 'payload')`
       }],
       isError: true
     }
