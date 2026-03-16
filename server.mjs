@@ -1,9 +1,7 @@
+import express from "express"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema
-} from "@modelcontextprotocol/sdk/types.js"
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js"
+import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 
 const APIOSK_BASE = "https://gateway.apiosk.com/apis/v1"
 
@@ -15,49 +13,93 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
-      name: "apiosk",
-      description: "Explore and execute APIs via Apiosk",
+      name: "list_apis",
+      description: "List all APIs available on Apiosk. Returns a list of available API slugs and their descriptions.",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    },
+    {
+      name: "inspect_api",
+      description: "Inspect an API and return endpoint documentation, required parameters, and example payload. Always call this before execute_request to understand the API structure.",
       inputSchema: {
         type: "object",
         properties: {
-          action: {
+          api: {
             type: "string",
-            enum: ["list","inspect","execute"]
-          },
-          api: { type: "string" },
-          payload: { type: "object" }
+            description: "The API slug (e.g., 'zeppay-payment-link')"
+          }
         },
-        required: ["action"]
+        required: ["api"]
+      }
+    },
+    {
+      name: "execute_request",
+      description: "Execute an API request through Apiosk. Use inspect_api first to understand required parameters.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          api: {
+            type: "string",
+            description: "The API slug to execute"
+          },
+          payload: {
+            type: "object",
+            description: "The request payload matching the API's required parameters"
+          }
+        },
+        required: ["api"]
       }
     }
   ]
 }))
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const { action, api, payload } = req.params.arguments
+  const toolName = req.params.name
+  const args = req.params.arguments || {}
 
-  if (action === "list") {
+  if (toolName === "list_apis") {
     const r = await fetch(APIOSK_BASE)
-    return { content: [{ type: "text", text: JSON.stringify(await r.json(), null, 2) }] }
+    const data = await r.json()
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
   }
 
-  if (action === "inspect") {
+  if (toolName === "inspect_api") {
+    const { api } = args
+    if (!api) {
+      return { content: [{ type: "text", text: "Error: 'api' parameter is required" }] }
+    }
     const r = await fetch(`${APIOSK_BASE}/${api}`)
-    return { content: [{ type: "text", text: JSON.stringify(await r.json(), null, 2) }] }
+    const data = await r.json()
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
   }
 
-  if (action === "execute") {
+  if (toolName === "execute_request") {
+    const { api, payload } = args
+    if (!api) {
+      return { content: [{ type: "text", text: "Error: 'api' parameter is required" }] }
+    }
     const r = await fetch(`${APIOSK_BASE}/${api}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload || {})
     })
-
-    return { content: [{ type: "text", text: JSON.stringify(await r.json(), null, 2) }] }
+    const data = await r.json()
+    return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
   }
 
-  return { content: [{ type: "text", text: "Invalid action" }] }
+  return { content: [{ type: "text", text: `Unknown tool: ${toolName}` }] }
 })
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+const app = express()
+
+app.get("/mcp", async (req, res) => {
+  const transport = new SSEServerTransport("/mcp", res)
+  await server.connect(transport)
+})
+
+app.listen(3000, () => {
+  console.log("MCP server running on port 3000")
+})
