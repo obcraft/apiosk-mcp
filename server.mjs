@@ -6,7 +6,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import express from "express"
 
-const APIOSK_BASE = "https://gateway.apiosk.com/apis/v1"
+const APIOSK_BASE = "https://gateway.apiosk.com/v1/apis"
 
 function createServer() {
   const server = new Server(
