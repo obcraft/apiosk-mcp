@@ -1,13 +1,25 @@
 # Apiosk MCP Server
 
-MCP server for exploring and executing APIs via the Apiosk gateway.
+Official MCP server for discovering and executing Apiosk APIs.
 
 ## Quick Start
 
-### npx (works immediately)
+### npx
 
 ```bash
 npx -y apiosk-mcp-server
+```
+
+### With automatic x402 payments
+
+```bash
+APIOSK_PRIVATE_KEY=0x... npx -y apiosk-mcp-server
+```
+
+### With dashboard-managed access
+
+```bash
+APIOSK_CONNECT_TOKEN=... npx -y apiosk-mcp-server
 ```
 
 ## Agent Configuration
@@ -21,7 +33,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp"]
+      "args": ["-y", "apiosk-mcp-server"]
     }
   }
 }
@@ -36,7 +48,7 @@ Add to Cursor MCP settings:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp"]
+      "args": ["-y", "apiosk-mcp-server"]
     }
   }
 }
@@ -51,7 +63,7 @@ Add to `~/.windsurf/mcp.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp"]
+      "args": ["-y", "apiosk-mcp-server"]
     }
   }
 }
@@ -59,14 +71,20 @@ Add to `~/.windsurf/mcp.json`:
 
 ### Claude Code
 
-Add to `~/.claude/settings.json`:
+Add with the Claude CLI:
+
+```bash
+claude mcp add --transport http apiosk https://apiosk-mcp.fly.dev/mcp
+```
+
+Or use the local stdio package:
 
 ```json
 {
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp"]
+      "args": ["-y", "apiosk-mcp-server"]
     }
   }
 }
@@ -79,7 +97,7 @@ Add to `~/.claude/settings.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp"]
+      "args": ["-y", "apiosk-mcp-server"]
     }
   }
 }
@@ -100,25 +118,55 @@ Add to `~/.claude/settings.json`:
 
 ## Available Tools
 
-### `apiosk`
+The server exposes:
 
-| Action | Description | Required params |
-|--------|-------------|-----------------|
-| `list` | Get all available APIs | - |
-| `inspect` | Get details for a specific API | `api` |
-| `execute` | Execute an API with payload | `api`, optionally `payload` |
+- `apiosk_search`: browse and filter the public catalog
+- `apiosk_get_api`: fetch listing detail plus agent metadata
+- `apiosk_execute`: generic fallback execute tool
+- one dynamic tool per active Apiosk API slug, using the listing's MCP metadata
 
-**Examples:**
+### Discovery examples
 
 ```json
-{ "action": "list" }
-{ "action": "inspect", "api": "weather" }
-{ "action": "execute", "api": "weather", "payload": { "city": "Amsterdam" } }
+{ "search": "diff", "limit": 5 }
+{ "slug": "agent-json-diff" }
 ```
 
-## Remote HTTP Server
+### Generic execute example
 
-The server is also deployed at `https://apiosk-mcp.fly.dev/mcp` for direct HTTP access.
+```json
+{
+  "slug": "agent-json-diff",
+  "input": {
+    "before": { "ok": true },
+    "after": { "ok": false }
+  }
+}
+```
+
+### Dynamic tool example
+
+If the server lists a dynamic tool named `agent-json-diff`, call it directly with
+the raw tool arguments:
+
+```json
+{
+  "before": { "ok": true },
+  "after": { "ok": false }
+}
+```
+
+## Environment Variables
+
+- `APIOSK_PRIVATE_KEY`: enables automatic x402 retry/payment for paid endpoints
+- `APIOSK_CONNECT_TOKEN`: attach a dashboard-managed connect token
+- `APIOSK_CONNECT_AUTHORIZATION`: attach a custom Authorization header
+- `APIOSK_CONNECT_HEADER_NAME`: override the connect-token header name
+- `APIOSK_WALLET_ADDRESS`: send a wallet address for wallet-aware flows
+- `APIOSK_X_PAYMENT`: attach a pre-built x402 proof manually
+- `APIOSK_GATEWAY`: override the gateway base URL
+
+## Remote HTTP Server
 
 Test it:
 

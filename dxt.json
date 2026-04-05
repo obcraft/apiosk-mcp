@@ -1,7 +1,7 @@
 {
   "name": "apiosk-mcp",
-  "version": "1.0.0",
-  "description": "Explore and execute APIs via Apiosk gateway",
+  "version": "1.1.0",
+  "description": "Official MCP server for browsing and executing Apiosk APIs",
   "author": "Apiosk",
   "license": "MIT",
   "repository": "https://github.com/apiosk/apiosk-mcp",
@@ -11,8 +11,16 @@
   },
   "tools": [
     {
-      "name": "apiosk",
-      "description": "Explore and execute APIs via Apiosk. Actions: list (get all APIs), inspect (get API details), execute (run an API)"
+      "name": "apiosk_search",
+      "description": "Search the Apiosk catalog and discover API-specific dynamic tools."
+    },
+    {
+      "name": "apiosk_get_api",
+      "description": "Get full listing detail and agent metadata for a specific Apiosk slug."
+    },
+    {
+      "name": "apiosk_execute",
+      "description": "Fallback execute tool for any Apiosk API slug."
     }
   ]
 }
