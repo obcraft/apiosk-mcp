@@ -5,12 +5,18 @@ import {
   createApioskMcpServer,
   listApioskTools,
 } from "./create-server.mjs";
+import { createApioskMcpRuntime } from "./runtime.mjs";
 
-const app = createMcpExpressApp();
+// Public Fly deployment must accept the Fly hostname instead of localhost-only
+// host validation defaults.
+const app = createMcpExpressApp({ host: "0.0.0.0" });
+const runtime = createApioskMcpRuntime({
+  enableLocalWallets: process.env.APIOSK_ENABLE_LOCAL_WALLETS === "true",
+});
 
 app.get("/health", async (req, res) => {
   try {
-    const tools = await listApioskTools();
+    const tools = await listApioskTools({ runtime });
     res.json({
       status: "ok",
       server: SERVER_INFO,
@@ -26,7 +32,7 @@ app.get("/health", async (req, res) => {
 });
 
 app.post("/mcp", async (req, res) => {
-  const server = createApioskMcpServer();
+  const server = createApioskMcpServer({ runtime });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });
@@ -88,7 +94,7 @@ app.listen(port, "0.0.0.0", async () => {
   console.log(`Health check: http://0.0.0.0:${port}/health`);
   console.log(`MCP endpoint: http://0.0.0.0:${port}/mcp`);
   try {
-    const tools = await listApioskTools();
+    const tools = await listApioskTools({ runtime });
     console.log(`Loaded ${tools.length} tools from the Apiosk catalog.`);
   } catch (error) {
     console.warn(

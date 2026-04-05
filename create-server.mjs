@@ -7,16 +7,19 @@ import { createApioskMcpRuntime } from "./runtime.mjs";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.1.0",
+  version: "1.2.0",
 };
 
-const runtime = createApioskMcpRuntime();
-
-export async function listApioskTools() {
-  return runtime.listTools();
+function resolveRuntime(options = {}) {
+  return options.runtime || createApioskMcpRuntime(options);
 }
 
-export function createApioskMcpServer() {
+export async function listApioskTools(options = {}) {
+  return resolveRuntime(options).listTools();
+}
+
+export function createApioskMcpServer(options = {}) {
+  const runtime = resolveRuntime(options);
   const server = new Server(
     SERVER_INFO,
     { capabilities: { tools: {} } }

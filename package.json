@@ -1,14 +1,15 @@
 {
   "name": "apiosk-mcp-server",
-  "version": "1.1.0",
-  "description": "Official MCP server for browsing and executing Apiosk APIs",
+  "version": "1.2.0",
+  "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
   "main": "index.mjs",
   "bin": {
     "apiosk-mcp": "./index.mjs",
     "apiosk": "./index.mjs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "smoke:new-env": "bash scripts/smoke-new-env.sh",
+    "test": "node --test",
     "dev": "node server.mjs",
     "start": "node server.mjs"
   },
@@ -20,6 +21,8 @@
     "@apiosk/sdk": "file:../sdk-js",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "express": "^5.2.1",
+    "qrcode": "^1.5.4",
+    "viem": "^2.47.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

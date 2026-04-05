@@ -1,7 +1,7 @@
 {
   "name": "apiosk-mcp",
-  "version": "1.1.0",
-  "description": "Official MCP server for browsing and executing Apiosk APIs",
+  "version": "1.2.0",
+  "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
   "author": "Apiosk",
   "license": "MIT",
   "repository": "https://github.com/apiosk/apiosk-mcp",
@@ -10,6 +10,10 @@
     "args": ["index.mjs"]
   },
   "tools": [
+    {
+      "name": "apiosk_explore",
+      "description": "Browse Apiosk listing groups before narrowing with search."
+    },
     {
       "name": "apiosk_search",
       "description": "Search the Apiosk catalog and discover API-specific dynamic tools."
@@ -21,6 +25,18 @@
     {
       "name": "apiosk_execute",
       "description": "Fallback execute tool for any Apiosk API slug."
+    },
+    {
+      "name": "apiosk_wallet_create",
+      "description": "Create or import a local wallet for autonomous pay and publish flows."
+    },
+    {
+      "name": "apiosk_configure",
+      "description": "Show a structured wallet funding and Apiosk management menu, including QR output when available."
+    },
+    {
+      "name": "apiosk_publish_api",
+      "description": "Publish an API directly to Apiosk with signed wallet auth."
     }
   ]
 }
