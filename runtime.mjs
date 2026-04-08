@@ -4,6 +4,13 @@ import { privateKeyToAccount } from "viem/accounts";
 import { buildFundingOptions } from "./funding-options.mjs";
 import { requestGatewayManagement } from "./gateway-management.mjs";
 import { buildListingMetadata, resolveCategory } from "./listing-metadata.mjs";
+import {
+  createApioskLocalConfigPaths,
+  parseConnectString,
+  readLocalApioskConfig,
+  saveLocalApioskDashboardSession,
+  saveLocalApioskConfig,
+} from "./local-config.mjs";
 import { createLocalWalletStore } from "./wallet-store.mjs";
 
 const DEFAULT_LIMIT = 25;
@@ -160,6 +167,66 @@ const DASHBOARD_WALLET_TOOLS = [
   },
 ];
 
+const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
+  {
+    name: "apiosk_create_account",
+    description:
+      "Create an Apiosk dashboard account for credits-based payments. Local stdio only; saves the returned dashboard session token locally when available.",
+    inputSchema: {
+      type: "object",
+      required: ["email", "password"],
+      properties: {
+        email: { type: "string" },
+        password: { type: "string" },
+        save_session: {
+          type: "boolean",
+          description: "Defaults to true when a session token is returned immediately.",
+        },
+      },
+    },
+  },
+  {
+    name: "apiosk_sign_in",
+    description:
+      "Sign into an existing Apiosk dashboard account and save the session token locally for credits and managed-wallet tools.",
+    inputSchema: {
+      type: "object",
+      required: ["email", "password"],
+      properties: {
+        email: { type: "string" },
+        password: { type: "string" },
+        save_session: {
+          type: "boolean",
+          description: "Defaults to true.",
+        },
+      },
+    },
+  },
+  {
+    name: "apiosk_buy_credits",
+    description:
+      "Create an Adyen payment link so a human can top up the signed-in user's Apiosk credits balance. Returns the checkout URL to open in a browser.",
+    inputSchema: {
+      type: "object",
+      required: ["amount_eur"],
+      properties: {
+        amount_eur: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "apiosk_get_credits_status",
+    description:
+      "Refresh pending Adyen credit top-ups and return the current credits balance plus any remaining pending payment links.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        payment_intent_id: { type: "string" },
+      },
+    },
+  },
+];
+
 const LOCAL_WALLET_TOOLS = [
   {
     name: "apiosk_wallet_list",
@@ -210,6 +277,62 @@ const LOCAL_WALLET_TOOLS = [
         include_qr_data_url: {
           type: "boolean",
           description: "Include a QR data URL alongside the terminal QR when the client can render images.",
+        },
+      },
+    },
+  },
+  {
+    name: "apiosk_get_started",
+    description: "Set up local Apiosk access by importing a connect string or creating/selecting a wallet, then run a discovery probe and a small test call.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        connect_string: {
+          type: "string",
+          description: "Optional dashboard connect string to save locally for managed access.",
+        },
+        connect_token: {
+          type: "string",
+          description: "Optional connect token to save locally when you do not have the full connect string.",
+        },
+        connect_authorization: {
+          type: "string",
+          description: "Optional Authorization header value to save alongside a managed connect token.",
+        },
+        connect_header_name: {
+          type: "string",
+          description: "Optional connect header override. Defaults to X-Apiosk-Connect-Token.",
+        },
+        wallet_address: {
+          type: "string",
+          description: "Optional wallet address to save with a managed connect token.",
+        },
+        wallet_id: {
+          type: "string",
+          description: "Optional existing local wallet id to select before running the test call.",
+        },
+        wallet_label: {
+          type: "string",
+          description: "Label to use if a new local wallet must be created. Defaults to Apiosk wallet.",
+        },
+        create_wallet: {
+          type: "boolean",
+          description: "Defaults to true when no managed connect token is configured.",
+        },
+        test_slug: {
+          type: "string",
+          description: "Optional API slug for the test call. Defaults to the first discovered API.",
+        },
+        test_operation: {
+          type: "string",
+          description: "Optional explicit operation for the test call.",
+        },
+        test_input: {
+          description: "Optional JSON input for the test call. Defaults to an empty object.",
+        },
+        include_qr_data_url: {
+          type: "boolean",
+          description: "Include QR image data when funding instructions are returned.",
         },
       },
     },
@@ -589,21 +712,77 @@ function buildDynamicTools(catalog, reservedTools) {
   return { tools, toolIndex };
 }
 
-function resolveDashboardUserToken(env = process.env) {
+function resolveDashboardUserToken(env = process.env, savedConfig = null) {
   return trimString(
     env.APIOSK_DASHBOARD_JWT ||
       env.APIOSK_USER_JWT ||
       env.APIOSK_AUTH_HEADER_VALUE ||
-      env.APIOSK_SESSION_TOKEN
+      env.APIOSK_SESSION_TOKEN ||
+      savedConfig?.dashboard_session_token
   );
 }
 
-function resolveDashboardUrl(env = process.env) {
-  return trimString(env.APIOSK_DASHBOARD_URL || "https://dashboard.apiosk.com").replace(/\/+$/, "");
+function resolveControlPlaneUrl(env = process.env, savedConfig = null) {
+  return trimString(
+    env.APIOSK_CONTROL_PLANE_URL || savedConfig?.control_plane_url || "https://mcp.apiosk.com"
+  ).replace(
+    /\/+$/,
+    ""
+  );
 }
 
-function resolveGatewayBaseUrl(env = process.env) {
-  return trimString(env.APIOSK_GATEWAY || DEFAULT_GATEWAY_BASE_URL).replace(/\/+$/, "");
+function resolveGatewayBaseUrl(env = process.env, savedConfig = null) {
+  return trimString(env.APIOSK_GATEWAY || savedConfig?.gateway_url || DEFAULT_GATEWAY_BASE_URL).replace(
+    /\/+$/,
+    ""
+  );
+}
+
+function summarizeSavedConnectConfig(savedConfig = null, env = process.env) {
+  if (!savedConfig) return null;
+
+  return {
+    gateway_url: trimString(savedConfig.gateway_url || DEFAULT_GATEWAY_BASE_URL),
+    agent_wallet_address: trimString(savedConfig.agent_wallet_address || ""),
+    connect_header_name: trimString(savedConfig.connect_header_name || "X-Apiosk-Connect-Token"),
+    connect_token_saved: Boolean(trimString(savedConfig.connect_token)),
+    connect_authorization_saved:
+      Boolean(trimString(savedConfig.connect_authorization || env.APIOSK_CONNECT_AUTHORIZATION)),
+  };
+}
+
+function buildAuthState({ env = process.env, savedConfig = null, activeWallet = null } = {}) {
+  const envConnectToken = trimString(env.APIOSK_CONNECT_TOKEN);
+  const savedConnectToken = trimString(savedConfig?.connect_token);
+  const envAuthorization = trimString(env.APIOSK_CONNECT_AUTHORIZATION);
+  const savedAuthorization = trimString(savedConfig?.connect_authorization);
+  const envWalletAddress = trimString(env.APIOSK_WALLET_ADDRESS).toLowerCase();
+  const savedWalletAddress = trimString(savedConfig?.agent_wallet_address).toLowerCase();
+
+  let mode = "none";
+  if (envConnectToken || savedConnectToken) {
+    mode = "connect_token";
+  } else if (envAuthorization || savedAuthorization) {
+    mode = "authorization";
+  } else if (trimString(env.APIOSK_PRIVATE_KEY)) {
+    mode = "env_private_key";
+  } else if (activeWallet?.source === "local_store") {
+    mode = "local_wallet";
+  } else if (envWalletAddress || savedWalletAddress || activeWallet?.address) {
+    mode = "wallet_address";
+  }
+
+  return {
+    mode,
+    connect_token_configured: Boolean(envConnectToken || savedConnectToken),
+    authorization_configured: Boolean(envAuthorization || savedAuthorization),
+    wallet_address:
+      activeWallet?.address ||
+      envWalletAddress ||
+      savedWalletAddress ||
+      null,
+    gateway_url: resolveGatewayBaseUrl(env, savedConfig),
+  };
 }
 
 function pickMessage(payload, fallback) {
@@ -619,8 +798,12 @@ function pickMessage(payload, fallback) {
   return fallback;
 }
 
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
 function createDashboardWalletManagerFromEnv(env = process.env) {
-  const dashboardUrl = resolveDashboardUrl(env);
+  const dashboardUrl = resolveControlPlaneUrl(env);
   const token = resolveDashboardUserToken(env);
 
   return {
@@ -712,6 +895,9 @@ function buildHelpPayload(topic = "overview", options = {}) {
           : "Wallet and publish tools are disabled in this server mode unless local wallets are enabled",
       ],
       next_steps: [
+        localWalletsEnabled
+          ? "Use apiosk_get_started first to save a connect string or create a wallet and run a test call"
+          : "Start with apiosk_search or apiosk_explore to discover APIs",
         "Use apiosk_explore or apiosk_search to find an API",
         "Use apiosk_get_api to inspect detail and metadata",
         "Use the API-specific dynamic tool or apiosk_execute to call it",
@@ -724,14 +910,16 @@ function buildHelpPayload(topic = "overview", options = {}) {
       topic: "setup",
       summary: "Connect Apiosk MCP over remote HTTP or local stdio.",
       claude_code: [
-        "Remote HTTP: claude mcp add --transport http apiosk https://apiosk-mcp.fly.dev/mcp",
+        "Remote HTTP: claude mcp add --transport http apiosk https://mcp.apiosk.com/mcp",
         "Verify: claude mcp get apiosk",
       ],
       local_stdio: [
         "npx -y apiosk-mcp-server",
         "Or add a stdio config that runs npx -y apiosk-mcp-server",
+        "Then call apiosk_get_started to save a managed connect string or create a local wallet and run a test call",
+        "Use apiosk_create_account or apiosk_sign_in when you want a human to fund credits through Adyen and let the agent spend those credits later",
       ],
-      endpoint: "https://apiosk-mcp.fly.dev/mcp",
+      endpoint: "https://mcp.apiosk.com/mcp",
       local_wallet_note:
         "Local wallet creation, secret export, and publish tools are intended for the local stdio package. The public HTTP deployment keeps them disabled by default.",
     },
@@ -746,6 +934,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "APIOSK_WALLET_ADDRESS: wallet-aware flows without a token",
         "APIOSK_X_PAYMENT: manually attach a prebuilt x402 proof",
         "APIOSK_DASHBOARD_JWT or APIOSK_USER_JWT: unlock dashboard-managed wallet CRUD tools",
+        "Saved local dashboard session from apiosk_sign_in or apiosk_create_account: reuse credits and managed-wallet tools without exporting a JWT manually",
       ],
       notes: [
         "Connect token is the simplest managed option",
@@ -757,6 +946,9 @@ function buildHelpPayload(topic = "overview", options = {}) {
       topic: "workflow",
       summary: "Recommended usage pattern for agents working with Apiosk.",
       steps: [
+        localWalletsEnabled
+          ? "Call apiosk_get_started first when you want the MCP package to configure local auth and prove the setup with a test call"
+          : "Call apiosk_search or apiosk_explore to find a capability",
         "Call apiosk_explore to browse listing groups or apiosk_search to find a capability",
         "Read tool_name from search results when a dynamic tool is available",
         "Call apiosk_get_api when you need detail, docs_url, or listing metadata",
@@ -777,15 +969,18 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "The MCP server surfaces payment errors with hints that explain how to configure settlement",
       ],
       recommended_setup: [
+        "Use apiosk_get_started in the local stdio package for the shortest path from install to first paid-capable call",
         "Use apiosk_wallet_create and apiosk_wallet_select in the local stdio package for the cleanest autonomous workflow",
         "Use APIOSK_PRIVATE_KEY when you want deterministic wallet selection from environment variables",
         "Use APIOSK_CONNECT_TOKEN when access is managed in the dashboard",
+        "Use apiosk_buy_credits when a human should fund usage once through Adyen and let the agent keep spending from a credits balance",
       ],
     },
     wallets: {
       topic: "wallets",
       summary: "Local wallet tools let Claude or Codex create, select, reveal, and save wallet secrets without opening the dashboard.",
       tools: [
+        "apiosk_get_started",
         "apiosk_wallet_create",
         "apiosk_configure",
         "apiosk_wallet_list",
@@ -897,7 +1092,8 @@ function resolveEnvPrivateWallet(env = process.env) {
 export function createApioskMcpRuntime(options = {}) {
   const env = options.env || process.env;
   const fixedClient = options.client || null;
-  const walletManager = options.walletManager || createDashboardWalletManagerFromEnv(env);
+  const clientFactory = options.clientFactory || null;
+  const providedDashboardManager = options.walletManager || null;
   const localWalletStore =
     options.localWalletStore ||
     (options.enableLocalWallets === false ? null : createLocalWalletStore(env));
@@ -921,37 +1117,109 @@ export function createApioskMcpRuntime(options = {}) {
     return localWalletStore.resolveSigningWallet();
   }
 
+  async function getSavedConfig() {
+    return readLocalApioskConfig(env);
+  }
+
+  function hasConfiguredDashboardAccess() {
+    if (providedDashboardManager?.isConfigured) {
+      return Boolean(providedDashboardManager.isConfigured());
+    }
+
+    return Boolean(resolveDashboardUserToken(env));
+  }
+
+  async function requestDashboard(path, init = {}, options = {}) {
+    const requireAuth = options.requireAuth !== false;
+
+    if (providedDashboardManager) {
+      return providedDashboardManager.request(path, init);
+    }
+
+    const savedConfig = await getSavedConfig();
+    const dashboardUrl = resolveControlPlaneUrl(env, savedConfig);
+    const token = resolveDashboardUserToken(env, savedConfig);
+
+    if (requireAuth && !token) {
+      throw new Error(
+        "This tool needs an Apiosk dashboard session. Ask whether the user wants an account, then call apiosk_create_account or apiosk_sign_in. If they already have an account, sign in first or set APIOSK_DASHBOARD_JWT / APIOSK_USER_JWT."
+      );
+    }
+
+    const headers = new Headers(init.headers || {});
+    headers.set("accept", "application/json");
+
+    if (token) {
+      headers.set("x-apiosk-user-jwt", token);
+      headers.set("authorization", `Bearer ${token}`);
+    }
+
+    let body = init.body;
+    if (body !== undefined && body !== null && typeof body !== "string") {
+      headers.set("content-type", "application/json");
+      body = JSON.stringify(body);
+    }
+
+    const response = await fetch(`${dashboardUrl}${path}`, {
+      ...init,
+      body,
+      cache: "no-store",
+      headers,
+    });
+
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = text || null;
+    }
+
+    if (!response.ok) {
+      throw new Error(pickMessage(payload, `Dashboard request failed with HTTP ${response.status}`));
+    }
+
+    return payload;
+  }
+
   async function getClient() {
     if (fixedClient) {
       return fixedClient;
     }
 
+    const savedConfig = await getSavedConfig();
     const activeWallet = await getActiveExecutionWallet();
     const envWalletAddress = trimString(env.APIOSK_WALLET_ADDRESS).toLowerCase();
+    const savedWalletAddress = trimString(savedConfig?.agent_wallet_address).toLowerCase();
     const privateKey = activeWallet?.private_key || normalizePrivateKeyHex(env.APIOSK_PRIVATE_KEY) || undefined;
     const walletAddress = privateKey
       ? activeWallet?.address
-      : envWalletAddress || activeWallet?.address;
-
-    return new ApioskClient({
-      baseUrl: resolveGatewayBaseUrl(env),
-      connectToken: trimString(env.APIOSK_CONNECT_TOKEN) || undefined,
-      connectHeaderName: trimString(env.APIOSK_CONNECT_HEADER_NAME) || undefined,
-      authorization: trimString(env.APIOSK_CONNECT_AUTHORIZATION) || undefined,
+      : envWalletAddress || activeWallet?.address || savedWalletAddress;
+    const clientOptions = {
+      baseUrl: resolveGatewayBaseUrl(env, savedConfig),
+      connectToken: trimString(env.APIOSK_CONNECT_TOKEN || savedConfig?.connect_token) || undefined,
+      connectHeaderName:
+        trimString(env.APIOSK_CONNECT_HEADER_NAME || savedConfig?.connect_header_name) || undefined,
+      authorization:
+        trimString(env.APIOSK_CONNECT_AUTHORIZATION || savedConfig?.connect_authorization) || undefined,
       walletAddress: walletAddress || undefined,
       xPayment: trimString(env.APIOSK_X_PAYMENT) || undefined,
       privateKey,
-    });
+    };
+
+    if (clientFactory) {
+      return await clientFactory(clientOptions);
+    }
+
+    return new ApioskClient(clientOptions);
   }
 
   function getStaticTools() {
     const tools = [...DISCOVERY_TOOLS];
 
     if (localWalletStore) {
-      tools.push(...LOCAL_WALLET_TOOLS, ...PUBLISH_TOOLS);
-    }
-
-    if (walletManager.isConfigured()) {
+      tools.push(...LOCAL_WALLET_TOOLS, ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS, ...DASHBOARD_WALLET_TOOLS, ...PUBLISH_TOOLS);
+    } else if (hasConfiguredDashboardAccess()) {
       tools.push(...DASHBOARD_WALLET_TOOLS);
     }
 
@@ -1040,6 +1308,11 @@ export function createApioskMcpRuntime(options = {}) {
           id: "wallet",
           label: "Wallet",
           options: [
+            {
+              label: "Get started",
+              tool: "apiosk_get_started",
+              arguments: buildWalletToolArguments(wallet, {}),
+            },
             {
               label: "List wallets",
               tool: "apiosk_wallet_list",
@@ -1213,7 +1486,7 @@ export function createApioskMcpRuntime(options = {}) {
       wallet: {
         wallet,
         local_wallet_tools_enabled: Boolean(localWalletStore),
-        dashboard_wallet_tools_enabled: walletManager.isConfigured(),
+        dashboard_wallet_tools_enabled: hasConfiguredDashboardAccess(),
       },
       payments: {
         wallet,
@@ -1394,13 +1667,169 @@ export function createApioskMcpRuntime(options = {}) {
     );
   }
 
+  function ensureLocalDashboardSessionTools(toolName) {
+    if (!localWalletStore) {
+      return errorContent(
+        `${toolName} is only available in the local stdio package because it stores dashboard session state on the local machine.`
+      );
+    }
+
+    return null;
+  }
+
+  async function handleCreateAccount(argumentsObject = {}) {
+    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_create_account");
+    if (localOnlyError) return localOnlyError;
+
+    const email = trimString(argumentsObject.email);
+    const password = trimString(argumentsObject.password);
+
+    if (!email) return errorContent("Missing required field: email");
+    if (!password) return errorContent("Missing required field: password");
+
+    const payload = await requestDashboard(
+      "/api/auth/mcp-sign-up",
+      {
+        method: "POST",
+        body: { email, password },
+      },
+      { requireAuth: false }
+    );
+    const record = asObject(payload) || {};
+
+    let savedSession = false;
+    if (typeof record.session_token === "string" && record.session_token.trim() && argumentsObject.save_session !== false) {
+      await saveLocalApioskDashboardSession(
+        {
+          session_token: record.session_token,
+          expires_at: record.expires_at,
+          email,
+          control_plane_url: resolveControlPlaneUrl(env),
+          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://apiosk.com"),
+        },
+        env
+      );
+      savedSession = true;
+    }
+
+    return content({
+      ...record,
+      saved_session: savedSession,
+      local_config_paths: createApioskLocalConfigPaths(env),
+      next_steps:
+        record.email_confirmation_required ?
+          [
+            "Tell the user to confirm their email from the Supabase/Apiosk email they just received.",
+            "After confirmation, call apiosk_sign_in and then apiosk_buy_credits.",
+          ] :
+          [
+            "Call apiosk_buy_credits to create an Adyen payment link.",
+            "After the human pays, call apiosk_get_credits_status to confirm the credits landed.",
+          ],
+    });
+  }
+
+  async function handleSignIn(argumentsObject = {}) {
+    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_sign_in");
+    if (localOnlyError) return localOnlyError;
+
+    const email = trimString(argumentsObject.email);
+    const password = trimString(argumentsObject.password);
+
+    if (!email) return errorContent("Missing required field: email");
+    if (!password) return errorContent("Missing required field: password");
+
+    const payload = await requestDashboard(
+      "/api/auth/mcp-sign-in",
+      {
+        method: "POST",
+        body: { email, password },
+      },
+      { requireAuth: false }
+    );
+    const record = asObject(payload) || {};
+
+    let savedSession = false;
+    if (typeof record.session_token === "string" && record.session_token.trim() && argumentsObject.save_session !== false) {
+      await saveLocalApioskDashboardSession(
+        {
+          session_token: record.session_token,
+          expires_at: record.expires_at,
+          email,
+          control_plane_url: resolveControlPlaneUrl(env),
+          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://apiosk.com"),
+        },
+        env
+      );
+      savedSession = true;
+    }
+
+    return content({
+      ...record,
+      saved_session: savedSession,
+      local_config_paths: createApioskLocalConfigPaths(env),
+      next_steps: [
+        "Call apiosk_buy_credits to create an Adyen payment link.",
+        "After the human pays, call apiosk_get_credits_status to reconcile pending top-ups and confirm the balance.",
+      ],
+    });
+  }
+
+  async function handleBuyCredits(argumentsObject = {}) {
+    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_buy_credits");
+    if (localOnlyError) return localOnlyError;
+
+    const amountEur = Number(argumentsObject.amount_eur);
+    if (!Number.isFinite(amountEur) || amountEur <= 0) {
+      return errorContent("amount_eur must be a positive number");
+    }
+
+    const payload = await requestDashboard("/api/credits/topup", {
+      method: "POST",
+      body: {
+        amount_eur: amountEur,
+      },
+    });
+    const record = asObject(payload) || {};
+
+    return content({
+      ...record,
+      payment_url: typeof record.checkout_url === "string" ? record.checkout_url : null,
+      instructions: [
+        "Open payment_url in a browser and complete the Adyen checkout.",
+        "After payment, call apiosk_get_credits_status with the payment_intent_id to confirm the credits landed.",
+      ],
+    });
+  }
+
+  async function handleCreditsStatus(argumentsObject = {}) {
+    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_get_credits_status");
+    if (localOnlyError) return localOnlyError;
+
+    const paymentIntentId = trimString(argumentsObject.payment_intent_id);
+    const body = paymentIntentId ? { payment_intent_id: paymentIntentId } : {};
+    const payload = await requestDashboard("/api/credits/reconcile", {
+      method: "POST",
+      body,
+    });
+    const record = asObject(payload) || {};
+
+    return content({
+      ...record,
+      summary:
+        Number(record.reconciled || 0) > 0 ?
+          "At least one pending credit top-up was reconciled successfully." :
+          "Checked pending credit top-ups and returned the current balance.",
+    });
+  }
+
   async function handleWalletList() {
-    return content(await walletManager.request("/api/agent-wallets"));
+    return content(await requestDashboard("/api/agent-wallets"));
   }
 
   async function handleWalletCreate(argumentsObject = {}) {
     return content(
-      await walletManager.request("/api/agent-wallets", {
+      await requestDashboard("/api/agent-wallets", {
         method: "POST",
         body: argumentsObject,
       })
@@ -1414,7 +1843,7 @@ export function createApioskMcpRuntime(options = {}) {
 
     const { wallet_id, ...updates } = argumentsObject;
     return content(
-      await walletManager.request(`/api/agent-wallets/${wallet_id}`, {
+      await requestDashboard(`/api/agent-wallets/${wallet_id}`, {
         method: "PATCH",
         body: updates,
       })
@@ -1427,7 +1856,7 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     return content(
-      await walletManager.request(`/api/agent-wallets/${argumentsObject.wallet_id}`, {
+      await requestDashboard(`/api/agent-wallets/${argumentsObject.wallet_id}`, {
         method: "DELETE",
       })
     );
@@ -1444,7 +1873,7 @@ export function createApioskMcpRuntime(options = {}) {
     const query = params.toString();
 
     return content(
-      await walletManager.request(
+      await requestDashboard(
         `/api/agent-wallets/${argumentsObject.wallet_id}/transactions${query ? `?${query}` : ""}`
       )
     );
@@ -1457,7 +1886,7 @@ export function createApioskMcpRuntime(options = {}) {
 
     const { wallet_id, ...body } = argumentsObject;
     return content(
-      await walletManager.request(`/api/agent-wallets/${wallet_id}/connect-string`, {
+      await requestDashboard(`/api/agent-wallets/${wallet_id}/connect-string`, {
         method: "POST",
         body,
       })
@@ -1470,7 +1899,7 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     return content(
-      await walletManager.request(`/api/agent-wallets/${argumentsObject.wallet_id}/api-keys`)
+      await requestDashboard(`/api/agent-wallets/${argumentsObject.wallet_id}/api-keys`)
     );
   }
 
@@ -1481,7 +1910,7 @@ export function createApioskMcpRuntime(options = {}) {
 
     const { wallet_id, ...body } = argumentsObject;
     return content(
-      await walletManager.request(`/api/agent-wallets/${wallet_id}/api-keys`, {
+      await requestDashboard(`/api/agent-wallets/${wallet_id}/api-keys`, {
         method: "POST",
         body,
       })
@@ -1498,7 +1927,7 @@ export function createApioskMcpRuntime(options = {}) {
 
     const { wallet_id, key_id, ...body } = argumentsObject;
     return content(
-      await walletManager.request(`/api/agent-wallets/${wallet_id}/api-keys/${key_id}`, {
+      await requestDashboard(`/api/agent-wallets/${wallet_id}/api-keys/${key_id}`, {
         method: "PATCH",
         body,
       })
@@ -1514,7 +1943,7 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     return content(
-      await walletManager.request(
+      await requestDashboard(
         `/api/agent-wallets/${argumentsObject.wallet_id}/api-keys/${argumentsObject.key_id}`,
         { method: "DELETE" }
       )
@@ -1560,6 +1989,211 @@ export function createApioskMcpRuntime(options = {}) {
 
   async function handleConfigure(argumentsObject = {}) {
     return content(await buildConfigurePayload(argumentsObject));
+  }
+
+  async function handleGetStarted(argumentsObject = {}) {
+    if (!localWalletStore) {
+      return errorContent(
+        "apiosk_get_started is only available in the local stdio package because it saves wallet and connect-token state on the local machine."
+      );
+    }
+
+    let savedConfig = await getSavedConfig();
+    let savedConnectConfig = summarizeSavedConnectConfig(savedConfig, env);
+    let createdWallet = null;
+    let selectedWallet = null;
+
+    if (trimString(argumentsObject.connect_string)) {
+      const parsed = parseConnectString(argumentsObject.connect_string);
+      await saveLocalApioskConfig(
+        {
+          gateway_url: parsed.gateway_url,
+          chain_id: parsed.chain_id,
+          wallet_address: parsed.wallet_address,
+          connect_token: parsed.connect_token,
+          connect_authorization: parsed.connect_authorization,
+          connect_header_name: parsed.connect_header_name,
+          daily_limit_usdc: parsed.daily_limit_usdc,
+          per_request_limit_usdc: parsed.per_request_limit_usdc,
+        },
+        env
+      );
+      savedConfig = await getSavedConfig();
+      savedConnectConfig = summarizeSavedConnectConfig(savedConfig, env);
+    } else if (
+      trimString(argumentsObject.connect_token) ||
+      trimString(argumentsObject.connect_authorization)
+    ) {
+      await saveLocalApioskConfig(
+        {
+          gateway_url: resolveGatewayBaseUrl(env, savedConfig),
+          chain_id: savedConfig?.chain_id || 8453,
+          wallet_address:
+            trimString(argumentsObject.wallet_address) ||
+            trimString(savedConfig?.agent_wallet_address),
+          connect_token:
+            trimString(argumentsObject.connect_token) || trimString(savedConfig?.connect_token),
+          connect_authorization:
+            trimString(argumentsObject.connect_authorization) ||
+            trimString(savedConfig?.connect_authorization),
+          connect_header_name:
+            trimString(argumentsObject.connect_header_name) ||
+            trimString(savedConfig?.connect_header_name) ||
+            "X-Apiosk-Connect-Token",
+          daily_limit_usdc: savedConfig?.daily_limit_usdc,
+          per_request_limit_usdc: savedConfig?.per_request_limit_usdc,
+        },
+        env
+      );
+      savedConfig = await getSavedConfig();
+      savedConnectConfig = summarizeSavedConnectConfig(savedConfig, env);
+    }
+
+    if (trimString(argumentsObject.wallet_id)) {
+      const selected = await localWalletStore.selectWallet(trimString(argumentsObject.wallet_id));
+      selectedWallet = selected.wallet;
+    }
+
+    let activeWallet = await resolveConfigurationWallet(argumentsObject.wallet_id);
+    let authState = buildAuthState({ env, savedConfig, activeWallet });
+
+    if (authState.mode === "none" && argumentsObject.create_wallet !== false) {
+      const created = await localWalletStore.createWallet({
+        label: trimString(argumentsObject.wallet_label) || "Apiosk wallet",
+        set_active: true,
+      });
+      createdWallet = created.wallet;
+      activeWallet = await resolveConfigurationWallet(created.wallet.id);
+      authState = buildAuthState({ env, savedConfig, activeWallet });
+    }
+
+    if (authState.mode === "none") {
+      return errorContent({
+        error:
+          "No Apiosk payment or access method is configured yet. Provide a connect string or allow apiosk_get_started to create a local wallet.",
+        local_config_paths: createApioskLocalConfigPaths(env),
+        next_steps: [
+          "Call apiosk_get_started with connect_string from the dashboard, or set create_wallet=true.",
+          "If you already manage auth outside the MCP package, set APIOSK_PRIVATE_KEY or APIOSK_CONNECT_TOKEN in the MCP environment.",
+        ],
+      });
+    }
+
+    const client = await getClient();
+    const discoveryResponse = await client.listApis({ limit: 5, offset: 0 });
+    await getTools(true);
+
+    const discoveredApis = (discoveryResponse.apis || []).map((api) =>
+      buildCatalogEntry(api, cache.toolNamesBySlug.get(api.slug) || null)
+    );
+    const testSlug =
+      trimString(argumentsObject.test_slug) ||
+      discoveredApis.find((api) => api.slug)?.slug ||
+      null;
+    const testInput =
+      Object.prototype.hasOwnProperty.call(argumentsObject, "test_input") ?
+        argumentsObject.test_input :
+        {};
+
+    let metadata = null;
+    if (testSlug) {
+      metadata = await client.getMetadata(testSlug).catch((error) => ({
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
+
+    let status = "configured";
+    let summary =
+      "Apiosk is configured locally. Discovery worked, but the test execute call still needs a specific slug or input payload.";
+    let executeResult = null;
+    let executeError = null;
+    let configure = null;
+
+    if (testSlug) {
+      try {
+        executeResult = await client.execute(testSlug, testInput, {
+          operation: argumentsObject.test_operation,
+        });
+        status = "ready";
+        summary = `Apiosk is configured and the test call to ${testSlug} succeeded.`;
+      } catch (error) {
+        if (error instanceof ApioskPaymentRequiredError) {
+          status = "needs_funding";
+          summary =
+            "Apiosk is configured, but the first paid execute call still needs wallet funding or a managed wallet with spend available.";
+          executeError = {
+            error: error.message,
+            payment_required: error.paymentRequired,
+          };
+          if (activeWallet?.source === "local_store" && activeWallet?.id) {
+            configure = await buildConfigurePayload({
+              wallet_id: activeWallet.id,
+              section: "funding",
+              include_qr_data_url: argumentsObject.include_qr_data_url,
+            });
+          }
+        } else {
+          executeError = {
+            error: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+    }
+
+    if (!configure && activeWallet?.source === "local_store" && activeWallet?.id) {
+      configure = await buildConfigurePayload({
+        wallet_id: activeWallet.id,
+        section: "overview",
+        include_qr_data_url: argumentsObject.include_qr_data_url,
+      });
+    }
+
+    const nextSteps = [];
+    if (status === "ready") {
+      nextSteps.push(
+        "Call the API-specific dynamic tool from discovery, or use apiosk_execute with a different slug.",
+        "Use apiosk_publish_api when you want to list your own API behind the gateway."
+      );
+    } else if (status === "needs_funding") {
+      nextSteps.push(
+        "Fund the selected local wallet, then rerun apiosk_get_started or retry the API-specific tool.",
+        "If you prefer managed access, import a dashboard connect string into apiosk_get_started instead of using a local wallet."
+      );
+    } else {
+      nextSteps.push(
+        "Provide test_slug and test_input to apiosk_get_started if you want a more representative first execute call.",
+        "Use apiosk_get_api on one of the discovered slugs to inspect its metadata and input shape before retrying."
+      );
+    }
+
+    return content({
+      status,
+      summary,
+      auth: {
+        ...authState,
+        saved_connect_config: savedConnectConfig,
+        local_config_paths: createApioskLocalConfigPaths(env),
+      },
+      setup: {
+        created_wallet: createdWallet,
+        selected_wallet: selectedWallet,
+        active_wallet: activeWallet,
+      },
+      discovery: {
+        apis: discoveredApis,
+        meta: discoveryResponse.meta || null,
+      },
+      test: {
+        slug: testSlug,
+        operation: trimString(argumentsObject.test_operation) || null,
+        input: testInput,
+        metadata,
+        result: executeResult,
+        error: executeError,
+      },
+      configure,
+      next_steps: nextSteps,
+    });
   }
 
   async function handleLocalWalletSelect(argumentsObject = {}) {
@@ -1818,6 +2452,7 @@ export function createApioskMcpRuntime(options = {}) {
 
       if (name === "apiosk_wallet_list") return await handleLocalWalletList();
       if (name === "apiosk_wallet_create") return await handleLocalWalletCreate(argumentsObject);
+      if (name === "apiosk_get_started") return await handleGetStarted(argumentsObject);
       if (name === "apiosk_configure") return await handleConfigure(argumentsObject);
       if (name === "apiosk_wallet_select") return await handleLocalWalletSelect(argumentsObject);
       if (name === "apiosk_wallet_update") return await handleLocalWalletUpdate(argumentsObject);
@@ -1829,6 +2464,11 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_list_my_apis") return await handleListMyApis(argumentsObject);
       if (name === "apiosk_update_api") return await handleUpdateApi(argumentsObject);
       if (name === "apiosk_delete_api") return await handleDeleteApi(argumentsObject);
+
+      if (name === "apiosk_create_account") return await handleCreateAccount(argumentsObject);
+      if (name === "apiosk_sign_in") return await handleSignIn(argumentsObject);
+      if (name === "apiosk_buy_credits") return await handleBuyCredits(argumentsObject);
+      if (name === "apiosk_get_credits_status") return await handleCreditsStatus(argumentsObject);
 
       if (name === "apiosk_list_wallets") return await handleWalletList();
       if (name === "apiosk_create_wallet") return await handleWalletCreate(argumentsObject);
@@ -1852,7 +2492,7 @@ export function createApioskMcpRuntime(options = {}) {
         return errorContent({
           error: error.message,
           hint:
-            "Configure APIOSK_PRIVATE_KEY, or create/select a local wallet with apiosk_wallet_create and apiosk_wallet_select, to enable automatic x402 settlement.",
+            "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.",
           payment_required: error.paymentRequired,
         });
       }

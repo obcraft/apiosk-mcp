@@ -1,24 +1,32 @@
 {
   "name": "apiosk-mcp-server",
-  "version": "1.2.0",
+  "version": "1.2.3",
   "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
   "main": "index.mjs",
   "bin": {
+    "apiosk-mcp-server": "./index.mjs",
     "apiosk-mcp": "./index.mjs",
     "apiosk": "./index.mjs"
   },
   "scripts": {
     "smoke:new-env": "bash scripts/smoke-new-env.sh",
+    "test:macbook-air": "bash scripts/test-macbook-air.sh",
+    "test:live": "bash scripts/test-live-url.sh",
     "test": "node --test",
     "dev": "node server.mjs",
     "start": "node server.mjs"
   },
-  "keywords": ["mcp", "apiosk", "api", "model-context-protocol"],
+  "keywords": [
+    "mcp",
+    "apiosk",
+    "api",
+    "model-context-protocol"
+  ],
   "author": "Apiosk",
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "@apiosk/sdk": "file:../sdk-js",
+    "@apiosk/sdk": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "express": "^5.2.1",
     "qrcode": "^1.5.4",

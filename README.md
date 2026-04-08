@@ -22,6 +22,14 @@ APIOSK_PRIVATE_KEY=0x... npx -y apiosk-mcp-server
 APIOSK_CONNECT_TOKEN=... npx -y apiosk-mcp-server
 ```
 
+After the MCP server is installed in Claude, Codex, or another client, the fastest first-run path in local stdio mode is:
+
+```json
+{ "wallet_label": "My Apiosk wallet" }
+```
+
+Call that through `apiosk_get_started`. It will create a local wallet when needed, or you can pass `connect_string` to save managed access locally and immediately run a discovery probe plus a small test call.
+
 ## Local Wallet Mode
 
 The local stdio package exposes wallet tools that let Claude or Codex:
@@ -87,7 +95,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 Remote HTTP:
 
 ```bash
-claude mcp add --transport http apiosk https://apiosk-mcp.fly.dev/mcp
+claude mcp add --transport http apiosk https://mcp.apiosk.com/mcp
 ```
 
 Local stdio:
@@ -141,6 +149,7 @@ Static tools:
 
 Local wallet tools in stdio mode:
 
+- `apiosk_get_started`
 - `apiosk_wallet_list`
 - `apiosk_wallet_create`
 - `apiosk_configure`
@@ -206,6 +215,35 @@ The create response includes:
 - a terminal QR block when QR rendering is enabled
 - a structured Apiosk control menu with wallet, funding, pay, publish, security, and local-data sections
 
+### Get started in one step
+
+Create a local wallet automatically, discover the catalog, and run a test call:
+
+```json
+{
+  "wallet_label": "Starter wallet",
+  "test_slug": "agent-json-diff",
+  "test_input": {
+    "before": { "ok": true },
+    "after": { "ok": false }
+  }
+}
+```
+
+Or save a dashboard-managed connect string locally and verify it:
+
+```json
+{
+  "connect_string": "export APIO_GATEWAY_URL=https://gateway.apiosk.com\nexport APIO_CHAIN_ID=8453\nexport APIO_AGENT_WALLET_ADDRESS=0x...\nexport APIO_CONNECT_TOKEN=aw_...\nexport APIO_CONNECT_AUTHORIZATION=Bearer aw_...\nexport APIO_CONNECT_HEADER_NAME=X-Apiosk-Connect-Token",
+  "test_slug": "agent-json-diff",
+  "test_input": {
+    "before": { "ok": true },
+    "after": { "ok": false }
+  },
+  "create_wallet": false
+}
+```
+
 ### Open the configure menu
 
 ```json
@@ -258,6 +296,64 @@ If the server lists a dynamic tool named `agent-json-diff`, call it directly:
 }
 ```
 
+## MacBook Air Test Script
+
+Run the safe default suite from a repo checkout:
+
+```bash
+cd /Users/olivierbrinkman/Development/Apiosk/subs/mcp
+npm run test:macbook-air
+```
+
+Default coverage:
+
+- runs `npm test`
+- runs the isolated fresh-environment smoke test
+- starts a local HTTP MCP server in a temp `APIOSK_HOME`
+- verifies `health`, `tools/list`, `apiosk_search`, `apiosk_explore`, and `apiosk_get_api`
+- creates a wallet, checks funding QR/configure output, and verifies secret export plus `wallet.json` and `wallet.txt`
+- verifies the hosted Fly deployment and its tool surface
+
+Useful options:
+
+- `TARGET=local` to skip hosted checks
+- `TARGET=hosted` to skip local checks
+- `APIOSK_RUN_REMOTE_WALLET_TEST=1` to create/configure/delete a wallet on the hosted server
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_TEST_PRIVATE_KEY=0x...` to import a funded wallet and run a real paid execute test
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_RUN_PUBLISH_TEST=1 APIOSK_TEST_PRIVATE_KEY=0x...` to also test publish, list, update, and delete with a temporary listing
+
+Example funded run:
+
+```bash
+cd /Users/olivierbrinkman/Development/Apiosk/subs/mcp
+APIOSK_RUN_FUNDED_TESTS=1 \
+APIOSK_TEST_PRIVATE_KEY=0x... \
+npm run test:macbook-air
+```
+
+## Live URL Test Script
+
+Run a hosted-only test directly against the public MCP endpoint:
+
+```bash
+cd /Users/olivierbrinkman/Development/Apiosk/subs/mcp
+npm run test:live
+```
+
+Default live coverage:
+
+- checks `https://mcp.apiosk.com/health`
+- verifies the hosted tool surface
+- runs live `apiosk_search`, `apiosk_explore`, and `apiosk_get_api`
+- creates a hosted wallet, verifies the funding/configure payload, and deletes the wallet again
+
+Optional live funded checks:
+
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_TEST_PRIVATE_KEY=0x... npm run test:live`
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_RUN_PUBLISH_TEST=1 APIOSK_TEST_PRIVATE_KEY=0x... npm run test:live`
+
+Use a throwaway funded wallet for the live funded mode, because the private key is sent to the hosted MCP when importing the wallet for autonomous pay/publish tests.
+
 ## Environment Variables
 
 - `APIOSK_PRIVATE_KEY`: enables automatic x402 settlement and signed publish requests
@@ -267,10 +363,30 @@ If the server lists a dynamic tool named `agent-json-diff`, call it directly:
 - `APIOSK_WALLET_ADDRESS`: send a wallet address for wallet-aware flows
 - `APIOSK_X_PAYMENT`: attach a pre-built x402 proof manually
 - `APIOSK_GATEWAY`: override the gateway base URL
+- `APIOSK_CONTROL_PLANE_URL`: override the MCP-owned control-plane API base URL used for account, credits, and managed-wallet routes. Defaults to `https://mcp.apiosk.com`
+- `APIOSK_DASHBOARD_URL`: override the human-facing dashboard/app URL stored in local config and used in confirmation flows. Defaults to `https://apiosk.com`
 - `APIOSK_DASHBOARD_JWT` or `APIOSK_USER_JWT`: unlock dashboard wallet routes
 - `APIOSK_ENABLE_LOCAL_WALLETS=true`: enable local wallet tools in HTTP server mode
 - `APIOSK_HOME`: override the default `~/.apiosk` directory
 - `APIOSK_MCP_WALLET_STORE`: override the local wallet store path
+
+## Human-Funded Credits Flow
+
+In the local stdio package, MCP can now help a human top up Apiosk credits and then let the agent spend those credits later:
+
+1. `apiosk_create_account` if the user needs a new Apiosk account
+2. `apiosk_sign_in` to store a local dashboard session token
+3. `apiosk_buy_credits` to create an Adyen checkout link
+4. `apiosk_get_credits_status` after payment to reconcile the top-up and confirm the balance
+
+If signup does not return a session immediately, tell the user to confirm their email first and then call `apiosk_sign_in`.
+
+These calls now target the MCP-owned control-plane surface by default:
+
+- `https://mcp.apiosk.com/api/auth/mcp-sign-up`
+- `https://mcp.apiosk.com/api/auth/mcp-sign-in`
+- `https://mcp.apiosk.com/api/credits/topup`
+- `https://mcp.apiosk.com/api/credits/reconcile`
 
 ## Remote HTTP Server
 
@@ -279,11 +395,11 @@ The public HTTP deployment is safe-by-default: local wallet and publish tools ar
 Test it:
 
 ```bash
-curl https://apiosk-mcp.fly.dev/health
+curl https://mcp.apiosk.com/health
 ```
 
 ```bash
-curl https://apiosk-mcp.fly.dev/mcp \
+curl https://mcp.apiosk.com/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
