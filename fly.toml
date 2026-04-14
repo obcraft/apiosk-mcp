@@ -3,6 +3,8 @@ primary_region = "ams"
 
 [env]
   APIOSK_MCP_PUBLIC_BASE_URL = "https://mcp.apiosk.com"
+  APIOSK_CONTROL_PLANE_BACKEND_URL = "https://dashboard.apiosk.com"
+  APIOSK_DASHBOARD_URL = "https://dashboard.apiosk.com"
 
 [http_service]
   internal_port = 3000

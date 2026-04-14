@@ -304,6 +304,35 @@ process.stdin.on("end", () => {
 '
 }
 
+assert_control_plane_auth_proxy() {
+  local base_url="$1"
+  curl -i -sS "$base_url/api/auth/mcp-sign-in" \
+    -H "Content-Type: application/json" \
+    -d '{"email":"invalid@example.com","password":"bad-password"}' | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const raw = Buffer.concat(chunks).toString("utf8");
+  const parts = raw.split(/\r?\n\r?\n/);
+  const headerBlock = parts.shift() || "";
+  const body = parts.join("\n\n");
+  const statusLine = headerBlock.split(/\r?\n/)[0] || "";
+  const statusMatch = statusLine.match(/\s(\d{3})\s/);
+  const status = statusMatch ? Number(statusMatch[1]) : 0;
+  if (status !== 401) {
+    console.error(`Expected proxied sign-in route to return 401 for invalid credentials, received ${status || "unknown"}.`);
+    process.exit(1);
+  }
+  const parsed = JSON.parse(body);
+  if (parsed.error !== "signin_failed") {
+    console.error(`Expected signin_failed payload from proxied sign-in route, received ${parsed.error || "unknown"}.`);
+    process.exit(1);
+  }
+  console.log("Hosted MCP auth proxy points at the real dashboard sign-in route.");
+});
+'
+}
+
 assert_protected_call_requires_auth() {
   local base_url="$1"
   local tool_name="$2"
@@ -471,6 +500,7 @@ process.stdin.on("end", () => {
 echo "==> Step 2: live OAuth metadata"
 assert_oauth_metadata "$HOSTED_URL"
 assert_protected_resource_metadata "$HOSTED_URL"
+assert_control_plane_auth_proxy "$HOSTED_URL"
 
 echo "==> Step 3: live tool surface"
 assert_tools "$HOSTED_URL" \

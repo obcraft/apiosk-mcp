@@ -1810,7 +1810,7 @@ export function createApioskMcpRuntime(options = {}) {
           expires_at: record.expires_at,
           email,
           control_plane_url: resolveControlPlaneUrl(env),
-          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://apiosk.com"),
+          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://dashboard.apiosk.com"),
         },
         env
       );
@@ -1862,7 +1862,7 @@ export function createApioskMcpRuntime(options = {}) {
           expires_at: record.expires_at,
           email,
           control_plane_url: resolveControlPlaneUrl(env),
-          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://apiosk.com"),
+          dashboard_url: trimString(env.APIOSK_DASHBOARD_URL || "https://dashboard.apiosk.com"),
         },
         env
       );

@@ -11,7 +11,7 @@ import { createApioskMcpRuntime } from "./runtime.mjs";
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
   process.env.APIOSK_DASHBOARD_URL ||
-  "https://apiosk.com"
+  "https://dashboard.apiosk.com"
 ).replace(/\/+$/, "");
 
 function normalizeControlPlanePath(pathname = "") {

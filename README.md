@@ -377,7 +377,7 @@ The live hosted suite no longer imports a private key into the hosted MCP. Prote
 - `APIOSK_X_PAYMENT`: attach a pre-built x402 proof manually
 - `APIOSK_GATEWAY`: override the gateway base URL
 - `APIOSK_CONTROL_PLANE_URL`: override the MCP-owned control-plane API base URL used for account, credits, and managed-wallet routes. Defaults to `https://mcp.apiosk.com`
-- `APIOSK_DASHBOARD_URL`: override the human-facing dashboard/app URL stored in local config and used in confirmation flows. Defaults to `https://apiosk.com`
+- `APIOSK_DASHBOARD_URL`: override the human-facing dashboard/app URL stored in local config and used in confirmation flows. Defaults to `https://dashboard.apiosk.com`
 - `APIOSK_DASHBOARD_JWT` or `APIOSK_USER_JWT`: unlock dashboard wallet routes
 - `APIOSK_ENABLE_LOCAL_WALLETS=true`: enable local wallet tools in HTTP server mode
 - `APIOSK_MCP_OAUTH_SECRET` or `APIOSK_MCP_AUTH_SECRET`: signing secret for hosted OAuth codes, access tokens, and refresh tokens
