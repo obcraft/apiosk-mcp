@@ -5,6 +5,7 @@ import {
   createApioskMcpServer,
   listApioskTools,
 } from "./create-server.mjs";
+import { createHostedOAuthSupport, resolveHostedMcpUrls } from "./oauth.mjs";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 
 const CONTROL_PLANE_BACKEND_URL = (
@@ -92,9 +93,34 @@ async function proxyControlPlaneRequest(req, res) {
 // Public Fly deployment must accept the Fly hostname instead of localhost-only
 // host validation defaults.
 const app = createMcpExpressApp({ host: "0.0.0.0" });
+const port = Number(process.env.PORT || 3000);
+const { issuerUrl, mcpServerUrl } = resolveHostedMcpUrls({
+  env: process.env,
+  port,
+});
 const runtime = createApioskMcpRuntime({
   enableLocalWallets: process.env.APIOSK_ENABLE_LOCAL_WALLETS === "true",
+  hostedAuthEnabled: true,
 });
+const hostedOAuth = createHostedOAuthSupport({
+  env: process.env,
+  controlPlaneBaseUrl: CONTROL_PLANE_BACKEND_URL,
+  issuerUrl,
+  mcpServerUrl,
+  appName: "Apiosk",
+  resourceName: "Apiosk MCP",
+});
+const mcpAuthMiddleware = hostedOAuth.createMcpAuthMiddleware(runtime);
+
+app.use(hostedOAuth.metadataRouter);
+app.use(new URL(hostedOAuth.oauthMetadata.authorization_endpoint).pathname, hostedOAuth.authorizationRouter);
+app.use(new URL(hostedOAuth.oauthMetadata.token_endpoint).pathname, hostedOAuth.tokenRouter);
+if (hostedOAuth.oauthMetadata.registration_endpoint) {
+  app.use(
+    new URL(hostedOAuth.oauthMetadata.registration_endpoint).pathname,
+    hostedOAuth.registrationRouter
+  );
+}
 
 app.all("/api/*path", async (req, res) => {
   try {
@@ -134,7 +160,7 @@ app.get("/health", async (req, res) => {
   }
 });
 
-app.post("/mcp", async (req, res) => {
+app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
   const server = createApioskMcpServer({ runtime });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -191,11 +217,12 @@ app.delete("/mcp", (req, res) => {
   });
 });
 
-const port = Number(process.env.PORT || 3000);
 app.listen(port, "0.0.0.0", async () => {
   console.log(`Apiosk MCP server listening on http://0.0.0.0:${port}`);
   console.log(`Health check: http://0.0.0.0:${port}/health`);
   console.log(`MCP endpoint: http://0.0.0.0:${port}/mcp`);
+  console.log(`OAuth issuer: ${issuerUrl.href}`);
+  console.log(`OAuth protected-resource metadata: ${hostedOAuth.resourceMetadataUrl}`);
   try {
     const tools = await listApioskTools({ runtime });
     console.log(`Loaded ${tools.length} tools from the Apiosk catalog.`);

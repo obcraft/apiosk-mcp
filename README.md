@@ -137,6 +137,16 @@ Local stdio:
 }
 ```
 
+### ChatGPT and other remote MCP apps
+
+Use the hosted MCP endpoint:
+
+```text
+https://mcp.apiosk.com/mcp
+```
+
+Protected tools on the hosted server use OAuth. Public discovery stays open, but paid execution, credits, and managed-wallet tools will trigger an Apiosk sign-in flow the first time the app calls them.
+
 ## Available Tools
 
 Static tools:
@@ -367,6 +377,7 @@ Use a throwaway funded wallet for the live funded mode, because the private key 
 - `APIOSK_DASHBOARD_URL`: override the human-facing dashboard/app URL stored in local config and used in confirmation flows. Defaults to `https://apiosk.com`
 - `APIOSK_DASHBOARD_JWT` or `APIOSK_USER_JWT`: unlock dashboard wallet routes
 - `APIOSK_ENABLE_LOCAL_WALLETS=true`: enable local wallet tools in HTTP server mode
+- `APIOSK_MCP_OAUTH_SECRET` or `APIOSK_MCP_AUTH_SECRET`: signing secret for hosted OAuth codes, access tokens, and refresh tokens
 - `APIOSK_HOME`: override the default `~/.apiosk` directory
 - `APIOSK_MCP_WALLET_STORE`: override the local wallet store path
 
@@ -391,6 +402,14 @@ These calls now target the MCP-owned control-plane surface by default:
 ## Remote HTTP Server
 
 The public HTTP deployment is safe-by-default: local wallet and publish tools are disabled unless `APIOSK_ENABLE_LOCAL_WALLETS=true` is set on that server.
+
+Hosted OAuth metadata and authorization routes now live on the same host:
+
+- `https://mcp.apiosk.com/.well-known/oauth-authorization-server`
+- `https://mcp.apiosk.com/.well-known/oauth-protected-resource/mcp`
+- `https://mcp.apiosk.com/authorize`
+- `https://mcp.apiosk.com/token`
+- `https://mcp.apiosk.com/register`
 
 Test it:
 

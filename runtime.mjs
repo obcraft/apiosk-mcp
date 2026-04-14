@@ -20,7 +20,7 @@ const DEFAULT_GATEWAY_BASE_URL = "https://gateway.apiosk.com";
 const DASHBOARD_WALLET_TOOLS = [
   {
     name: "apiosk_list_wallets",
-    description: "List the signed-in user's managed Apiosk wallets. Requires APIOSK_DASHBOARD_JWT or APIOSK_USER_JWT in the local MCP environment.",
+    description: "List the signed-in user's managed Apiosk wallets. Requires an Apiosk dashboard session from local env auth or hosted MCP authorization.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -205,7 +205,7 @@ const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
   {
     name: "apiosk_buy_credits",
     description:
-      "Create an Adyen payment link so a human can top up the signed-in user's Apiosk credits balance. Returns the checkout URL to open in a browser.",
+      "Create an Adyen payment link so a human can top up the signed-in user's Apiosk credits balance. Works with a local dashboard session or hosted MCP authorization and returns the checkout URL to open in a browser.",
     inputSchema: {
       type: "object",
       required: ["amount_eur"],
@@ -217,7 +217,7 @@ const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
   {
     name: "apiosk_get_credits_status",
     description:
-      "Refresh pending Adyen credit top-ups and return the current credits balance plus any remaining pending payment links.",
+      "Refresh pending Adyen credit top-ups and return the current credits balance plus any remaining pending payment links for the authorized dashboard user.",
     inputSchema: {
       type: "object",
       properties: {
@@ -226,6 +226,10 @@ const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
     },
   },
 ];
+
+const REMOTE_CREDITS_TOOLS = LOCAL_ACCOUNT_AND_CREDITS_TOOLS.filter((tool) =>
+  ["apiosk_buy_credits", "apiosk_get_credits_status"].includes(tool.name)
+);
 
 const LOCAL_WALLET_TOOLS = [
   {
@@ -629,6 +633,23 @@ const DISCOVERY_TOOLS = [
   },
 ];
 
+const ALL_STATIC_TOOLS = [
+  ...DISCOVERY_TOOLS,
+  ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS,
+  ...LOCAL_WALLET_TOOLS,
+  ...DASHBOARD_WALLET_TOOLS,
+  ...PUBLISH_TOOLS,
+];
+
+const PUBLIC_STATIC_TOOL_NAMES = new Set(
+  DISCOVERY_TOOLS.map((tool) => tool.name).filter((name) => name !== "apiosk_execute")
+);
+const REMOTE_PROTECTED_STATIC_TOOL_NAMES = new Set([
+  "apiosk_execute",
+  ...REMOTE_CREDITS_TOOLS.map((tool) => tool.name),
+  ...DASHBOARD_WALLET_TOOLS.map((tool) => tool.name),
+]);
+
 function trimString(value) {
   return String(value || "").trim();
 }
@@ -782,6 +803,33 @@ function buildAuthState({ env = process.env, savedConfig = null, activeWallet = 
       savedWalletAddress ||
       null,
     gateway_url: resolveGatewayBaseUrl(env, savedConfig),
+  };
+}
+
+function resolveRequestDashboardUserToken(authInfo = null) {
+  const extra = authInfo?.extra;
+  if (!extra || typeof extra !== "object") return "";
+
+  return trimString(
+    extra.dashboardSessionToken ||
+      extra.dashboard_session_token ||
+      extra.userToken ||
+      extra.user_token ||
+      ""
+  );
+}
+
+function hasRequestScopedDashboardAccess(authInfo = null) {
+  return Boolean(resolveRequestDashboardUserToken(authInfo));
+}
+
+function buildRequestScopedDashboardHeaders(authInfo = null) {
+  const token = resolveRequestDashboardUserToken(authInfo);
+  if (!token) return null;
+
+  return {
+    "x-apiosk-user-jwt": token,
+    authorization: `Bearer ${token}`,
   };
 }
 
@@ -1094,13 +1142,14 @@ export function createApioskMcpRuntime(options = {}) {
   const fixedClient = options.client || null;
   const clientFactory = options.clientFactory || null;
   const providedDashboardManager = options.walletManager || null;
+  const hostedAuthEnabled = options.hostedAuthEnabled === true;
   const localWalletStore =
     options.localWalletStore ||
     (options.enableLocalWallets === false ? null : createLocalWalletStore(env));
   const cache = {
     catalog: null,
     expiresAt: 0,
-    tools: null,
+    dynamicTools: null,
     toolIndex: new Map(),
     toolNamesBySlug: new Map(),
   };
@@ -1121,7 +1170,11 @@ export function createApioskMcpRuntime(options = {}) {
     return readLocalApioskConfig(env);
   }
 
-  function hasConfiguredDashboardAccess() {
+  function hasConfiguredDashboardAccess(authInfo = null) {
+    if (hasRequestScopedDashboardAccess(authInfo)) {
+      return true;
+    }
+
     if (providedDashboardManager?.isConfigured) {
       return Boolean(providedDashboardManager.isConfigured());
     }
@@ -1129,20 +1182,23 @@ export function createApioskMcpRuntime(options = {}) {
     return Boolean(resolveDashboardUserToken(env));
   }
 
-  async function requestDashboard(path, init = {}, options = {}) {
+  async function requestDashboard(path, init = {}, options = {}, authInfo = null) {
     const requireAuth = options.requireAuth !== false;
+    const requestScopedToken = resolveRequestDashboardUserToken(authInfo);
 
-    if (providedDashboardManager) {
+    if (providedDashboardManager && !requestScopedToken) {
       return providedDashboardManager.request(path, init);
     }
 
     const savedConfig = await getSavedConfig();
     const dashboardUrl = resolveControlPlaneUrl(env, savedConfig);
-    const token = resolveDashboardUserToken(env, savedConfig);
+    const token = requestScopedToken || resolveDashboardUserToken(env, savedConfig);
 
     if (requireAuth && !token) {
       throw new Error(
-        "This tool needs an Apiosk dashboard session. Ask whether the user wants an account, then call apiosk_create_account or apiosk_sign_in. If they already have an account, sign in first or set APIOSK_DASHBOARD_JWT / APIOSK_USER_JWT."
+        hostedAuthEnabled ?
+          "This tool needs an Apiosk dashboard session. In ChatGPT or another remote MCP client, authorize the Apiosk app when prompted and then retry the tool call." :
+          "This tool needs an Apiosk dashboard session. Ask whether the user wants an account, then call apiosk_create_account or apiosk_sign_in. If they already have an account, sign in first or set APIOSK_DASHBOARD_JWT / APIOSK_USER_JWT."
       );
     }
 
@@ -1182,13 +1238,14 @@ export function createApioskMcpRuntime(options = {}) {
     return payload;
   }
 
-  async function getClient() {
+  async function getClient(authInfo = null) {
     if (fixedClient) {
       return fixedClient;
     }
 
     const savedConfig = await getSavedConfig();
     const activeWallet = await getActiveExecutionWallet();
+    const requestScopedHeaders = buildRequestScopedDashboardHeaders(authInfo);
     const envWalletAddress = trimString(env.APIOSK_WALLET_ADDRESS).toLowerCase();
     const savedWalletAddress = trimString(savedConfig?.agent_wallet_address).toLowerCase();
     const privateKey = activeWallet?.private_key || normalizePrivateKeyHex(env.APIOSK_PRIVATE_KEY) || undefined;
@@ -1205,6 +1262,7 @@ export function createApioskMcpRuntime(options = {}) {
       walletAddress: walletAddress || undefined,
       xPayment: trimString(env.APIOSK_X_PAYMENT) || undefined,
       privateKey,
+      headers: requestScopedHeaders || undefined,
     };
 
     if (clientFactory) {
@@ -1214,49 +1272,50 @@ export function createApioskMcpRuntime(options = {}) {
     return new ApioskClient(clientOptions);
   }
 
-  function getStaticTools() {
+  function getStaticTools(authInfo = null) {
     const tools = [...DISCOVERY_TOOLS];
 
     if (localWalletStore) {
       tools.push(...LOCAL_WALLET_TOOLS, ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS, ...DASHBOARD_WALLET_TOOLS, ...PUBLISH_TOOLS);
-    } else if (hasConfiguredDashboardAccess()) {
+    } else if (hostedAuthEnabled) {
+      tools.push(...REMOTE_CREDITS_TOOLS, ...DASHBOARD_WALLET_TOOLS);
+    } else if (hasConfiguredDashboardAccess(authInfo)) {
       tools.push(...DASHBOARD_WALLET_TOOLS);
     }
 
     return tools;
   }
 
-  async function getCatalog(force = false) {
+  async function getCatalog(force = false, authInfo = null) {
     if (!force && cache.catalog && Date.now() < cache.expiresAt) {
       return cache.catalog;
     }
 
-    const client = await getClient();
+    const client = await getClient(authInfo);
     const response = await client.listApis({ limit: 500, offset: 0 });
     cache.catalog = response.apis || [];
     cache.expiresAt = Date.now() + CACHE_TTL_MS;
-    cache.tools = null;
+    cache.dynamicTools = null;
     cache.toolIndex = new Map();
     cache.toolNamesBySlug = new Map();
     return cache.catalog;
   }
 
-  async function getTools(force = false) {
-    if (!force && cache.tools && Date.now() < cache.expiresAt) {
-      return cache.tools;
+  async function getTools(force = false, authInfo = null) {
+    if (!force && cache.dynamicTools && Date.now() < cache.expiresAt) {
+      return [...getStaticTools(authInfo), ...cache.dynamicTools];
     }
 
-    const catalog = await getCatalog(force);
-    const staticTools = getStaticTools();
-    const { tools, toolIndex } = buildDynamicTools(catalog, staticTools);
+    const catalog = await getCatalog(force, authInfo);
+    const { tools, toolIndex } = buildDynamicTools(catalog, ALL_STATIC_TOOLS);
 
-    cache.tools = [...staticTools, ...tools];
+    cache.dynamicTools = tools;
     cache.toolIndex = toolIndex;
     cache.toolNamesBySlug = new Map(
       Array.from(toolIndex.values()).map((entry) => [entry.api.slug, entry.toolName])
     );
 
-    return cache.tools;
+    return [...getStaticTools(authInfo), ...tools];
   }
 
   async function resolveConfigurationWallet(walletId = null) {
@@ -1528,14 +1587,50 @@ export function createApioskMcpRuntime(options = {}) {
     };
   }
 
-  async function resolveDynamicTool(name) {
-    await getTools();
+  async function resolveDynamicTool(name, authInfo = null) {
+    await getTools(false, authInfo);
     if (cache.toolIndex.has(name)) {
       return cache.toolIndex.get(name);
     }
 
-    await getTools(true);
+    await getTools(true, authInfo);
     return cache.toolIndex.get(name) || null;
+  }
+
+  function isDynamicToolProtectedApi(api) {
+    const price = Number(api?.price_usd ?? api?.listing_metadata?.cost_per_call ?? 0);
+    const annotations = api?.listing_metadata?.mcp_tool?.annotations || {};
+
+    if (Number.isFinite(price) && price > 0) {
+      return true;
+    }
+
+    if (annotations.destructiveHint === true) {
+      return true;
+    }
+
+    if (annotations.readOnlyHint === false) {
+      return true;
+    }
+
+    return false;
+  }
+
+  async function isToolProtected(name, authInfo = null) {
+    if (PUBLIC_STATIC_TOOL_NAMES.has(name)) {
+      return false;
+    }
+
+    if (REMOTE_PROTECTED_STATIC_TOOL_NAMES.has(name)) {
+      return true;
+    }
+
+    const dynamicTool = await resolveDynamicTool(name, authInfo);
+    if (!dynamicTool) {
+      return false;
+    }
+
+    return isDynamicToolProtectedApi(dynamicTool.api);
   }
 
   async function resolvePublishingWallet(walletId = null) {
@@ -1564,8 +1659,8 @@ export function createApioskMcpRuntime(options = {}) {
     );
   }
 
-  async function handleExplore(argumentsObject = {}) {
-    const client = await getClient();
+  async function handleExplore(argumentsObject = {}, authInfo = null) {
+    const client = await getClient(authInfo);
     if (!argumentsObject.listing_type) {
       const response = await client.requestJson("/types", { method: "GET" });
       return content({
@@ -1594,8 +1689,8 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleSearch(argumentsObject = {}) {
-    const client = await getClient();
+  async function handleSearch(argumentsObject = {}, authInfo = null) {
+    const client = await getClient(authInfo);
     const response = await client.listApis({
       search: argumentsObject.search,
       category: argumentsObject.category,
@@ -1606,7 +1701,7 @@ export function createApioskMcpRuntime(options = {}) {
     });
 
     const catalog = response.apis || [];
-    await getTools();
+    await getTools(false, authInfo);
 
     return content({
       apis: catalog.map((api) => buildCatalogEntry(api, cache.toolNamesBySlug.get(api.slug) || null)),
@@ -1615,12 +1710,12 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleGetApi(argumentsObject = {}) {
+  async function handleGetApi(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.slug) {
       return errorContent("Missing required field: slug");
     }
 
-    const client = await getClient();
+    const client = await getClient(authInfo);
     const [detail, metadata] = await Promise.all([
       client.getApi(argumentsObject.slug),
       client.getMetadata(argumentsObject.slug).catch(() => null),
@@ -1632,12 +1727,12 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleExecute(argumentsObject = {}) {
+  async function handleExecute(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.slug) {
       return errorContent("Missing required field: slug");
     }
 
-    const client = await getClient();
+    const client = await getClient(authInfo);
     const result = await client.execute(argumentsObject.slug, argumentsObject.input, {
       operation: argumentsObject.operation,
       query: argumentsObject.query,
@@ -1647,8 +1742,8 @@ export function createApioskMcpRuntime(options = {}) {
     return content(result);
   }
 
-  async function handleDynamicExecute(tool, argumentsObject = {}) {
-    const client = await getClient();
+  async function handleDynamicExecute(tool, argumentsObject = {}, authInfo = null) {
+    const client = await getClient(authInfo);
     const result = hasExecuteEnvelope(argumentsObject)
       ? await client.execute(tool.api.slug, argumentsObject.input, {
           operation: argumentsObject.operation,
@@ -1675,6 +1770,16 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     return null;
+  }
+
+  function ensureDashboardSessionTool(toolName, authInfo = null) {
+    if (localWalletStore || hasConfiguredDashboardAccess(authInfo) || hostedAuthEnabled) {
+      return null;
+    }
+
+    return errorContent(
+      "This tool needs an Apiosk dashboard session. In remote MCP clients, authorize the Apiosk app first. In the local stdio package, call apiosk_create_account or apiosk_sign_in."
+    );
   }
 
   async function handleCreateAccount(argumentsObject = {}) {
@@ -1775,21 +1880,26 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleBuyCredits(argumentsObject = {}) {
-    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_buy_credits");
-    if (localOnlyError) return localOnlyError;
+  async function handleBuyCredits(argumentsObject = {}, authInfo = null) {
+    const authError = ensureDashboardSessionTool("apiosk_buy_credits", authInfo);
+    if (authError) return authError;
 
     const amountEur = Number(argumentsObject.amount_eur);
     if (!Number.isFinite(amountEur) || amountEur <= 0) {
       return errorContent("amount_eur must be a positive number");
     }
 
-    const payload = await requestDashboard("/api/credits/topup", {
-      method: "POST",
-      body: {
-        amount_eur: amountEur,
+    const payload = await requestDashboard(
+      "/api/credits/topup",
+      {
+        method: "POST",
+        body: {
+          amount_eur: amountEur,
+        },
       },
-    });
+      {},
+      authInfo
+    );
     const record = asObject(payload) || {};
 
     return content({
@@ -1802,16 +1912,21 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleCreditsStatus(argumentsObject = {}) {
-    const localOnlyError = ensureLocalDashboardSessionTools("apiosk_get_credits_status");
-    if (localOnlyError) return localOnlyError;
+  async function handleCreditsStatus(argumentsObject = {}, authInfo = null) {
+    const authError = ensureDashboardSessionTool("apiosk_get_credits_status", authInfo);
+    if (authError) return authError;
 
     const paymentIntentId = trimString(argumentsObject.payment_intent_id);
     const body = paymentIntentId ? { payment_intent_id: paymentIntentId } : {};
-    const payload = await requestDashboard("/api/credits/reconcile", {
-      method: "POST",
-      body,
-    });
+    const payload = await requestDashboard(
+      "/api/credits/reconcile",
+      {
+        method: "POST",
+        body,
+      },
+      {},
+      authInfo
+    );
     const record = asObject(payload) || {};
 
     return content({
@@ -1823,46 +1938,61 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function handleWalletList() {
-    return content(await requestDashboard("/api/agent-wallets"));
+  async function handleWalletList(authInfo = null) {
+    return content(await requestDashboard("/api/agent-wallets", {}, {}, authInfo));
   }
 
-  async function handleWalletCreate(argumentsObject = {}) {
+  async function handleWalletCreate(argumentsObject = {}, authInfo = null) {
     return content(
-      await requestDashboard("/api/agent-wallets", {
-        method: "POST",
-        body: argumentsObject,
-      })
+      await requestDashboard(
+        "/api/agent-wallets",
+        {
+          method: "POST",
+          body: argumentsObject,
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletUpdate(argumentsObject = {}) {
+  async function handleWalletUpdate(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
 
     const { wallet_id, ...updates } = argumentsObject;
     return content(
-      await requestDashboard(`/api/agent-wallets/${wallet_id}`, {
-        method: "PATCH",
-        body: updates,
-      })
+      await requestDashboard(
+        `/api/agent-wallets/${wallet_id}`,
+        {
+          method: "PATCH",
+          body: updates,
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletDelete(argumentsObject = {}) {
+  async function handleWalletDelete(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
 
     return content(
-      await requestDashboard(`/api/agent-wallets/${argumentsObject.wallet_id}`, {
-        method: "DELETE",
-      })
+      await requestDashboard(
+        `/api/agent-wallets/${argumentsObject.wallet_id}`,
+        {
+          method: "DELETE",
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletActivity(argumentsObject = {}) {
+  async function handleWalletActivity(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
@@ -1874,50 +2004,68 @@ export function createApioskMcpRuntime(options = {}) {
 
     return content(
       await requestDashboard(
-        `/api/agent-wallets/${argumentsObject.wallet_id}/transactions${query ? `?${query}` : ""}`
+        `/api/agent-wallets/${argumentsObject.wallet_id}/transactions${query ? `?${query}` : ""}`,
+        {},
+        {},
+        authInfo
       )
     );
   }
 
-  async function handleWalletConnectString(argumentsObject = {}) {
+  async function handleWalletConnectString(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
 
     const { wallet_id, ...body } = argumentsObject;
     return content(
-      await requestDashboard(`/api/agent-wallets/${wallet_id}/connect-string`, {
-        method: "POST",
-        body,
-      })
+      await requestDashboard(
+        `/api/agent-wallets/${wallet_id}/connect-string`,
+        {
+          method: "POST",
+          body,
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletApiKeys(argumentsObject = {}) {
+  async function handleWalletApiKeys(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
 
     return content(
-      await requestDashboard(`/api/agent-wallets/${argumentsObject.wallet_id}/api-keys`)
+      await requestDashboard(
+        `/api/agent-wallets/${argumentsObject.wallet_id}/api-keys`,
+        {},
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletApiKeyCreate(argumentsObject = {}) {
+  async function handleWalletApiKeyCreate(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
 
     const { wallet_id, ...body } = argumentsObject;
     return content(
-      await requestDashboard(`/api/agent-wallets/${wallet_id}/api-keys`, {
-        method: "POST",
-        body,
-      })
+      await requestDashboard(
+        `/api/agent-wallets/${wallet_id}/api-keys`,
+        {
+          method: "POST",
+          body,
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletApiKeyUpdate(argumentsObject = {}) {
+  async function handleWalletApiKeyUpdate(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
@@ -1927,14 +2075,19 @@ export function createApioskMcpRuntime(options = {}) {
 
     const { wallet_id, key_id, ...body } = argumentsObject;
     return content(
-      await requestDashboard(`/api/agent-wallets/${wallet_id}/api-keys/${key_id}`, {
-        method: "PATCH",
-        body,
-      })
+      await requestDashboard(
+        `/api/agent-wallets/${wallet_id}/api-keys/${key_id}`,
+        {
+          method: "PATCH",
+          body,
+        },
+        {},
+        authInfo
+      )
     );
   }
 
-  async function handleWalletApiKeyDelete(argumentsObject = {}) {
+  async function handleWalletApiKeyDelete(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
     }
@@ -1945,7 +2098,9 @@ export function createApioskMcpRuntime(options = {}) {
     return content(
       await requestDashboard(
         `/api/agent-wallets/${argumentsObject.wallet_id}/api-keys/${argumentsObject.key_id}`,
-        { method: "DELETE" }
+        { method: "DELETE" },
+        {},
+        authInfo
       )
     );
   }
@@ -2442,13 +2597,13 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
-  async function callTool(name, argumentsObject = {}) {
+  async function callTool(name, argumentsObject = {}, authInfo = null) {
     try {
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
-      if (name === "apiosk_explore") return await handleExplore(argumentsObject);
-      if (name === "apiosk_search") return await handleSearch(argumentsObject);
-      if (name === "apiosk_get_api") return await handleGetApi(argumentsObject);
-      if (name === "apiosk_execute") return await handleExecute(argumentsObject);
+      if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
+      if (name === "apiosk_search") return await handleSearch(argumentsObject, authInfo);
+      if (name === "apiosk_get_api") return await handleGetApi(argumentsObject, authInfo);
+      if (name === "apiosk_execute") return await handleExecute(argumentsObject, authInfo);
 
       if (name === "apiosk_wallet_list") return await handleLocalWalletList();
       if (name === "apiosk_wallet_create") return await handleLocalWalletCreate(argumentsObject);
@@ -2467,26 +2622,26 @@ export function createApioskMcpRuntime(options = {}) {
 
       if (name === "apiosk_create_account") return await handleCreateAccount(argumentsObject);
       if (name === "apiosk_sign_in") return await handleSignIn(argumentsObject);
-      if (name === "apiosk_buy_credits") return await handleBuyCredits(argumentsObject);
-      if (name === "apiosk_get_credits_status") return await handleCreditsStatus(argumentsObject);
+      if (name === "apiosk_buy_credits") return await handleBuyCredits(argumentsObject, authInfo);
+      if (name === "apiosk_get_credits_status") return await handleCreditsStatus(argumentsObject, authInfo);
 
-      if (name === "apiosk_list_wallets") return await handleWalletList();
-      if (name === "apiosk_create_wallet") return await handleWalletCreate(argumentsObject);
-      if (name === "apiosk_update_wallet") return await handleWalletUpdate(argumentsObject);
-      if (name === "apiosk_delete_wallet") return await handleWalletDelete(argumentsObject);
-      if (name === "apiosk_get_wallet_activity") return await handleWalletActivity(argumentsObject);
-      if (name === "apiosk_create_wallet_connect_string") return await handleWalletConnectString(argumentsObject);
-      if (name === "apiosk_list_wallet_api_keys") return await handleWalletApiKeys(argumentsObject);
-      if (name === "apiosk_create_wallet_api_key") return await handleWalletApiKeyCreate(argumentsObject);
-      if (name === "apiosk_update_wallet_api_key") return await handleWalletApiKeyUpdate(argumentsObject);
-      if (name === "apiosk_delete_wallet_api_key") return await handleWalletApiKeyDelete(argumentsObject);
+      if (name === "apiosk_list_wallets") return await handleWalletList(authInfo);
+      if (name === "apiosk_create_wallet") return await handleWalletCreate(argumentsObject, authInfo);
+      if (name === "apiosk_update_wallet") return await handleWalletUpdate(argumentsObject, authInfo);
+      if (name === "apiosk_delete_wallet") return await handleWalletDelete(argumentsObject, authInfo);
+      if (name === "apiosk_get_wallet_activity") return await handleWalletActivity(argumentsObject, authInfo);
+      if (name === "apiosk_create_wallet_connect_string") return await handleWalletConnectString(argumentsObject, authInfo);
+      if (name === "apiosk_list_wallet_api_keys") return await handleWalletApiKeys(argumentsObject, authInfo);
+      if (name === "apiosk_create_wallet_api_key") return await handleWalletApiKeyCreate(argumentsObject, authInfo);
+      if (name === "apiosk_update_wallet_api_key") return await handleWalletApiKeyUpdate(argumentsObject, authInfo);
+      if (name === "apiosk_delete_wallet_api_key") return await handleWalletApiKeyDelete(argumentsObject, authInfo);
 
-      const tool = await resolveDynamicTool(name);
+      const tool = await resolveDynamicTool(name, authInfo);
       if (!tool) {
         return errorContent(`Unknown Apiosk tool: ${name}`);
       }
 
-      return await handleDynamicExecute(tool, argumentsObject);
+      return await handleDynamicExecute(tool, argumentsObject, authInfo);
     } catch (error) {
       if (error instanceof ApioskPaymentRequiredError) {
         return errorContent({
@@ -2504,7 +2659,8 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   return {
-    listTools: () => getTools(),
+    listTools: (authInfo = null) => getTools(false, authInfo),
+    isToolProtected,
     callTool,
   };
 }

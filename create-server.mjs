@@ -15,7 +15,7 @@ function resolveRuntime(options = {}) {
 }
 
 export async function listApioskTools(options = {}) {
-  return resolveRuntime(options).listTools();
+  return resolveRuntime(options).listTools(options.authInfo);
 }
 
 export function createApioskMcpServer(options = {}) {
@@ -25,12 +25,12 @@ export function createApioskMcpServer(options = {}) {
     { capabilities: { tools: {} } }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: await runtime.listTools(),
+  server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => ({
+    tools: await runtime.listTools(extra.authInfo),
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    return runtime.callTool(request.params.name, request.params.arguments || {});
+  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+    return runtime.callTool(request.params.name, request.params.arguments || {}, extra.authInfo);
   });
 
   return server;
