@@ -322,15 +322,16 @@ Default coverage:
 - starts a local HTTP MCP server in a temp `APIOSK_HOME`
 - verifies `health`, `tools/list`, `apiosk_search`, `apiosk_explore`, and `apiosk_get_api`
 - creates a wallet, checks funding QR/configure output, and verifies secret export plus `wallet.json` and `wallet.txt`
-- verifies the hosted Fly deployment and its tool surface
+- verifies the hosted Fly deployment, OAuth metadata, protected-resource metadata, public discovery, and the unauthenticated OAuth challenge for protected tools
 
 Useful options:
 
 - `TARGET=local` to skip hosted checks
 - `TARGET=hosted` to skip local checks
-- `APIOSK_RUN_REMOTE_WALLET_TEST=1` to create/configure/delete a wallet on the hosted server
+- `APIOSK_RUN_REMOTE_WALLET_TEST=1 APIOSK_MCP_BEARER_TOKEN=...` to verify an authenticated protected hosted call after the unauthenticated challenge check
 - `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_TEST_PRIVATE_KEY=0x...` to import a funded wallet and run a real paid execute test
-- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_RUN_PUBLISH_TEST=1 APIOSK_TEST_PRIVATE_KEY=0x...` to also test publish, list, update, and delete with a temporary listing
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_MCP_BEARER_TOKEN=... TARGET=hosted` to run a real paid execute test through the hosted OAuth path
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_RUN_PUBLISH_TEST=1 APIOSK_TEST_PRIVATE_KEY=0x... TARGET=local` to also test publish, list, update, and delete with a temporary listing
 
 Example funded run:
 
@@ -354,15 +355,17 @@ Default live coverage:
 
 - checks `https://mcp.apiosk.com/health`
 - verifies the hosted tool surface
+- verifies `/.well-known/oauth-authorization-server`
+- verifies `/.well-known/oauth-protected-resource/mcp`
 - runs live `apiosk_search`, `apiosk_explore`, and `apiosk_get_api`
-- creates a hosted wallet, verifies the funding/configure payload, and deletes the wallet again
+- verifies that an unauthenticated protected MCP tool call returns the expected OAuth `401` challenge
 
 Optional live funded checks:
 
-- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_TEST_PRIVATE_KEY=0x... npm run test:live`
-- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_RUN_PUBLISH_TEST=1 APIOSK_TEST_PRIVATE_KEY=0x... npm run test:live`
+- `APIOSK_RUN_REMOTE_WALLET_TEST=1 APIOSK_MCP_BEARER_TOKEN=... npm run test:live`
+- `APIOSK_RUN_FUNDED_TESTS=1 APIOSK_MCP_BEARER_TOKEN=... npm run test:live`
 
-Use a throwaway funded wallet for the live funded mode, because the private key is sent to the hosted MCP when importing the wallet for autonomous pay/publish tests.
+The live hosted suite no longer imports a private key into the hosted MCP. Protected live checks now rely on a real hosted OAuth bearer token, which matches the ChatGPT-style remote MCP flow.
 
 ## Environment Variables
 
@@ -378,6 +381,7 @@ Use a throwaway funded wallet for the live funded mode, because the private key 
 - `APIOSK_DASHBOARD_JWT` or `APIOSK_USER_JWT`: unlock dashboard wallet routes
 - `APIOSK_ENABLE_LOCAL_WALLETS=true`: enable local wallet tools in HTTP server mode
 - `APIOSK_MCP_OAUTH_SECRET` or `APIOSK_MCP_AUTH_SECRET`: signing secret for hosted OAuth codes, access tokens, and refresh tokens
+- `APIOSK_MCP_BEARER_TOKEN`: optional hosted OAuth access token used by the live scripts for authenticated protected-tool checks
 - `APIOSK_HOME`: override the default `~/.apiosk` directory
 - `APIOSK_MCP_WALLET_STORE`: override the local wallet store path
 

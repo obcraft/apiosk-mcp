@@ -13,6 +13,7 @@ RUN_REMOTE_WALLET_TEST="${APIOSK_RUN_REMOTE_WALLET_TEST:-0}"
 RUN_FUNDED_TESTS="${APIOSK_RUN_FUNDED_TESTS:-0}"
 RUN_PUBLISH_TEST="${APIOSK_RUN_PUBLISH_TEST:-0}"
 TEST_PRIVATE_KEY="${APIOSK_TEST_PRIVATE_KEY:-}"
+MCP_BEARER_TOKEN="${APIOSK_MCP_BEARER_TOKEN:-}"
 PAY_TEST_SLUG="${APIOSK_PAY_TEST_SLUG:-agent-json-diff}"
 PAY_TEST_OPERATION="${APIOSK_PAY_TEST_OPERATION:-/diff}"
 PUBLISH_ENDPOINT_URL="${APIOSK_PUBLISH_TEST_ENDPOINT_URL:-https://httpbin.org/anything}"
@@ -89,10 +90,36 @@ wait_for_health() {
 call_mcp() {
   local base_url="$1"
   local payload="$2"
-  curl -fsS "$base_url/mcp" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "Content-Type: application/json" \
+  local bearer_token="${3-}"
+  local curl_args=(
+    -fsS
+    "$base_url/mcp"
+    -H "Accept: application/json, text/event-stream"
+    -H "Content-Type: application/json"
     -d "$payload"
+  )
+  if [[ -n "$bearer_token" ]]; then
+    curl_args+=(-H "Authorization: Bearer $bearer_token")
+  fi
+  curl "${curl_args[@]}"
+}
+
+call_mcp_with_headers() {
+  local base_url="$1"
+  local payload="$2"
+  local bearer_token="${3-}"
+  local curl_args=(
+    -i
+    -sS
+    "$base_url/mcp"
+    -H "Accept: application/json, text/event-stream"
+    -H "Content-Type: application/json"
+    -d "$payload"
+  )
+  if [[ -n "$bearer_token" ]]; then
+    curl_args+=(-H "Authorization: Bearer $bearer_token")
+  fi
+  curl "${curl_args[@]}"
 }
 
 parse_jsonrpc_response() {
@@ -164,10 +191,11 @@ mcp_call_text() {
   local base_url="$1"
   local tool_name="$2"
   local args_json="${3-}"
+  local bearer_token="${4-}"
   if [[ -z "$args_json" ]]; then
     args_json='{}'
   fi
-  call_mcp "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")" | extract_text_content
+  call_mcp "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")" "$bearer_token" | extract_text_content
 }
 
 assert_tools() {
@@ -249,6 +277,96 @@ process.stdin.on("end", () => {
     process.exit(1);
   }
   console.log(`Get API returned ${parsed.detail.name}.`);
+});
+'
+}
+
+assert_oauth_metadata() {
+  local base_url="$1"
+  curl -fsS "$base_url/.well-known/oauth-authorization-server" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const requiredScopes = ["mcp:tools", "offline_access"];
+  if (!parsed.issuer || !parsed.authorization_endpoint || !parsed.token_endpoint || !parsed.registration_endpoint) {
+    console.error("OAuth metadata is missing issuer or required endpoints.");
+    process.exit(1);
+  }
+  for (const scope of requiredScopes) {
+    if (!parsed.scopes_supported?.includes(scope)) {
+      console.error(`OAuth metadata is missing required scope ${scope}.`);
+      process.exit(1);
+    }
+  }
+  if (!parsed.grant_types_supported?.includes("refresh_token")) {
+    console.error("OAuth metadata is missing refresh_token grant support.");
+    process.exit(1);
+  }
+  console.log(`OAuth metadata OK for issuer ${parsed.issuer}`);
+});
+'
+}
+
+assert_protected_resource_metadata() {
+  local base_url="$1"
+  curl -fsS "$base_url/.well-known/oauth-protected-resource/mcp" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const requiredScopes = ["mcp:tools", "offline_access"];
+  if (!parsed.resource || !Array.isArray(parsed.authorization_servers) || parsed.authorization_servers.length === 0) {
+    console.error("Protected-resource metadata is missing resource or authorization_servers.");
+    process.exit(1);
+  }
+  for (const scope of requiredScopes) {
+    if (!parsed.scopes_supported?.includes(scope)) {
+      console.error(`Protected-resource metadata is missing required scope ${scope}.`);
+      process.exit(1);
+    }
+  }
+  console.log(`Protected-resource metadata OK for ${parsed.resource}`);
+});
+'
+}
+
+assert_protected_call_requires_auth() {
+  local base_url="$1"
+  local tool_name="$2"
+  local args_json="${3-}"
+  local raw
+  raw="$(call_mcp_with_headers "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")")"
+  printf '%s' "$raw" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const raw = Buffer.concat(chunks).toString("utf8");
+  const parts = raw.split(/\r?\n\r?\n/);
+  const headerBlock = parts.shift() || "";
+  const body = parts.join("\n\n");
+  const statusLine = headerBlock.split(/\r?\n/)[0] || "";
+  const statusMatch = statusLine.match(/\s(\d{3})\s/);
+  const status = statusMatch ? Number(statusMatch[1]) : 0;
+  const wwwAuthenticate = (headerBlock.match(/^www-authenticate:\s*(.+)$/im) || [])[1] || "";
+  if (status !== 401) {
+    console.error(`Expected 401 auth challenge, received ${status || "unknown"}.`);
+    process.exit(1);
+  }
+  if (!/scope="mcp:tools"/.test(wwwAuthenticate)) {
+    console.error("WWW-Authenticate header is missing the mcp:tools scope.");
+    process.exit(1);
+  }
+  if (!/resource_metadata=/.test(wwwAuthenticate)) {
+    console.error("WWW-Authenticate header is missing resource_metadata.");
+    process.exit(1);
+  }
+  const parsed = JSON.parse(body);
+  if (parsed.error !== "invalid_token") {
+    console.error(`Expected invalid_token error body, received ${parsed.error || "unknown"}.`);
+    process.exit(1);
+  }
+  console.log("Protected tool correctly returned an OAuth auth challenge.");
 });
 '
 }
@@ -404,6 +522,22 @@ process.stdin.on("end", () => {
   console.log(`Confirmed slug ${expectedSlug} is absent after delete.`);
 });
 ' "$expected_slug"
+}
+
+assert_hosted_wallets_payload() {
+  local payload="$1"
+  printf '%s' "$payload" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!Array.isArray(parsed.wallets)) {
+    console.error("Hosted wallet list payload is missing wallets[].");
+    process.exit(1);
+  }
+  console.log(`Hosted wallet list returned ${parsed.wallets.length} wallet(s).`);
+});
+'
 }
 
 start_local_server() {
@@ -562,7 +696,7 @@ process.stdout.write(JSON.stringify({
 }
 
 run_hosted_suite() {
-  local wallet_create_text wallet_state wallet_id wallet_address configure_text delete_text
+  local search_text explore_text get_text wallet_list_text paid_text
 
   echo "==> Hosted suite: health and tool surface"
   if ! wait_for_health "$HOSTED_URL"; then
@@ -587,43 +721,68 @@ process.stdin.on("end", () => {
 });
 '
 
+  assert_oauth_metadata "$HOSTED_URL"
+  assert_protected_resource_metadata "$HOSTED_URL"
+
   assert_tools "$HOSTED_URL" \
     "apiosk_help" \
     "apiosk_explore" \
     "apiosk_search" \
     "apiosk_get_api" \
     "apiosk_execute" \
-    "apiosk_wallet_create" \
-    "apiosk_configure" \
-    "apiosk_publish_api"
+    "apiosk_list_wallets" \
+    "apiosk_create_wallet" \
+    "apiosk_buy_credits"
 
-  if [[ "$RUN_REMOTE_WALLET_TEST" != "1" ]]; then
-    echo "==> Skipping hosted wallet create/delete. Set APIOSK_RUN_REMOTE_WALLET_TEST=1 to enable it."
+  search_text="$(mcp_call_text "$HOSTED_URL" "apiosk_search" '{"search":"diff","limit":2}')"
+  assert_search_payload "$search_text"
+
+  explore_text="$(mcp_call_text "$HOSTED_URL" "apiosk_explore" '{"listing_type":"api","search":"weather","limit":2}')"
+  assert_explore_payload "$explore_text"
+
+  get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_get_api" '{"slug":"agent-json-diff"}')"
+  assert_get_api_payload "$get_text"
+
+  assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_list_wallets" "{}"
+
+  if [[ "$RUN_REMOTE_WALLET_TEST" == "1" ]]; then
+    if [[ -z "$MCP_BEARER_TOKEN" ]]; then
+      echo "APIOSK_RUN_REMOTE_WALLET_TEST=1 requires APIOSK_MCP_BEARER_TOKEN." >&2
+      exit 1
+    fi
+    echo "==> Hosted suite: authenticated protected-tool check"
+    wallet_list_text="$(mcp_call_text "$HOSTED_URL" "apiosk_list_wallets" '{}' "$MCP_BEARER_TOKEN")"
+    assert_hosted_wallets_payload "$wallet_list_text"
+  else
+    echo "==> Skipping authenticated hosted protected-tool check. Set APIOSK_RUN_REMOTE_WALLET_TEST=1 and APIOSK_MCP_BEARER_TOKEN=... to enable it."
+  fi
+
+  if [[ "$RUN_FUNDED_TESTS" != "1" ]]; then
     return 0
   fi
 
-  echo "==> Hosted suite: remote wallet create/configure/delete"
-  wallet_create_text="$(mcp_call_text "$HOSTED_URL" "apiosk_wallet_create" '{"label":"Hosted MacBook Air smoke wallet"}')"
-  wallet_state="$(assert_wallet_create_payload "$wallet_create_text")"
-  IFS=$'\t' read -r wallet_id wallet_address <<<"$wallet_state"
-  echo "Hosted wallet created: $wallet_id"
+  if [[ -z "$MCP_BEARER_TOKEN" ]]; then
+    echo "Hosted funded tests require APIOSK_MCP_BEARER_TOKEN." >&2
+    exit 1
+  fi
 
-  configure_text="$(mcp_call_text "$HOSTED_URL" "apiosk_configure" "{\"wallet_id\":\"$wallet_id\",\"section\":\"funding\"}")"
-  assert_configure_payload "$configure_text" "$wallet_address"
-
-  delete_text="$(mcp_call_text "$HOSTED_URL" "apiosk_wallet_delete" "{\"wallet_id\":\"$wallet_id\"}")"
-  printf '%s' "$delete_text" | node -e '
-const chunks = [];
-process.stdin.on("data", (chunk) => chunks.push(chunk));
-process.stdin.on("end", () => {
-  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (!parsed.deleted_wallet_id) {
-    console.error("Hosted wallet delete response is missing deleted_wallet_id.");
-    process.exit(1);
+  echo "==> Hosted suite: funded execute through hosted OAuth"
+  paid_text="$(mcp_call_text "$HOSTED_URL" "apiosk_execute" "$(node -e '
+process.stdout.write(JSON.stringify({
+  slug: process.argv[1],
+  operation: process.argv[2],
+  input: {
+    before: { ok: true, version: 1 },
+    after: { ok: false, version: 2 }
   }
-  console.log(`Hosted wallet deleted: ${parsed.deleted_wallet_id}`);
-});
-'
+}));
+' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")" "$MCP_BEARER_TOKEN")"
+  assert_paid_execute_payload "$paid_text" "$PAY_TEST_SLUG"
+
+  if [[ "$RUN_PUBLISH_TEST" == "1" ]]; then
+    echo "Hosted publish lifecycle is not part of the MacBook Air hosted suite. Use the local funded suite for publish verification." >&2
+    exit 1
+  fi
 }
 
 echo "==> Step 1: unit tests"

@@ -10,6 +10,8 @@ const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_SCOPE = "mcp:tools";
+const OFFLINE_ACCESS_SCOPE = "offline_access";
+const SUPPORTED_SCOPES = [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE];
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -520,7 +522,7 @@ class ApioskHostedOAuthProvider {
         clientId: client.client_id,
         redirectUri: params.redirectUri,
         codeChallenge: params.codeChallenge,
-        scopes: params.scopes?.length ? params.scopes : [DEFAULT_SCOPE],
+        scopes: params.scopes?.length ? params.scopes : [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE],
         resource: params.resource ? params.resource.href : this.mcpServerUrl.href,
         dashboardSessionToken: sessionToken,
         dashboardSessionExpiresAt: normalizedSessionExpiry || undefined,
@@ -567,7 +569,10 @@ class ApioskHostedOAuthProvider {
     const maxExpiry = Number.isFinite(payload.dashboardSessionExpiresAt) ? payload.dashboardSessionExpiresAt : null;
     const tokenPayload = {
       clientId: client.client_id,
-      scopes: Array.isArray(payload.scopes) && payload.scopes.length ? payload.scopes : [DEFAULT_SCOPE],
+      scopes:
+        Array.isArray(payload.scopes) && payload.scopes.length ?
+          payload.scopes :
+          [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE],
       resource: requestedResource,
       dashboardSessionToken: payload.dashboardSessionToken,
       dashboardSessionExpiresAt: payload.dashboardSessionExpiresAt,
@@ -652,7 +657,7 @@ class ApioskHostedOAuthProvider {
     return {
       token,
       clientId: payload.clientId,
-      scopes: Array.isArray(payload.scopes) ? payload.scopes : [DEFAULT_SCOPE],
+      scopes: Array.isArray(payload.scopes) ? payload.scopes : [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE],
       expiresAt: payload.exp,
       resource: payload.resource ? new URL(payload.resource) : new URL(this.mcpServerUrl.href),
       extra: {
@@ -733,7 +738,7 @@ export function createHostedOAuthSupport({
   const oauthMetadata = createOAuthMetadata({
     provider,
     issuerUrl,
-    scopesSupported: [DEFAULT_SCOPE],
+    scopesSupported: SUPPORTED_SCOPES,
     resourceServerUrl: mcpServerUrl,
     resourceName,
     serviceDocumentationUrl: new URL("https://apiosk.com"),
@@ -749,7 +754,7 @@ export function createHostedOAuthSupport({
     metadataRouter: mcpAuthMetadataRouter({
       oauthMetadata,
       resourceServerUrl: mcpServerUrl,
-      scopesSupported: [DEFAULT_SCOPE],
+      scopesSupported: SUPPORTED_SCOPES,
       resourceName,
       serviceDocumentationUrl: new URL("https://apiosk.com"),
     }),

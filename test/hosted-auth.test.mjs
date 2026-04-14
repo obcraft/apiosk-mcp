@@ -136,6 +136,11 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
     resourceName: "Apiosk MCP",
   });
 
+  assert.deepEqual(
+    support.oauthMetadata.scopes_supported,
+    ["mcp:tools", "offline_access"]
+  );
+
   const client = await support.provider.clientsStore.registerClient({
     client_id: "chatgpt-test-client",
     client_name: "ChatGPT",

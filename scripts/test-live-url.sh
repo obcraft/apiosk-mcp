@@ -5,10 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 MCP_DIR="$ROOT_DIR/subs/mcp"
 HOSTED_URL="${HOSTED_URL:-https://mcp.apiosk.com}"
 HOSTED_URL="${HOSTED_URL%/}"
-RUN_REMOTE_WALLET_TEST="${APIOSK_RUN_REMOTE_WALLET_TEST:-1}"
+RUN_REMOTE_WALLET_TEST="${APIOSK_RUN_REMOTE_WALLET_TEST:-0}"
 RUN_FUNDED_TESTS="${APIOSK_RUN_FUNDED_TESTS:-0}"
 RUN_PUBLISH_TEST="${APIOSK_RUN_PUBLISH_TEST:-0}"
 TEST_PRIVATE_KEY="${APIOSK_TEST_PRIVATE_KEY:-}"
+MCP_BEARER_TOKEN="${APIOSK_MCP_BEARER_TOKEN:-}"
 PAY_TEST_SLUG="${APIOSK_PAY_TEST_SLUG:-agent-json-diff}"
 PAY_TEST_OPERATION="${APIOSK_PAY_TEST_OPERATION:-/diff}"
 PUBLISH_ENDPOINT_URL="${APIOSK_PUBLISH_TEST_ENDPOINT_URL:-https://httpbin.org/anything}"
@@ -34,9 +35,9 @@ require_cmd() {
 
 cleanup() {
   local exit_code=$?
-  if [[ "${#CREATED_WALLET_IDS[@]}" -gt 0 ]]; then
+  if [[ "${#CREATED_WALLET_IDS[@]}" -gt 0 && -n "$MCP_BEARER_TOKEN" ]]; then
     for wallet_id in "${CREATED_WALLET_IDS[@]}"; do
-      call_mcp "$HOSTED_URL" "$(build_tool_call_payload "apiosk_wallet_delete" "{\"wallet_id\":\"$wallet_id\"}")" >/dev/null 2>&1 || true
+      call_mcp "$HOSTED_URL" "$(build_tool_call_payload "apiosk_delete_wallet" "{\"wallet_id\":\"$wallet_id\"}")" "$MCP_BEARER_TOKEN" >/dev/null 2>&1 || true
     done
   fi
   return "$exit_code"
@@ -66,10 +67,36 @@ wait_for_health() {
 call_mcp() {
   local base_url="$1"
   local payload="$2"
-  curl -fsS "$base_url/mcp" \
-    -H "Accept: application/json, text/event-stream" \
-    -H "Content-Type: application/json" \
+  local bearer_token="${3-}"
+  local curl_args=(
+    -fsS
+    "$base_url/mcp"
+    -H "Accept: application/json, text/event-stream"
+    -H "Content-Type: application/json"
     -d "$payload"
+  )
+  if [[ -n "$bearer_token" ]]; then
+    curl_args+=(-H "Authorization: Bearer $bearer_token")
+  fi
+  curl "${curl_args[@]}"
+}
+
+call_mcp_with_headers() {
+  local base_url="$1"
+  local payload="$2"
+  local bearer_token="${3-}"
+  local curl_args=(
+    -i
+    -sS
+    "$base_url/mcp"
+    -H "Accept: application/json, text/event-stream" \
+    -H "Content-Type: application/json"
+    -d "$payload"
+  )
+  if [[ -n "$bearer_token" ]]; then
+    curl_args+=(-H "Authorization: Bearer $bearer_token")
+  fi
+  curl "${curl_args[@]}"
 }
 
 parse_jsonrpc_response() {
@@ -141,10 +168,11 @@ mcp_call_text() {
   local base_url="$1"
   local tool_name="$2"
   local args_json="${3-}"
+  local bearer_token="${4-}"
   if [[ -z "$args_json" ]]; then
     args_json='{}'
   fi
-  call_mcp "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")" | extract_text_content
+  call_mcp "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")" "$bearer_token" | extract_text_content
 }
 
 assert_tools() {
@@ -226,7 +254,113 @@ process.stdin.on("end", () => {
 '
 }
 
-assert_wallet_create_payload() {
+assert_oauth_metadata() {
+  local base_url="$1"
+  curl -fsS "$base_url/.well-known/oauth-authorization-server" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const requiredScopes = ["mcp:tools", "offline_access"];
+  if (!parsed.issuer || !parsed.authorization_endpoint || !parsed.token_endpoint || !parsed.registration_endpoint) {
+    console.error("OAuth metadata is missing issuer or required endpoints.");
+    process.exit(1);
+  }
+  for (const scope of requiredScopes) {
+    if (!parsed.scopes_supported?.includes(scope)) {
+      console.error(`OAuth metadata is missing required scope ${scope}.`);
+      process.exit(1);
+    }
+  }
+  if (!parsed.grant_types_supported?.includes("refresh_token")) {
+    console.error("OAuth metadata is missing refresh_token grant support.");
+    process.exit(1);
+  }
+  console.log(`OAuth metadata OK for issuer ${parsed.issuer}`);
+});
+'
+}
+
+assert_protected_resource_metadata() {
+  local base_url="$1"
+  curl -fsS "$base_url/.well-known/oauth-protected-resource/mcp" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const requiredScopes = ["mcp:tools", "offline_access"];
+  if (!parsed.resource || !Array.isArray(parsed.authorization_servers) || parsed.authorization_servers.length === 0) {
+    console.error("Protected-resource metadata is missing resource or authorization_servers.");
+    process.exit(1);
+  }
+  for (const scope of requiredScopes) {
+    if (!parsed.scopes_supported?.includes(scope)) {
+      console.error(`Protected-resource metadata is missing required scope ${scope}.`);
+      process.exit(1);
+    }
+  }
+  console.log(`Protected-resource metadata OK for ${parsed.resource}`);
+});
+'
+}
+
+assert_protected_call_requires_auth() {
+  local base_url="$1"
+  local tool_name="$2"
+  local args_json="${3-}"
+  local raw
+  raw="$(call_mcp_with_headers "$base_url" "$(build_tool_call_payload "$tool_name" "$args_json")")"
+  printf '%s' "$raw" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const raw = Buffer.concat(chunks).toString("utf8");
+  const parts = raw.split(/\r?\n\r?\n/);
+  const headerBlock = parts.shift() || "";
+  const body = parts.join("\n\n");
+  const statusLine = headerBlock.split(/\r?\n/)[0] || "";
+  const statusMatch = statusLine.match(/\s(\d{3})\s/);
+  const status = statusMatch ? Number(statusMatch[1]) : 0;
+  const wwwAuthenticate = (headerBlock.match(/^www-authenticate:\s*(.+)$/im) || [])[1] || "";
+  if (status !== 401) {
+    console.error(`Expected 401 auth challenge, received ${status || "unknown"}.`);
+    process.exit(1);
+  }
+  if (!/scope="mcp:tools"/.test(wwwAuthenticate)) {
+    console.error("WWW-Authenticate header is missing the mcp:tools scope.");
+    process.exit(1);
+  }
+  if (!/resource_metadata=/.test(wwwAuthenticate)) {
+    console.error("WWW-Authenticate header is missing resource_metadata.");
+    process.exit(1);
+  }
+  const parsed = JSON.parse(body);
+  if (parsed.error !== "invalid_token") {
+    console.error(`Expected invalid_token error body, received ${parsed.error || "unknown"}.`);
+    process.exit(1);
+  }
+  console.log("Protected tool correctly returned an OAuth auth challenge.");
+});
+'
+}
+
+assert_wallet_list_payload() {
+  local payload="$1"
+  printf '%s' "$payload" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!Array.isArray(parsed.wallets)) {
+    console.error("Wallet list payload is missing wallets[].");
+    process.exit(1);
+  }
+  console.log(`Authenticated wallet list returned ${parsed.wallets.length} wallet(s).`);
+});
+'
+}
+
+assert_dashboard_wallet_payload() {
   local payload="$1"
   printf '%s' "$payload" | node -e '
 const chunks = [];
@@ -253,47 +387,6 @@ process.stdin.on("end", () => {
   process.stdout.write([parsed.wallet.id, parsed.wallet.address].join("\t"));
 });
 '
-}
-
-assert_configure_payload() {
-  local payload="$1"
-  local expected_address="$2"
-  printf '%s' "$payload" | node -e '
-const expectedAddress = process.argv[1];
-const chunks = [];
-process.stdin.on("data", (chunk) => chunks.push(chunk));
-process.stdin.on("end", () => {
-  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  const funding = parsed.section_payload?.receive_on_base || parsed.funding?.receive_on_base;
-  if (!funding?.address || !funding?.qr_image_url) {
-    console.error("Configure funding payload is missing address or QR image URL.");
-    process.exit(1);
-  }
-  if (String(funding.address).toLowerCase() !== String(expectedAddress).toLowerCase()) {
-    console.error(`Configure address mismatch. Expected ${expectedAddress}, received ${funding.address}`);
-    process.exit(1);
-  }
-  console.log(`Configure funding address: ${funding.address}`);
-});
-' "$expected_address"
-}
-
-assert_wallet_delete_payload() {
-  local payload="$1"
-  local expected_wallet_id="$2"
-  printf '%s' "$payload" | node -e '
-const expectedWalletId = process.argv[1];
-const chunks = [];
-process.stdin.on("data", (chunk) => chunks.push(chunk));
-process.stdin.on("end", () => {
-  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (parsed.deleted_wallet_id !== expectedWalletId) {
-    console.error(`Delete wallet mismatch. Expected ${expectedWalletId}, received ${parsed.deleted_wallet_id}`);
-    process.exit(1);
-  }
-  console.log(`Deleted hosted wallet: ${parsed.deleted_wallet_id}`);
-});
-' "$expected_wallet_id"
 }
 
 assert_paid_execute_payload() {
@@ -375,19 +468,22 @@ process.stdin.on("end", () => {
 });
 '
 
-echo "==> Step 2: live tool surface"
+echo "==> Step 2: live OAuth metadata"
+assert_oauth_metadata "$HOSTED_URL"
+assert_protected_resource_metadata "$HOSTED_URL"
+
+echo "==> Step 3: live tool surface"
 assert_tools "$HOSTED_URL" \
   "apiosk_help" \
   "apiosk_explore" \
   "apiosk_search" \
   "apiosk_get_api" \
   "apiosk_execute" \
-  "apiosk_wallet_create" \
-  "apiosk_configure" \
-  "apiosk_wallet_delete" \
-  "apiosk_publish_api"
+  "apiosk_list_wallets" \
+  "apiosk_create_wallet" \
+  "apiosk_buy_credits"
 
-echo "==> Step 3: live discovery flow"
+echo "==> Step 4: live discovery flow"
 search_text="$(mcp_call_text "$HOSTED_URL" "apiosk_search" '{"search":"diff","limit":3}')"
 assert_search_payload "$search_text"
 
@@ -397,24 +493,19 @@ assert_explore_payload "$explore_text"
 get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_get_api" '{"slug":"agent-json-diff"}')"
 assert_get_api_payload "$get_text"
 
-hosted_wallet_id=""
-funded_wallet_id=""
+echo "==> Step 5: protected tools must challenge without auth"
+assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_list_wallets" "{}"
 
+echo "==> Step 6: optional authenticated protected-tool check"
 if [[ "$RUN_REMOTE_WALLET_TEST" == "1" ]]; then
-  echo "==> Step 4: live hosted wallet flow"
-  hosted_wallet_text="$(mcp_call_text "$HOSTED_URL" "apiosk_wallet_create" '{"label":"Live hosted smoke wallet"}')"
-  hosted_wallet_state="$(assert_wallet_create_payload "$hosted_wallet_text")"
-  IFS=$'\t' read -r hosted_wallet_id hosted_wallet_address <<<"$hosted_wallet_state"
-  CREATED_WALLET_IDS+=("$hosted_wallet_id")
-  echo "Created hosted wallet: $hosted_wallet_id"
-  echo "Hosted wallet address: $hosted_wallet_address"
-
-  hosted_configure_text="$(mcp_call_text "$HOSTED_URL" "apiosk_configure" "{\"wallet_id\":\"$hosted_wallet_id\",\"section\":\"funding\"}")"
-  assert_configure_payload "$hosted_configure_text" "$hosted_wallet_address"
-
-  hosted_delete_text="$(mcp_call_text "$HOSTED_URL" "apiosk_wallet_delete" "{\"wallet_id\":\"$hosted_wallet_id\"}")"
-  assert_wallet_delete_payload "$hosted_delete_text" "$hosted_wallet_id"
-  CREATED_WALLET_IDS=()
+  if [[ -z "$MCP_BEARER_TOKEN" ]]; then
+    echo "APIOSK_RUN_REMOTE_WALLET_TEST=1 requires APIOSK_MCP_BEARER_TOKEN." >&2
+    exit 1
+  fi
+  wallet_list_text="$(mcp_call_text "$HOSTED_URL" "apiosk_list_wallets" '{}' "$MCP_BEARER_TOKEN")"
+  assert_wallet_list_payload "$wallet_list_text"
+else
+  echo "==> Skipping authenticated protected-tool check. Set APIOSK_RUN_REMOTE_WALLET_TEST=1 and APIOSK_MCP_BEARER_TOKEN=... to enable it."
 fi
 
 if [[ "$RUN_FUNDED_TESTS" != "1" ]]; then
@@ -423,26 +514,12 @@ if [[ "$RUN_FUNDED_TESTS" != "1" ]]; then
   exit 0
 fi
 
-if [[ -z "$TEST_PRIVATE_KEY" ]]; then
-  echo "APIOSK_RUN_FUNDED_TESTS=1 requires APIOSK_TEST_PRIVATE_KEY." >&2
+if [[ -z "$MCP_BEARER_TOKEN" ]]; then
+  echo "APIOSK_RUN_FUNDED_TESTS=1 requires APIOSK_MCP_BEARER_TOKEN." >&2
   exit 1
 fi
 
-echo "==> Step 5: live funded pay flow"
-funded_wallet_text="$(mcp_call_text "$HOSTED_URL" "apiosk_wallet_create" "$(node -e '
-process.stdout.write(JSON.stringify({
-  label: "Live funded smoke wallet",
-  mode: "import_private_key",
-  secret: process.argv[1],
-  set_active: true
-}));
-' "$TEST_PRIVATE_KEY")")"
-funded_wallet_state="$(assert_wallet_create_payload "$funded_wallet_text")"
-IFS=$'\t' read -r funded_wallet_id funded_wallet_address <<<"$funded_wallet_state"
-CREATED_WALLET_IDS+=("$funded_wallet_id")
-echo "Imported funded hosted wallet: $funded_wallet_id"
-echo "Funded hosted wallet address: $funded_wallet_address"
-
+echo "==> Step 7: live funded pay flow"
 paid_text="$(mcp_call_text "$HOSTED_URL" "apiosk_execute" "$(node -e '
 process.stdout.write(JSON.stringify({
   slug: process.argv[1],
@@ -452,47 +529,16 @@ process.stdout.write(JSON.stringify({
     after: { ok: false, version: 2 }
   }
 }));
-' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")")"
+' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")" "$MCP_BEARER_TOKEN")"
 assert_paid_execute_payload "$paid_text" "$PAY_TEST_SLUG"
 
 if [[ "$RUN_PUBLISH_TEST" != "1" ]]; then
-  echo "==> Skipping live publish lifecycle. Set APIOSK_RUN_PUBLISH_TEST=1 to enable it."
+  echo "==> Skipping live publish lifecycle. Use the local suite for publish lifecycle verification."
   echo "==> Live URL test passed"
   exit 0
 fi
 
-echo "==> Step 6: live publish lifecycle"
-publish_slug="live-smoke-$(date +%s)"
-
-publish_text="$(mcp_call_text "$HOSTED_URL" "apiosk_publish_api" "$(node -e '
-process.stdout.write(JSON.stringify({
-  wallet_id: process.argv[1],
-  name: "Live Smoke API",
-  slug: process.argv[2],
-  endpoint_url: process.argv[3],
-  price_usd: 0.001,
-  description: "Temporary live smoke-test listing created by scripts/test-live-url.sh",
-  listing_group: "api"
-}));
-' "$funded_wallet_id" "$publish_slug" "$PUBLISH_ENDPOINT_URL")")"
-assert_slug_present "$publish_text" "$publish_slug"
-
-list_text="$(mcp_call_text "$HOSTED_URL" "apiosk_list_my_apis" "{\"wallet_id\":\"$funded_wallet_id\"}")"
-assert_slug_present "$list_text" "$publish_slug"
-
-update_text="$(mcp_call_text "$HOSTED_URL" "apiosk_update_api" "$(node -e '
-process.stdout.write(JSON.stringify({
-  wallet_id: process.argv[1],
-  slug: process.argv[2],
-  description: "Updated by the live smoke test"
-}));
-' "$funded_wallet_id" "$publish_slug")")"
-assert_slug_present "$update_text" "$publish_slug"
-
-delete_text="$(mcp_call_text "$HOSTED_URL" "apiosk_delete_api" "{\"wallet_id\":\"$funded_wallet_id\",\"slug\":\"$publish_slug\"}")"
-assert_slug_present "$delete_text" "$publish_slug"
-
-list_text="$(mcp_call_text "$HOSTED_URL" "apiosk_list_my_apis" "{\"wallet_id\":\"$funded_wallet_id\"}")"
-assert_slug_absent "$list_text" "$publish_slug"
+echo "Hosted publish lifecycle is no longer part of the safe live suite." >&2
+exit 1
 
 echo "==> Live URL test passed"
