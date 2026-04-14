@@ -9,9 +9,12 @@ import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
+const CLIENT_ID_TTL_SECONDS = 20 * 365 * 24 * 60 * 60;
 const DEFAULT_SCOPE = "mcp:tools";
 const OFFLINE_ACCESS_SCOPE = "offline_access";
 const SUPPORTED_SCOPES = [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE];
+const UUID_LIKE_CLIENT_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -119,6 +122,56 @@ function buildRedirectUri(baseRedirectUri, params) {
   }
 
   return redirectUrl.toString();
+}
+
+function deriveClientSecret(secret, clientId) {
+  return crypto.createHmac("sha256", secret).update(`client-secret:${clientId}`).digest("hex");
+}
+
+function shouldReplaceClientId(clientId) {
+  const value = trimString(clientId);
+  return !value || UUID_LIKE_CLIENT_ID_PATTERN.test(value);
+}
+
+function sanitizeClientMetadata(client = {}) {
+  const entries = Object.entries(client).filter(([key, value]) => {
+    if (value === undefined) return false;
+    return ![
+      "client_id",
+      "client_secret",
+      "client_id_issued_at",
+      "client_secret_expires_at",
+    ].includes(key);
+  });
+  return Object.fromEntries(entries);
+}
+
+function restoreSignedClient(secret, clientId) {
+  try {
+    const payload = parseSignedToken(secret, clientId);
+    if (payload.typ !== "client" || !payload.client || typeof payload.client !== "object") {
+      return undefined;
+    }
+
+    const restoredClient = {
+      ...payload.client,
+      client_id: clientId,
+      client_id_issued_at: payload.iat,
+    };
+
+    if (
+      trimString(restoredClient.token_endpoint_auth_method).toLowerCase() !== "none"
+    ) {
+      restoredClient.client_secret = deriveClientSecret(secret, clientId);
+      if (Number.isFinite(payload.client_secret_expires_at)) {
+        restoredClient.client_secret_expires_at = payload.client_secret_expires_at;
+      }
+    }
+
+    return restoredClient;
+  } catch {
+    return undefined;
+  }
 }
 
 function createAuthorizePage({
@@ -347,7 +400,8 @@ async function fetchDashboardJson(baseUrl, pathname, payload) {
 }
 
 class ApioskOAuthClientsStore {
-  constructor() {
+  constructor(secret) {
+    this.secret = secret;
     this.registeredClients = new Map();
     this.metadataClients = new Map();
   }
@@ -359,6 +413,12 @@ class ApioskOAuthClientsStore {
 
     if (this.metadataClients.has(clientId)) {
       return this.metadataClients.get(clientId);
+    }
+
+    const restoredClient = restoreSignedClient(this.secret, clientId);
+    if (restoredClient) {
+      this.registeredClients.set(clientId, restoredClient);
+      return restoredClient;
     }
 
     if (!URL.canParse(clientId)) {
@@ -396,8 +456,39 @@ class ApioskOAuthClientsStore {
   }
 
   async registerClient(client) {
-    this.registeredClients.set(client.client_id, client);
-    return client;
+    const normalizedClient = {
+      token_endpoint_auth_method: "none",
+      ...client,
+    };
+
+    if (shouldReplaceClientId(normalizedClient.client_id)) {
+      const signedClientId = buildIssuedToken(
+        this.secret,
+        "client",
+        {
+          client: sanitizeClientMetadata(normalizedClient),
+          client_secret_expires_at:
+            Number.isFinite(normalizedClient.client_secret_expires_at) ?
+              normalizedClient.client_secret_expires_at :
+              undefined,
+        },
+        CLIENT_ID_TTL_SECONDS
+      ).token;
+
+      normalizedClient.client_id = signedClientId;
+      normalizedClient.client_id_issued_at = getIssuedAtSeconds();
+      if (
+        trimString(normalizedClient.token_endpoint_auth_method).toLowerCase() !== "none"
+      ) {
+        normalizedClient.client_secret = deriveClientSecret(this.secret, signedClientId);
+      } else {
+        delete normalizedClient.client_secret;
+        delete normalizedClient.client_secret_expires_at;
+      }
+    }
+
+    this.registeredClients.set(normalizedClient.client_id, normalizedClient);
+    return normalizedClient;
   }
 }
 
@@ -410,7 +501,7 @@ class ApioskHostedOAuthProvider {
     this.mcpServerUrl = mcpServerUrl;
     this.appName = appName;
     this.resourceName = resourceName;
-    this.clientsStore = new ApioskOAuthClientsStore();
+    this.clientsStore = new ApioskOAuthClientsStore(secret);
   }
 
   async authorize(client, params, res) {

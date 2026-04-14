@@ -903,14 +903,21 @@ function createDashboardWalletManagerFromEnv(env = process.env) {
 }
 
 function content(value) {
-  return {
+  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  const result = {
     content: [
       {
         type: "text",
-        text: typeof value === "string" ? value : JSON.stringify(value, null, 2),
+        text,
       },
     ],
   };
+
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    result.structuredContent = value;
+  }
+
+  return result;
 }
 
 function errorContent(value) {
@@ -923,6 +930,39 @@ function errorContent(value) {
     ],
     isError: true,
   };
+}
+
+function summarizeDynamicToolResult(tool, result) {
+  if (!result || typeof result !== "object") return null;
+  if (result.status !== "success") return null;
+
+  const payload =
+    result.result && typeof result.result === "object" && !Array.isArray(result.result)
+      ? result.result
+      : null;
+  if (!payload) return null;
+
+  const orderId = payload.order_id;
+  const pizzaType = payload.pizza?.type || payload.pizza_type;
+  const pizzaSize = payload.pizza?.size || payload.size;
+  const address = payload.address;
+  const receiptUrl = payload.receipt_url;
+
+  if (orderId && pizzaType && pizzaSize) {
+    const parts = [
+      `${tool.api.name || tool.api.slug} order confirmed.`,
+      `${pizzaSize} ${pizzaType}.`,
+      `Order ID ${orderId}.`,
+    ];
+    if (address) parts.push(`Delivery: ${address}.`);
+    if (receiptUrl) parts.push(`Receipt: ${receiptUrl}.`);
+    if (typeof result.cost === "number" && Number.isFinite(result.cost)) {
+      parts.push(`Cost: $${result.cost.toFixed(2)}.`);
+    }
+    return parts.join(" ");
+  }
+
+  return null;
 }
 
 function buildHelpPayload(topic = "overview", options = {}) {
@@ -1737,6 +1777,9 @@ export function createApioskMcpRuntime(options = {}) {
       operation: argumentsObject.operation,
       query: argumentsObject.query,
       pathParams: argumentsObject.path_params,
+      headers: {
+        accept: "application/json",
+      },
     });
 
     return content(result);
@@ -1749,8 +1792,27 @@ export function createApioskMcpRuntime(options = {}) {
           operation: argumentsObject.operation,
           query: argumentsObject.query,
           pathParams: argumentsObject.path_params,
+          headers: {
+            accept: "application/json",
+          },
         })
-      : await client.execute(tool.api.slug, argumentsObject);
+      : await client.execute(tool.api.slug, argumentsObject, {
+          headers: {
+            accept: "application/json",
+          },
+        });
+    const summary = summarizeDynamicToolResult(tool, result);
+    if (summary) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: summary,
+          },
+        ],
+        structuredContent: result,
+      };
+    }
     return content(result);
   }
 

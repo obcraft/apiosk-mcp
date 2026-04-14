@@ -106,9 +106,55 @@ function normalizeOperation(operation, priceUsd) {
   };
 }
 
+function isDiagnosticOperationPath(path = "/") {
+  const normalized = normalizePath(path);
+  if (normalized === "/") return true;
+  return normalized.split("/").filter(Boolean).some((segment) =>
+    /^(health|status|metadata|docs?|openapi|swagger|ping|readyz?|livez?)$/i.test(segment)
+  );
+}
+
+function defaultOperationRank(operation = {}) {
+  const path = normalizePath(operation.path || operation.id || "/");
+  const trimmed = path.replace(/^\/+|\/+$/g, "");
+  const segments = trimmed ? trimmed.split("/").filter(Boolean).length : 0;
+  const method = String(operation.method || "POST").trim().toUpperCase();
+  const methodRank =
+    method === "POST"
+      ? 0
+      : method === "PUT"
+        ? 1
+        : method === "PATCH"
+          ? 2
+          : method === "DELETE"
+            ? 3
+            : method === "GET"
+              ? 4
+              : method === "HEAD"
+                ? 5
+                : 6;
+  return [
+    isDiagnosticOperationPath(path) ? 1 : 0,
+    /batch/i.test(path) ? 1 : 0,
+    segments,
+    path.length,
+    methodRank,
+    operation.payment_required === false ? 1 : 0,
+    `${method} ${path}`,
+  ];
+}
+
 function inferDefaultOperation(operations = []) {
-  const nonRoot = operations.find((operation) => operation.path !== "/" && !/batch/i.test(operation.path));
-  return nonRoot?.id || operations[0]?.id || "/";
+  const ranked = [...operations].sort((left, right) => {
+    const leftRank = defaultOperationRank(left);
+    const rightRank = defaultOperationRank(right);
+    for (let index = 0; index < leftRank.length; index += 1) {
+      if (leftRank[index] < rightRank[index]) return -1;
+      if (leftRank[index] > rightRank[index]) return 1;
+    }
+    return 0;
+  });
+  return ranked[0]?.id || operations[0]?.id || "/";
 }
 
 function inferReadOnlyHint(operations = [], slug = "", name = "", description = "") {

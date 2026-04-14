@@ -316,3 +316,85 @@ test("local-wallet-disabled mode hides configure and wallet-create tools", async
   assert.equal(tools.some((tool) => tool.name === "apiosk_buy_credits"), false);
   assert.equal(tools.some((tool) => tool.name === "apiosk_sign_in"), false);
 });
+
+test("dynamic order tools return a human confirmation summary with structured content", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-order-${Date.now()}`);
+  const runtime = createApioskMcpRuntime({
+    env: { APIOSK_HOME: homeDir },
+    enableLocalWallets: true,
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+    client: {
+      async listApis() {
+        return {
+          apis: [
+            {
+              slug: "bella-pizza",
+              name: "La Bella Pizza API",
+              description: "Order fictional pizzas",
+              category: "demo",
+              price_usd: 5,
+              active: true,
+              listing_metadata: {
+                mcp_native: true,
+                default_operation: "/orders",
+                mcp_tool: {
+                  name: "bella-pizza",
+                  description: "Order pizza",
+                  inputSchema: {
+                    type: "object",
+                    required: ["type", "size"],
+                    properties: {
+                      type: { type: "string" },
+                      size: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          meta: { total: 1, returned: 1, limit: 1, offset: 0 },
+        };
+      },
+      async execute(slug, input) {
+        return {
+          status: "success",
+          api: slug,
+          operation: "/orders",
+          upstream_status: 200,
+          cost: 5,
+          latency: 120,
+          result: {
+            order_id: "12345",
+            pizza: {
+              type: input.type,
+              size: input.size,
+            },
+            address: "Saved address on file",
+            receipt_url: "https://tmpfiles.org/dl/demo/receipt_12345.pdf",
+          },
+        };
+      },
+      async getApi(slug) {
+        return { slug };
+      },
+      async getMetadata(slug) {
+        return { slug, ok: true };
+      },
+      async requestJson() {
+        return { apis: [], meta: { total: 0 } };
+      },
+    },
+    clientFactory: null,
+  });
+
+  const result = await runtime.callTool("bella-pizza", {
+    type: "Tonno",
+    size: "Small",
+  });
+
+  assert.match(result.content[0].text, /order confirmed/i);
+  assert.match(result.content[0].text, /Small Tonno/);
+  assert.equal(result.structuredContent.result.order_id, "12345");
+
+  await rm(homeDir, { recursive: true, force: true });
+});

@@ -266,3 +266,51 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
     globalThis.fetch = originalFetch;
   }
 });
+
+test("dynamic registered OAuth clients survive a fresh provider instance", async () => {
+  const env = {
+    NODE_ENV: "test",
+    APIOSK_MCP_OAUTH_SECRET: "shared-hosted-oauth-secret",
+  };
+  const support = createHostedOAuthSupport({
+    env,
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const registered = await support.provider.clientsStore.registerClient({
+    client_id: "3622cef6-582f-4050-a615-5f01be7a6ed9",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    grant_types: ["authorization_code", "refresh_token"],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  });
+
+  assert.notEqual(
+    registered.client_id,
+    "3622cef6-582f-4050-a615-5f01be7a6ed9"
+  );
+  assert.match(registered.client_id, /^apiosk\./);
+
+  const freshSupport = createHostedOAuthSupport({
+    env,
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const restored = await freshSupport.provider.clientsStore.getClient(registered.client_id);
+  assert.ok(restored);
+  assert.equal(restored.client_name, "ChatGPT");
+  assert.deepEqual(
+    restored.redirect_uris,
+    ["https://chatgpt.com/connector/oauth/callback"]
+  );
+  assert.equal(restored.token_endpoint_auth_method, "none");
+});
