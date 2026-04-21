@@ -4,9 +4,9 @@ import {
   SERVER_INFO,
   createApioskMcpServer,
   listApioskTools,
-} from "./create-server.mjs";
-import { createHostedOAuthSupport, resolveHostedMcpUrls } from "./oauth.mjs";
-import { createApioskMcpRuntime } from "./runtime.mjs";
+} from "./src/create-server.mjs";
+import { createHostedOAuthSupport, resolveHostedMcpUrls } from "./src/oauth.mjs";
+import { createApioskMcpRuntime } from "./src/runtime.mjs";
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||

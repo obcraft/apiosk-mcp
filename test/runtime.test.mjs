@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { readFile, rm } from "node:fs/promises";
 
-import { createApioskMcpRuntime } from "../runtime.mjs";
+import { createApioskMcpRuntime } from "../src/runtime.mjs";
 
 function createFakeClient() {
   return {
