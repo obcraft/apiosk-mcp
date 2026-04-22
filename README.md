@@ -145,7 +145,7 @@ Use the hosted MCP endpoint:
 https://mcp.apiosk.com/mcp
 ```
 
-Protected tools on the hosted server use OAuth. Public discovery stays open, but paid execution, credits, and managed-wallet tools will trigger an Apiosk sign-in flow the first time the app calls them.
+Protected tools on the hosted server use OAuth. The remote MCP surface is intentionally slim for ChatGPT-style clients: `apiosk_explore`, `apiosk_metadata`, `apiosk_execute`, and `apiosk_health`.
 
 ## Available Tools
 
@@ -156,6 +156,13 @@ Static tools:
 - `apiosk_search`
 - `apiosk_get_api`
 - `apiosk_execute`
+
+Hosted remote MCP tools:
+
+- `apiosk_explore`
+- `apiosk_metadata`
+- `apiosk_execute`
+- `apiosk_health`
 
 Local wallet tools in stdio mode:
 
@@ -191,7 +198,7 @@ Optional dashboard-managed wallet tools:
 
 Dynamic tools:
 
-- one dynamic tool per active Apiosk API slug, generated from listing metadata
+- local stdio mode still generates one dynamic tool per active Apiosk API slug from listing metadata
 
 ## Examples
 
@@ -295,7 +302,7 @@ Or save a dashboard-managed connect string locally and verify it:
 }
 ```
 
-### Dynamic tool call
+### Dynamic tool call (local stdio only)
 
 If the server lists a dynamic tool named `agent-json-diff`, call it directly:
 
@@ -357,7 +364,7 @@ Default live coverage:
 - verifies the hosted tool surface
 - verifies `/.well-known/oauth-authorization-server`
 - verifies `/.well-known/oauth-protected-resource/mcp`
-- runs live `apiosk_search`, `apiosk_explore`, and `apiosk_get_api`
+- runs live `apiosk_explore`, `apiosk_metadata`, and `apiosk_health`
 - verifies that an unauthenticated protected MCP tool call returns the expected OAuth `401` challenge
 
 Optional live funded checks:

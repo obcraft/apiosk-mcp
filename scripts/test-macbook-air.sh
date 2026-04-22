@@ -281,6 +281,31 @@ process.stdin.on("end", () => {
 '
 }
 
+assert_health_payload() {
+  local payload="$1"
+  printf '%s' "$payload" | node -e '
+const chunks = [];
+process.stdin.on("data", (chunk) => chunks.push(chunk));
+process.stdin.on("end", () => {
+  const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  const expected = ["apiosk_explore", "apiosk_metadata", "apiosk_execute", "apiosk_health"];
+  if (parsed.status !== "ok") {
+    console.error(`Health returned unexpected status: ${parsed.status}`);
+    process.exit(1);
+  }
+  if (parsed.gateway?.status !== "ok") {
+    console.error(`Gateway health returned unexpected status: ${parsed.gateway?.status}`);
+    process.exit(1);
+  }
+  if (JSON.stringify(parsed.mcp?.tools || []) !== JSON.stringify(expected)) {
+    console.error(`Hosted MCP surface mismatch: ${JSON.stringify(parsed.mcp?.tools || [])}`);
+    process.exit(1);
+  }
+  console.log(`Health exposed ${expected.length} hosted tools.`);
+});
+'
+}
+
 assert_oauth_metadata() {
   local base_url="$1"
   curl -fsS "$base_url/.well-known/oauth-authorization-server" | node -e '
@@ -755,36 +780,41 @@ process.stdin.on("end", () => {
   assert_control_plane_auth_proxy "$HOSTED_URL"
 
   assert_tools "$HOSTED_URL" \
-    "apiosk_help" \
     "apiosk_explore" \
-    "apiosk_search" \
-    "apiosk_get_api" \
+    "apiosk_metadata" \
     "apiosk_execute" \
-    "apiosk_list_wallets" \
-    "apiosk_create_wallet" \
-    "apiosk_buy_credits"
-
-  search_text="$(mcp_call_text "$HOSTED_URL" "apiosk_search" '{"search":"diff","limit":2}')"
-  assert_search_payload "$search_text"
+    "apiosk_health"
 
   explore_text="$(mcp_call_text "$HOSTED_URL" "apiosk_explore" '{"listing_type":"api","search":"weather","limit":2}')"
   assert_explore_payload "$explore_text"
 
-  get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_get_api" '{"slug":"agent-json-diff"}')"
+  get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_metadata" '{"slug":"agent-json-diff"}')"
   assert_get_api_payload "$get_text"
 
-  assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_list_wallets" "{}"
+  health_text="$(mcp_call_text "$HOSTED_URL" "apiosk_health" '{}')"
+  assert_health_payload "$health_text"
+
+  assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_execute" '{"slug":"agent-json-diff","input":{"before":{"ok":true},"after":{"ok":false}}}'
 
   if [[ "$RUN_REMOTE_WALLET_TEST" == "1" ]]; then
     if [[ -z "$MCP_BEARER_TOKEN" ]]; then
       echo "APIOSK_RUN_REMOTE_WALLET_TEST=1 requires APIOSK_MCP_BEARER_TOKEN." >&2
       exit 1
     fi
-    echo "==> Hosted suite: authenticated protected-tool check"
-    wallet_list_text="$(mcp_call_text "$HOSTED_URL" "apiosk_list_wallets" '{}' "$MCP_BEARER_TOKEN")"
-    assert_hosted_wallets_payload "$wallet_list_text"
+    echo "==> Hosted suite: authenticated protected execute check"
+    paid_text="$(mcp_call_text "$HOSTED_URL" "apiosk_execute" "$(node -e '
+process.stdout.write(JSON.stringify({
+  slug: process.argv[1],
+  operation: process.argv[2],
+  input: {
+    before: { ok: true, version: 1 },
+    after: { ok: false, version: 2 }
+  }
+}));
+' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")" "$MCP_BEARER_TOKEN")"
+    assert_paid_execute_payload "$paid_text" "$PAY_TEST_SLUG"
   else
-    echo "==> Skipping authenticated hosted protected-tool check. Set APIOSK_RUN_REMOTE_WALLET_TEST=1 and APIOSK_MCP_BEARER_TOKEN=... to enable it."
+    echo "==> Skipping authenticated hosted protected execute check. Set APIOSK_RUN_REMOTE_WALLET_TEST=1 and APIOSK_MCP_BEARER_TOKEN=... to enable it."
   fi
 
   if [[ "$RUN_FUNDED_TESTS" != "1" ]]; then

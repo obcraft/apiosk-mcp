@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY index.mjs server.mjs runtime.mjs create-server.mjs oauth.mjs ./
+COPY index.mjs server.mjs runtime.mjs create-server.mjs oauth.mjs well-known.mjs ./
 COPY funding-options.mjs gateway-management.mjs listing-metadata.mjs local-config.mjs wallet-store.mjs ./
 EXPOSE 3000
 CMD ["node", "server.mjs"]

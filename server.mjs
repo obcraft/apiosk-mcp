@@ -7,12 +7,19 @@ import {
 } from "./create-server.mjs";
 import { createHostedOAuthSupport, resolveHostedMcpUrls } from "./oauth.mjs";
 import { createApioskMcpRuntime } from "./runtime.mjs";
+import {
+  resolveOpenAiAppsChallengeToken,
+  sendOpenAiAppsChallenge,
+} from "./well-known.mjs";
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
   process.env.APIOSK_DASHBOARD_URL ||
   "https://dashboard.apiosk.com"
 ).replace(/\/+$/, "");
+const OPENAI_APPS_CHALLENGE_TOKEN = resolveOpenAiAppsChallengeToken(process.env);
+const OPENAI_APPS_CHALLENGE_PATH_PATTERN =
+  /^\/\.well-known\/openai-apps-challenge(?:\/\.well-known\/openai-apps-challenge)*\/?$/;
 
 function normalizeControlPlanePath(pathname = "") {
   const basePath = String(pathname || "")
@@ -121,6 +128,10 @@ if (hostedOAuth.oauthMetadata.registration_endpoint) {
     hostedOAuth.registrationRouter
   );
 }
+
+app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
+  return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
+});
 
 app.all("/api/*path", async (req, res) => {
   try {

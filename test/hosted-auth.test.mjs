@@ -43,13 +43,16 @@ function createFakeGatewayClient() {
     async getMetadata(slug) {
       return { slug, ok: true };
     },
-    async requestJson() {
+    async requestJson(pathValue) {
+      if (pathValue === "/health") {
+        return { status: "ok" };
+      }
       return { apis: [], meta: { total: 0 } };
     },
   };
 }
 
-test("hosted runtime exposes dashboard tools and forwards request-scoped dashboard auth", async () => {
+test("hosted runtime exposes only the slim remote tool surface and forwards request-scoped dashboard auth", async () => {
   let capturedClientOptions = null;
   const runtime = createApioskMcpRuntime({
     env: {},
@@ -64,8 +67,10 @@ test("hosted runtime exposes dashboard tools and forwards request-scoped dashboa
   });
 
   const tools = await runtime.listTools();
-  assert.equal(tools.some((tool) => tool.name === "apiosk_list_wallets"), true);
-  assert.equal(tools.some((tool) => tool.name === "apiosk_buy_credits"), true);
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["apiosk_explore", "apiosk_metadata", "apiosk_execute", "apiosk_health"]
+  );
 
   const result = await runtime.callTool(
     "apiosk_execute",
@@ -88,6 +93,22 @@ test("hosted runtime exposes dashboard tools and forwards request-scoped dashboa
   });
   assert.equal(capturedClientOptions.headers["x-apiosk-user-jwt"], "jwt_remote_user");
   assert.equal(capturedClientOptions.headers.authorization, "Bearer jwt_remote_user");
+
+  const healthResult = await runtime.callTool("apiosk_health", {}, {
+    extra: {
+      dashboardSessionToken: "jwt_remote_user",
+    },
+  });
+  const healthPayload = JSON.parse(healthResult.content[0].text);
+
+  assert.equal(healthPayload.status, "ok");
+  assert.equal(healthPayload.gateway.status, "ok");
+  assert.deepEqual(healthPayload.mcp.tools, [
+    "apiosk_explore",
+    "apiosk_metadata",
+    "apiosk_execute",
+    "apiosk_health",
+  ]);
 });
 
 function createMockResponse(req) {

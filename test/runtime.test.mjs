@@ -45,6 +45,9 @@ function createFakeClient() {
       if (pathValue === "/types") {
         return { supported_types: [{ key: "api" }, { key: "dataset" }] };
       }
+      if (pathValue === "/health") {
+        return { status: "ok" };
+      }
       return { apis: [], meta: { total: 0 } };
     },
   };

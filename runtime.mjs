@@ -505,136 +505,195 @@ const PUBLISH_TOOLS = [
   },
 ];
 
-const DISCOVERY_TOOLS = [
-  {
-    name: "apiosk_help",
-    description: "Explain what Apiosk MCP is, how to connect it, how auth and x402 payments work, and the recommended workflow for discovery, wallets, and publishing.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        topic: {
-          type: "string",
-          enum: ["overview", "setup", "auth", "workflow", "payments", "wallets", "publish", "configure"],
-          description: "Optional help topic. Defaults to overview.",
-        },
+const HELP_TOOL = {
+  name: "apiosk_help",
+  description: "Explain what Apiosk MCP is, how to connect it, how auth and x402 payments work, and the recommended workflow for discovery, wallets, and publishing.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      topic: {
+        type: "string",
+        enum: ["overview", "setup", "auth", "workflow", "payments", "wallets", "publish", "configure"],
+        description: "Optional help topic. Defaults to overview.",
       },
     },
   },
-  {
-    name: "apiosk_explore",
-    description: "Browse Apiosk listing groups and explore one group at a time before narrowing with search.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        listing_type: {
-          type: "string",
-          enum: ["api", "dataset", "service", "connector", "skill", "product"],
-        },
-        search: {
-          type: "string",
-          description: "Optional free-text search when listing_type is set.",
-        },
-        sort: {
-          type: "string",
-          enum: ["name", "price", "newest"],
-        },
-        order: {
-          type: "string",
-          enum: ["asc", "desc"],
-        },
-        limit: {
-          type: "number",
-        },
-        offset: {
-          type: "number",
-        },
+};
+
+const EXPLORE_TOOL = {
+  name: "apiosk_explore",
+  description: "Browse Apiosk listing groups and explore one group at a time before narrowing with search.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      listing_type: {
+        type: "string",
+        enum: ["api", "dataset", "service", "connector", "skill", "product"],
+      },
+      search: {
+        type: "string",
+        description: "Optional free-text search when listing_type is set.",
+      },
+      sort: {
+        type: "string",
+        enum: ["name", "price", "newest"],
+      },
+      order: {
+        type: "string",
+        enum: ["asc", "desc"],
+      },
+      limit: {
+        type: "number",
+      },
+      offset: {
+        type: "number",
       },
     },
   },
-  {
-    name: "apiosk_search",
-    description: "Search and browse the Apiosk catalog. Use this first when you need to find APIs by capability, price, or category.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        search: {
-          type: "string",
-          description: "Free-text search over API names and descriptions.",
-        },
-        category: {
-          type: "string",
-          description: "Optional category filter.",
-        },
-        sort: {
-          type: "string",
-          enum: ["name", "price", "newest"],
-          description: "Sort order for results.",
-        },
-        order: {
-          type: "string",
-          enum: ["asc", "desc"],
-          description: "Sort direction.",
-        },
-        limit: {
-          type: "number",
-          description: "Maximum number of APIs to return.",
-        },
-        offset: {
-          type: "number",
-          description: "Pagination offset.",
-        },
+};
+
+const SEARCH_TOOL = {
+  name: "apiosk_search",
+  description: "Search and browse the Apiosk catalog. Use this first when you need to find APIs by capability, price, or category.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      search: {
+        type: "string",
+        description: "Free-text search over API names and descriptions.",
+      },
+      category: {
+        type: "string",
+        description: "Optional category filter.",
+      },
+      sort: {
+        type: "string",
+        enum: ["name", "price", "newest"],
+        description: "Sort order for results.",
+      },
+      order: {
+        type: "string",
+        enum: ["asc", "desc"],
+        description: "Sort direction.",
+      },
+      limit: {
+        type: "number",
+        description: "Maximum number of APIs to return.",
+      },
+      offset: {
+        type: "number",
+        description: "Pagination offset.",
       },
     },
   },
-  {
-    name: "apiosk_get_api",
-    description: "Fetch full listing detail and agent metadata for a specific Apiosk API slug.",
-    inputSchema: {
-      type: "object",
-      required: ["slug"],
-      properties: {
-        slug: {
-          type: "string",
-          description: "Apiosk API slug, for example 'agent-json-diff'.",
-        },
+};
+
+const METADATA_TOOL_INPUT_SCHEMA = {
+  type: "object",
+  required: ["slug"],
+  properties: {
+    slug: {
+      type: "string",
+      description: "Apiosk API slug, for example 'agent-json-diff'.",
+    },
+  },
+};
+
+const GET_API_TOOL = {
+  name: "apiosk_get_api",
+  description: "Fetch full listing detail and agent metadata for a specific Apiosk API slug.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: METADATA_TOOL_INPUT_SCHEMA,
+};
+
+const METADATA_TOOL = {
+  name: "apiosk_metadata",
+  description: "Fetch full listing detail and agent metadata for a specific Apiosk API slug.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: METADATA_TOOL_INPUT_SCHEMA,
+};
+
+const EXECUTE_TOOL = {
+  name: "apiosk_execute",
+  description: "Execute any Apiosk API by slug through the uniform /execute contract.",
+  annotations: {
+    readOnlyHint: false,
+    openWorldHint: true,
+    destructiveHint: true,
+  },
+  inputSchema: {
+    type: "object",
+    required: ["slug"],
+    properties: {
+      slug: {
+        type: "string",
+        description: "Apiosk API slug.",
+      },
+      operation: {
+        type: "string",
+        description: "Optional explicit operation id or path.",
+      },
+      input: {
+        description: "Raw JSON body for the default operation, or the envelope input field when operation is provided.",
+      },
+      query: {
+        type: "object",
+        additionalProperties: true,
+        description: "Optional query override when using the execute envelope.",
+      },
+      path_params: {
+        type: "object",
+        additionalProperties: true,
+        description: "Optional path parameter override when using the execute envelope.",
       },
     },
   },
-  {
-    name: "apiosk_execute",
-    description: "Fallback execute tool for any Apiosk API. Prefer the API-specific dynamic tool when one is available.",
-    inputSchema: {
-      type: "object",
-      required: ["slug"],
-      properties: {
-        slug: {
-          type: "string",
-          description: "Apiosk API slug.",
-        },
-        operation: {
-          type: "string",
-          description: "Optional explicit operation id or path.",
-        },
-        input: {
-          description: "Raw JSON body for the default operation, or the envelope input field when operation is provided.",
-        },
-        query: {
-          type: "object",
-          additionalProperties: true,
-          description: "Optional query override when using the execute envelope.",
-        },
-        path_params: {
-          type: "object",
-          additionalProperties: true,
-          description: "Optional path parameter override when using the execute envelope.",
-        },
-      },
-    },
+};
+
+const HEALTH_TOOL = {
+  name: "apiosk_health",
+  description: "Report Apiosk MCP runtime status and the configured gateway base URL.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
   },
-];
+  inputSchema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {},
+  },
+};
+
+const DISCOVERY_TOOLS = [HELP_TOOL, EXPLORE_TOOL, SEARCH_TOOL, GET_API_TOOL, EXECUTE_TOOL];
+const HOSTED_REMOTE_TOOLS = [EXPLORE_TOOL, METADATA_TOOL, EXECUTE_TOOL, HEALTH_TOOL];
 
 const ALL_STATIC_TOOLS = [
   ...DISCOVERY_TOOLS,
+  ...HOSTED_REMOTE_TOOLS,
   ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS,
   ...LOCAL_WALLET_TOOLS,
   ...DASHBOARD_WALLET_TOOLS,
@@ -1313,12 +1372,14 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   function getStaticTools(authInfo = null) {
+    if (hostedAuthEnabled) {
+      return [...HOSTED_REMOTE_TOOLS];
+    }
+
     const tools = [...DISCOVERY_TOOLS];
 
     if (localWalletStore) {
       tools.push(...LOCAL_WALLET_TOOLS, ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS, ...DASHBOARD_WALLET_TOOLS, ...PUBLISH_TOOLS);
-    } else if (hostedAuthEnabled) {
-      tools.push(...REMOTE_CREDITS_TOOLS, ...DASHBOARD_WALLET_TOOLS);
     } else if (hasConfiguredDashboardAccess(authInfo)) {
       tools.push(...DASHBOARD_WALLET_TOOLS);
     }
@@ -1342,6 +1403,13 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   async function getTools(force = false, authInfo = null) {
+    if (hostedAuthEnabled) {
+      cache.dynamicTools = [];
+      cache.toolIndex = new Map();
+      cache.toolNamesBySlug = new Map();
+      return [...HOSTED_REMOTE_TOOLS];
+    }
+
     if (!force && cache.dynamicTools && Date.now() < cache.expiresAt) {
       return [...getStaticTools(authInfo), ...cache.dynamicTools];
     }
@@ -1706,7 +1774,9 @@ export function createApioskMcpRuntime(options = {}) {
       return content({
         ...response,
         next_steps:
-          "Pick a listing_type and call apiosk_explore again, or use apiosk_search for full-text discovery.",
+          hostedAuthEnabled ?
+            "Pick a listing_type and call apiosk_explore again. Then use apiosk_metadata for a slug you want to inspect or apiosk_execute to run it." :
+            "Pick a listing_type and call apiosk_explore again, or use apiosk_search for full-text discovery.",
       });
     }
 
@@ -1725,7 +1795,9 @@ export function createApioskMcpRuntime(options = {}) {
     return content({
       ...response,
       next_steps:
-        "Use apiosk_get_api for detail or call apiosk_search if you want category filtering across the whole catalog.",
+        hostedAuthEnabled ?
+          "Use apiosk_metadata for listing detail and apiosk_execute when you are ready to run a slug." :
+          "Use apiosk_get_api for detail or call apiosk_search if you want category filtering across the whole catalog.",
     });
   }
 
@@ -1764,6 +1836,46 @@ export function createApioskMcpRuntime(options = {}) {
     return content({
       detail,
       metadata,
+    });
+  }
+
+  async function handleHealth(argumentsObject = {}, authInfo = null) {
+    const savedConfig = await getSavedConfig();
+    let gateway = null;
+
+    try {
+      const client = await getClient(authInfo);
+      gateway =
+        typeof client.requestJson === "function" ?
+          await client.requestJson("/health", { method: "GET" }) :
+          { status: "unknown" };
+    } catch (error) {
+      gateway = {
+        status: "degraded",
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    if (typeof gateway === "string") {
+      gateway = {
+        status: gateway.toLowerCase() === "ok" ? "ok" : gateway,
+        raw: gateway,
+      };
+    } else if (gateway && typeof gateway === "object" && !gateway.status && gateway.ok === true) {
+      gateway = {
+        ...gateway,
+        status: "ok",
+      };
+    }
+
+    return content({
+      status: gateway?.status || "ok",
+      mcp: {
+        mode: hostedAuthEnabled ? "hosted" : localWalletStore ? "local" : "remote",
+        tools: hostedAuthEnabled ? HOSTED_REMOTE_TOOLS.map((tool) => tool.name) : undefined,
+      },
+      gateway,
+      gateway_base_url: resolveGatewayBaseUrl(env, savedConfig),
     });
   }
 
@@ -2664,8 +2776,11 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
       if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
       if (name === "apiosk_search") return await handleSearch(argumentsObject, authInfo);
-      if (name === "apiosk_get_api") return await handleGetApi(argumentsObject, authInfo);
+      if (name === "apiosk_get_api" || name === "apiosk_metadata") {
+        return await handleGetApi(argumentsObject, authInfo);
+      }
       if (name === "apiosk_execute") return await handleExecute(argumentsObject, authInfo);
+      if (name === "apiosk_health") return await handleHealth(argumentsObject, authInfo);
 
       if (name === "apiosk_wallet_list") return await handleLocalWalletList();
       if (name === "apiosk_wallet_create") return await handleLocalWalletCreate(argumentsObject);
