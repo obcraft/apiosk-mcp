@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createHostedOAuthSupport } from "../oauth.mjs";
-import { createApioskMcpRuntime } from "../runtime.mjs";
+import { createHostedOAuthSupport } from "../src/oauth.mjs";
+import { createApioskMcpRuntime } from "../src/runtime.mjs";
 
 function createFakeGatewayClient() {
   return {
