@@ -165,6 +165,21 @@ const DASHBOARD_WALLET_TOOLS = [
       },
     },
   },
+  {
+    name: "apiosk_show_wallet_funding",
+    description:
+      "Show the buyer's Apiosk wallet address with a scannable QR code so they can fund it manually by sending USDC on Base mainnet from another wallet or exchange. Defaults to the user's first managed wallet when wallet_id is omitted. Always reminds the buyer that only Base mainnet USDC is accepted.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        wallet_id: {
+          type: "string",
+          description:
+            "Optional. Wallet to show funding info for. Defaults to the user's first managed wallet.",
+        },
+      },
+    },
+  },
 ];
 
 const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
@@ -2320,6 +2335,78 @@ export function createApioskMcpRuntime(options = {}) {
     return content(await buildConfigurePayload(argumentsObject));
   }
 
+  async function handleShowWalletFunding(argumentsObject = {}) {
+    const wallet = await resolveConfigurationWallet(argumentsObject.wallet_id);
+    if (!wallet?.address) {
+      return errorContent(
+        "No managed wallet is available. Use apiosk_create_wallet (or apiosk_get_started) to create one first.",
+      );
+    }
+
+    const funding = await buildFundingOptions({
+      wallet,
+      env,
+      fundingProvider: "manual",
+      includeQrDataUrl: true,
+    });
+    if (!funding?.receive_on_base) {
+      return errorContent("Could not build funding instructions for this wallet.");
+    }
+
+    const receive = funding.receive_on_base;
+    const baseUsdcContract = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+    const lines = [
+      "Send USDC to your Apiosk wallet:",
+      "",
+      `Address: ${receive.address}`,
+      "Network: Base mainnet (chain id 8453)",
+      `Token:   USDC (${baseUsdcContract})`,
+      "",
+      "WARNING: only Base mainnet USDC. Sending from Ethereum, Polygon, Solana,",
+      "or any other network will permanently lose the funds — this address is",
+      "Base only.",
+      "",
+      `Block explorer: ${receive.explorer_url}`,
+    ];
+    if (receive.qr_code_terminal) {
+      lines.push("", receive.qr_code_terminal);
+    } else if (receive.qr_image_url) {
+      lines.push("", `QR image: ${receive.qr_image_url}`);
+    }
+
+    const messageContent = [{ type: "text", text: lines.join("\n") }];
+
+    // Render the QR inline via MCP image content when the buyer's client
+    // supports images (Claude Desktop, the MCP Inspector, etc.). Falls back
+    // gracefully on terminals without image support — the text block above
+    // still has the address and the ANSI QR.
+    const dataUrl = receive.qr_code_data_url;
+    if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/png;base64,")) {
+      messageContent.push({
+        type: "image",
+        data: dataUrl.slice("data:image/png;base64,".length),
+        mimeType: "image/png",
+      });
+    }
+
+    return {
+      content: messageContent,
+      structuredContent: {
+        wallet_id: wallet.id ?? null,
+        wallet_label: wallet.label ?? null,
+        address: receive.address,
+        network: "base",
+        chain_id: 8453,
+        token_symbol: "USDC",
+        token_contract: baseUsdcContract,
+        explorer_url: receive.explorer_url,
+        qr_payload: receive.qr_payload,
+        qr_image_url: receive.qr_image_url,
+        transfer_uri: receive.transfer_uri,
+      },
+    };
+  }
+
   async function handleGetStarted(argumentsObject = {}) {
     if (!localWalletStore) {
       return errorContent(
@@ -2786,6 +2873,8 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_wallet_create") return await handleLocalWalletCreate(argumentsObject);
       if (name === "apiosk_get_started") return await handleGetStarted(argumentsObject);
       if (name === "apiosk_configure") return await handleConfigure(argumentsObject);
+      if (name === "apiosk_show_wallet_funding")
+        return await handleShowWalletFunding(argumentsObject);
       if (name === "apiosk_wallet_select") return await handleLocalWalletSelect(argumentsObject);
       if (name === "apiosk_wallet_update") return await handleLocalWalletUpdate(argumentsObject);
       if (name === "apiosk_wallet_delete") return await handleLocalWalletDelete(argumentsObject);

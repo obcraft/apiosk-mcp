@@ -89,6 +89,51 @@ test("wallet create returns configure menu and funding QR data", async () => {
   await rm(homeDir, { recursive: true, force: true });
 });
 
+test("apiosk_show_wallet_funding returns address text + QR image content", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-funding-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  await runtime.callTool("apiosk_wallet_create", { label: "Buyer wallet" });
+
+  const tools = (await runtime.listTools()).map((t) => t.name);
+  assert.ok(
+    tools.includes("apiosk_show_wallet_funding"),
+    "apiosk_show_wallet_funding should be exposed in the tool list",
+  );
+
+  const result = await runtime.callTool("apiosk_show_wallet_funding", {});
+  // First content block must carry the wallet address as plain text so
+  // clients without image rendering still see useful output.
+  assert.equal(result.content[0].type, "text");
+  assert.match(result.content[0].text, /Address: 0x[a-fA-F0-9]{40}/);
+  assert.match(result.content[0].text, /Base mainnet/);
+  // The structured payload exposes the address + Base USDC contract for
+  // any agent that wants to drive a bridge / exchange flow itself.
+  assert.match(result.structuredContent.address, /^0x[a-f0-9]{40}$/);
+  assert.equal(result.structuredContent.network, "base");
+  assert.equal(result.structuredContent.chain_id, 8453);
+  assert.equal(result.structuredContent.token_symbol, "USDC");
+  // Image content block should be present (we always set
+  // includeQrDataUrl=true) and base64-encoded.
+  const imageBlock = result.content.find((block) => block.type === "image");
+  assert.ok(imageBlock, "image content block should be present");
+  assert.equal(imageBlock.mimeType, "image/png");
+  assert.ok(imageBlock.data && imageBlock.data.length > 100, "QR PNG data should not be empty");
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
+test("apiosk_show_wallet_funding errors cleanly when no wallet exists", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-funding-empty-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  const result = await runtime.callTool("apiosk_show_wallet_funding", {});
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /No managed wallet/);
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
 test("configure returns provider checkout details when environment allows", async () => {
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-provider-${Date.now()}`);
   const runtime = createRuntime(homeDir, {
