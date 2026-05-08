@@ -89,6 +89,32 @@ test("wallet create returns configure menu and funding QR data", async () => {
   await rm(homeDir, { recursive: true, force: true });
 });
 
+test("apiosk_wallet_create response includes inline QR image content block", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-create-image-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  const result = await runtime.callTool("apiosk_wallet_create", { label: "Inline QR wallet" });
+
+  // Backwards-compat: the first content block is still the JSON payload
+  // older clients parsed.
+  assert.equal(result.content[0].type, "text");
+  const payload = JSON.parse(result.content[0].text);
+  assert.match(payload.wallet.address, /^0x[a-f0-9]{40}$/);
+  // The configure.funding bundle keeps shipping qr_image_url + ANSI QR.
+  assert.ok(payload.configure.funding.receive_on_base.qr_image_url);
+  assert.ok(payload.configure.funding.receive_on_base.qr_code_terminal);
+
+  // New: an image content block with the PNG QR is appended automatically
+  // so Claude Desktop / MCP Inspector renders the QR inline with the
+  // create-wallet response — no follow-up tool call required.
+  const imageBlock = result.content.find((block) => block.type === "image");
+  assert.ok(imageBlock, "expected inline image content block on wallet create");
+  assert.equal(imageBlock.mimeType, "image/png");
+  assert.ok(imageBlock.data && imageBlock.data.length > 100, "PNG data should not be empty");
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
 test("apiosk_show_wallet_funding returns address text + QR image content", async () => {
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-funding-${Date.now()}`);
   const runtime = createRuntime(homeDir);

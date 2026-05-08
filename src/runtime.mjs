@@ -2322,13 +2322,26 @@ export function createApioskMcpRuntime(options = {}) {
       });
     }
 
+    // Force include_qr_data_url so we can append an inline image content
+    // block below — clients that render images (Claude Desktop, MCP
+    // Inspector) will then show the funding QR right next to the
+    // newly-created wallet without a follow-up tool call.
     created.configure = await buildConfigurePayload({
       wallet_id: created.wallet.id,
       section: "overview",
-      include_qr_data_url: argumentsObject.include_qr_data_url,
+      include_qr_data_url: true,
     });
 
-    return content(created);
+    const result = content(created);
+    const dataUrl = created.configure?.funding?.receive_on_base?.qr_code_data_url;
+    if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/png;base64,")) {
+      result.content.push({
+        type: "image",
+        data: dataUrl.slice("data:image/png;base64,".length),
+        mimeType: "image/png",
+      });
+    }
+    return result;
   }
 
   async function handleConfigure(argumentsObject = {}) {
