@@ -736,6 +736,17 @@ class ApioskHostedOAuthProvider {
   }
 
   async verifyAccessToken(token) {
+    // Accept Apiosk connect tokens (aw_live_… / aw_test_…) as bearer-
+    // equivalent. This is the headless-agent path: cron / CI / a fresh box
+    // can mint a connect token in the buyer portal and call the hosted MCP
+    // straight away, no interactive OAuth handshake. The gateway is the
+    // authoritative store for connect tokens, so we validate by calling
+    // its /v1/me endpoint — one source of truth, no shared secret.
+    const trimmed = typeof token === "string" ? token.trim() : "";
+    if (/^aw_(live|test)_/i.test(trimmed)) {
+      return this.verifyConnectTokenAccess(trimmed);
+    }
+
     const payload = parseSignedToken(this.secret, token);
     if (payload.typ !== "access") {
       throw new Error("Invalid access token");
@@ -760,6 +771,66 @@ class ApioskHostedOAuthProvider {
       },
     };
   }
+
+  async verifyConnectTokenAccess(connectToken) {
+    const cached = this.connectTokenCache?.get(connectToken);
+    const now = Date.now();
+    if (cached && cached.expiresAt > now) {
+      return cached.auth;
+    }
+
+    const gatewayBase =
+      trimString(this.env?.APIOSK_GATEWAY_URL) ||
+      trimString(this.env?.APIOSK_GATEWAY_BASE_URL) ||
+      "https://gateway.apiosk.com";
+    const url = new URL("/v1/me", gatewayBase.replace(/\/+$/, "/")).href;
+
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: { "X-Apiosk-Connect-Token": connectToken, accept: "application/json" },
+      });
+    } catch (err) {
+      throw new Error(`Gateway unreachable while validating connect token: ${err?.message || err}`);
+    }
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`Gateway rejected connect token (HTTP ${response.status}): ${body.slice(0, 200)}`);
+    }
+    const data = await response.json().catch(() => ({}));
+    const tokenId = trimString(data?.token_id);
+    if (!tokenId) {
+      throw new Error("Gateway /v1/me returned no token_id");
+    }
+
+    const auth = {
+      token: connectToken,
+      clientId: tokenId,
+      scopes: [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE],
+      // Connect tokens have their own expiry stored gateway-side; we treat
+      // each MCP call as needing a fresh check (via cache TTL) rather than
+      // mirroring the absolute expiry here.
+      expiresAt: Math.floor(now / 1000) + 60,
+      resource: new URL(this.mcpServerUrl.href),
+      extra: {
+        userId: trimString(data?.user_id) || undefined,
+        apiosk_connect_token: connectToken,
+        apiosk_rails: Array.isArray(data?.rails) ? data.rails : undefined,
+      },
+    };
+
+    if (!this.connectTokenCache) {
+      this.connectTokenCache = new Map();
+    }
+    // Cache for 60s. Long enough to absorb a burst of tool calls, short
+    // enough that a revocation in the buyer portal takes effect within a
+    // minute — same TTL the dashboard uses for similar permission caches.
+    this.connectTokenCache.set(connectToken, {
+      auth,
+      expiresAt: now + 60_000,
+    });
+    return auth;
+  }
 }
 
 function resolveOAuthSecret(env = process.env) {
@@ -782,6 +853,15 @@ function resolveOAuthSecret(env = process.env) {
 }
 
 function extractBearerToken(req) {
+  // Apiosk's own header alias for headless agents that prefer to keep
+  // Authorization free for upstream APIs. Checked first so a request that
+  // carries BOTH a Bearer JWT and X-Apiosk-Connect-Token is treated as a
+  // connect-token caller (the explicit Apiosk header wins).
+  const apioskHeader = trimString(req.headers["x-apiosk-connect-token"]);
+  if (apioskHeader) {
+    return apioskHeader;
+  }
+
   const header = trimString(req.headers.authorization);
   if (!header) return null;
 
