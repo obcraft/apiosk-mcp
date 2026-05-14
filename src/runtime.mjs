@@ -1366,13 +1366,26 @@ export function createApioskMcpRuntime(options = {}) {
     const walletAddress = privateKey
       ? activeWallet?.address
       : envWalletAddress || activeWallet?.address || savedWalletAddress;
+
+    // Hosted MCP path: a headless caller authenticated by presenting an
+    // Apiosk connect token. oauth.mjs stashes it on req.auth.extra so we
+    // can thread it back through to the gateway as X-Apiosk-Connect-Token,
+    // which lets the gateway settle the call via the buyer's managed
+    // wallet (no APIOSK_PRIVATE_KEY needed). This is the request-scoped
+    // override; it beats the per-process env/saved-config token.
+    const requestConnectToken = trimString(authInfo?.extra?.apiosk_connect_token);
+    const envConnectToken = trimString(env.APIOSK_CONNECT_TOKEN || savedConfig?.connect_token);
+    const effectiveConnectToken = requestConnectToken || envConnectToken || undefined;
+    const requestAuthorization = requestConnectToken ? `Bearer ${requestConnectToken}` : undefined;
+    const envAuthorization = trimString(env.APIOSK_CONNECT_AUTHORIZATION || savedConfig?.connect_authorization);
+    const effectiveAuthorization = requestAuthorization || envAuthorization || undefined;
+
     const clientOptions = {
       baseUrl: resolveGatewayBaseUrl(env, savedConfig),
-      connectToken: trimString(env.APIOSK_CONNECT_TOKEN || savedConfig?.connect_token) || undefined,
+      connectToken: effectiveConnectToken,
       connectHeaderName:
         trimString(env.APIOSK_CONNECT_HEADER_NAME || savedConfig?.connect_header_name) || undefined,
-      authorization:
-        trimString(env.APIOSK_CONNECT_AUTHORIZATION || savedConfig?.connect_authorization) || undefined,
+      authorization: effectiveAuthorization,
       walletAddress: walletAddress || undefined,
       xPayment: trimString(env.APIOSK_X_PAYMENT) || undefined,
       privateKey,
