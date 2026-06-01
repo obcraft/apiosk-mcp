@@ -261,6 +261,16 @@ Or save a dashboard-managed connect string locally and verify it:
 }
 ```
 
+The connect string identifies the buyer's managed wallet and connect token. The
+`APIO_WALLET_*` limits bound the USDC (x402) rail. The **same** connect token
+also settles over the buyer's other enabled rails — **SEPA incasso** (EU bank
+direct debit) and **prepaid credits** — chosen by the gateway per call. The SEPA
+mandate and its threshold/age terms live server-side against the same buyer
+account, so an agent that only holds the connect token can keep making paid
+calls even with no on-chain balance: the call is recorded to a SEPA ledger and
+collected later in a batched direct debit. See **[Settlement rails](docs/sepa-rail.md)**
+or call `apiosk_help` with `topic="rails"` for the full incasso logic.
+
 ### Open the configure menu
 
 ```json

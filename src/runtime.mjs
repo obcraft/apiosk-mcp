@@ -522,7 +522,7 @@ const PUBLISH_TOOLS = [
 
 const HELP_TOOL = {
   name: "apiosk_help",
-  description: "Explain what Apiosk MCP is, how to connect it, how auth and x402 payments work, and the recommended workflow for discovery, wallets, and publishing.",
+  description: "Explain what Apiosk MCP is, how to connect it, how auth and x402 payments work, the settlement rails (USDC, SEPA incasso / direct debit, credits), and the recommended workflow for discovery, wallets, and publishing.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -533,8 +533,8 @@ const HELP_TOOL = {
     properties: {
       topic: {
         type: "string",
-        enum: ["overview", "setup", "auth", "workflow", "payments", "wallets", "publish", "configure"],
-        description: "Optional help topic. Defaults to overview.",
+        enum: ["overview", "setup", "auth", "workflow", "payments", "rails", "wallets", "publish", "configure"],
+        description: "Optional help topic. Defaults to overview. Use 'rails' to learn how settlement works across USDC, SEPA incasso (direct debit), and credits.",
       },
     },
   },
@@ -1137,6 +1137,53 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Use APIOSK_CONNECT_TOKEN when access is managed in the dashboard",
         "Use apiosk_buy_credits when a human should fund usage once through Adyen and let the agent keep spending from a credits balance",
       ],
+      see_also:
+        "x402/USDC is only one settlement rail. Call apiosk_help with topic='rails' to learn how the same connect token also settles over SEPA incasso (EU bank direct debit) and prepaid credits, including the rail fallback order.",
+    },
+    rails: {
+      topic: "rails",
+      summary:
+        "Apiosk is one mandate, any rail. A single buyer connect token can settle paid calls over USDC (x402 on Base), SEPA incasso (EU bank direct debit), or prepaid credits. The gateway picks the rail per call; the agent does not need to know which one is used.",
+      settlement_rails: [
+        "usdc_x402: on-chain USDC on Base (chain 8453), settled per call via an x402 payment proof from the agent wallet or APIOSK_PRIVATE_KEY.",
+        "sepa_incasso: EU SEPA Direct Debit. Paid calls are appended to a ledger and collected later in batches from the buyer's bank account. No per-call bank transaction. Best for EU buyers; lowest fees on high call volume.",
+        "credits: prepaid balance topped up once by a human (Adyen/Mollie), then spent down per call. See apiosk_buy_credits.",
+      ],
+      rail_fallback_order: [
+        "1. USDC / x402 wallet when the agent can produce a payment proof.",
+        "2. SEPA incasso ledger when the buyer has an active SEPA mandate (no proof needed — the call is recorded, not blocked).",
+        "3. Prepaid credits balance.",
+        "A 402 is only returned when none of the buyer's enabled rails can cover the call.",
+      ],
+      sepa_incasso: {
+        what_it_is:
+          "An incasso (SEPA Direct Debit) lets Apiosk pull euros from the buyer's bank account under a one-time mandate, so the agent can keep calling paid APIs without signing or funding each call.",
+        how_it_works: [
+          "1. Mandate setup (once): the buyer authorizes a recurring SEPA mandate in the buyer portal. iDEAL does a one-cent verification (NL banks) that returns a reusable direct-debit mandate; PayPal and card mandates are alternatives for non-NL buyers.",
+          "2. Collection terms (once): the buyer sets a threshold (€25–€500, default €25) and a max age (7, 14, or 30 days) that bound how much / how long can accrue before a collection.",
+          "3. Per call: when a paid call settles over SEPA, the gateway appends a SEPA ledger debit row carrying the full breakdown — gross EUR, Apiosk fee (3%), Mollie fee, and provider net. No bank transaction happens yet.",
+          "4. Batch collection: a background worker flushes a buyer's unbatched ledger into ONE Mollie SEPA Direct Debit when the outstanding sum crosses the threshold OR the oldest entry passes the max age. Many micro-calls become a single bank debit.",
+        ],
+        economics: [
+          "Apiosk platform fee: 3% of each call's gross, recorded per ledger row.",
+          "Mollie SEPA Direct Debit fee: ~€0.30 per COLLECTION (per batch), not per call — which is why sub-€25 thresholds are not offered.",
+          "Provider receives gross minus the 3% Apiosk fee; the Mollie fee is netted at collection time.",
+        ],
+        operational_defaults: {
+          threshold_eur: "25–500 (buyer-set, default 25, floor 25)",
+          max_age_days: "7, 14, or 30 (buyer-set)",
+          batch_worker_cadence_seconds: "SEPA_BATCH_POLL_SECONDS (default 1800)",
+          batch_flush_amount_eur: "MOLLIE_BATCH_FLUSH_EUR (default 25)",
+          batch_flush_age_days: "MOLLIE_BATCH_FLUSH_DAYS (default 7)",
+        },
+        agent_guidance: [
+          "Agents never set up the mandate — that is a human, one-time action in the buyer portal. The agent only needs the connect token; the SEPA rail is selected server-side.",
+          "SEPA-backed calls succeed immediately even with no wallet balance and no x402 proof; settlement is deferred to the batch.",
+          "Use apiosk_get_credits_status / the buyer portal to inspect outstanding (unbatched) SEPA balance and upcoming collections.",
+        ],
+      },
+      connect_string_note:
+        "The connect string identifies the buyer's managed wallet and connect token; APIO_WALLET_* limits bound the USDC rail. The SEPA mandate and its threshold/age terms live server-side against the same buyer account, so the same connect token transparently settles over SEPA when USDC is unavailable. See help topic 'setup' for the connect string format.",
     },
     wallets: {
       topic: "wallets",
