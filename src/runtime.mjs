@@ -737,6 +737,25 @@ function sanitizeToolName(name, fallback) {
   return candidate || "apiosk_tool";
 }
 
+/**
+ * Map the gateway's boolean active/verified flags onto the provider-portal's
+ * three-state listing lifecycle (live | pending | disabled). The portal writes
+ * apis.status (active|inactive) and the gateway auto-verifies owner-owned
+ * (KYB-gated) listings, so for a catalog reader: not active -> disabled,
+ * active but unverified -> pending review, active + verified -> live.
+ *
+ * NOTE: the public catalog (GET /v1/apis) hard-filters to active AND verified
+ * rows, so entries built from it are always "live" — the field documents that
+ * invariant for catalog readers. The pending/disabled branches are reached when
+ * this runs over a richer object (e.g. a get_api_detail response, which returns
+ * the real active/verified flags).
+ */
+function deriveListingStatus(api) {
+  if (api.active === false) return "disabled";
+  if (api.verified === false) return "pending";
+  return "live";
+}
+
 function buildCatalogEntry(api, toolName) {
   return {
     slug: api.slug,
@@ -753,6 +772,11 @@ function buildCatalogEntry(api, toolName) {
     default_operation: api.listing_metadata?.default_operation ?? null,
     tags: api.listing_metadata?.tags ?? [],
     mcp_native: api.listing_metadata?.mcp_native ?? false,
+    // Listing lifecycle from the gateway /v1/apis flags so a catalog reader can
+    // tell live from pending-verification from disabled, matching the portal.
+    status: deriveListingStatus(api),
+    active: api.active ?? true,
+    verified: api.verified ?? false,
   };
 }
 
@@ -1184,6 +1208,16 @@ function buildHelpPayload(topic = "overview", options = {}) {
       },
       connect_string_note:
         "The connect string identifies the buyer's managed wallet and connect token; APIO_WALLET_* limits bound the USDC rail. The SEPA mandate and its threshold/age terms live server-side against the same buyer account, so the same connect token transparently settles over SEPA when USDC is unavailable. See help topic 'setup' for the connect string format.",
+      provider_settlement: {
+        what_it_is:
+          "The settlement_rails above are how BUYERS pay. This is the PROVIDER (seller) side: how an API owner receives their earnings. Agents do not interact with it — it is provider-account configuration in the provider portal — but it completes the 'any rail' picture.",
+        how_it_works: [
+          "USDC earnings settle to the API's payout wallet (apis.wallet_address), which the portal links to a verified, Monerium-linked payout_wallets row.",
+          "EUR via SEPA incasso routing: the provider's share of buyer SEPA collections is paid to their verified receiver IBAN (provider_compliance_profiles gates this on KYB approval).",
+          "Crypto -> EUR off-ramp mandate (optional): the provider signs an EIP-191 authorization and an on-chain mandate (ApioskOfframpExecutor on Base). Apiosk's offramp keeper then auto-converts their accumulated USDC to EURe via Monerium and redeems it to their IBAN over SEPA once the balance crosses their bundle threshold. Non-custodial — the keeper can never redirect funds or exceed the provider's on-chain per-run cap or cooldown.",
+        ],
+        note: "The off-ramp mandate is the provider-side counterpart of the buyer-side SEPA incasso; they are distinct mechanisms. Both require a one-time human action (KYB + signing), never an agent.",
+      },
     },
     wallets: {
       topic: "wallets",
@@ -1217,6 +1251,8 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "endpoint_url must use HTTPS",
         "slug must use lowercase letters, numbers, and hyphens",
       ],
+      identity_note:
+        "These tools manage listings via WALLET SIGNATURE — the community/MCP publish channel, owned by a synthetic platform account. That is a different identity from the provider portal, where providers manage APIs under a Supabase-auth account (owner_id) after Monerium KYB, and where listings auto-verify on create. A listing published here and one created in the portal are managed through different identities and do not currently round-trip between the two surfaces.",
     },
     configure: {
       topic: "configure",
