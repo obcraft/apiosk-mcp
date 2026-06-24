@@ -222,34 +222,9 @@ const LOCAL_ACCOUNT_AND_CREDITS_TOOLS = [
       },
     },
   },
-  {
-    name: "apiosk_buy_credits",
-    description:
-      "Create an Adyen payment link so a human can top up the signed-in user's Apiosk credits balance. Works with a local dashboard session or hosted MCP authorization and returns the checkout URL to open in a browser.",
-    inputSchema: {
-      type: "object",
-      required: ["amount_eur"],
-      properties: {
-        amount_eur: { type: "number" },
-      },
-    },
-  },
-  {
-    name: "apiosk_get_credits_status",
-    description:
-      "Refresh pending Adyen credit top-ups and return the current credits balance plus any remaining pending payment links for the authorized dashboard user.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        payment_intent_id: { type: "string" },
-      },
-    },
-  },
 ];
 
-const REMOTE_CREDITS_TOOLS = LOCAL_ACCOUNT_AND_CREDITS_TOOLS.filter((tool) =>
-  ["apiosk_buy_credits", "apiosk_get_credits_status"].includes(tool.name)
-);
+const REMOTE_CREDITS_TOOLS = [];
 
 const LOCAL_WALLET_TOOLS = [
   {
@@ -677,6 +652,8 @@ const EXECUTE_TOOL = {
         description: "Optional explicit operation id or path.",
       },
       input: {
+        type: "object",
+        additionalProperties: true,
         description: "Raw JSON body for the default operation, or the envelope input field when operation is provided.",
       },
       query: {
@@ -1227,7 +1204,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Use apiosk_wallet_create and apiosk_wallet_select in the local stdio package for the cleanest autonomous workflow",
         "Use APIOSK_PRIVATE_KEY when you want deterministic wallet selection from environment variables",
         "Use APIOSK_CONNECT_TOKEN when access is managed in the dashboard",
-        "Use apiosk_buy_credits when a human should fund usage once through Adyen and let the agent keep spending from a credits balance",
+        "Use the buyer portal to top up a prepaid credits balance and let the agent keep spending from it",
       ],
       see_also:
         "x402/USDC is only one settlement rail. Call apiosk_help with topic='rails' to learn how the same connect token also settles over SEPA incasso (EU bank direct debit) and prepaid credits, including the rail fallback order.",
@@ -1239,7 +1216,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
       settlement_rails: [
         "usdc_x402: on-chain USDC on Base (chain 8453), settled per call via an x402 payment proof from the agent wallet or APIOSK_PRIVATE_KEY.",
         "sepa_incasso: EU SEPA Direct Debit. Paid calls are appended to a ledger and collected later in batches from the buyer's bank account. No per-call bank transaction. Best for EU buyers; lowest fees on high call volume.",
-        "credits: prepaid balance topped up once by a human (Adyen/Mollie), then spent down per call. See apiosk_buy_credits.",
+        "credits: prepaid balance topped up once by a human via the buyer portal (Adyen/Mollie), then spent down per call.",
       ],
       rail_fallback_order: [
         "1. USDC / x402 wallet when the agent can produce a payment proof.",
@@ -1271,7 +1248,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
         agent_guidance: [
           "Agents never set up the mandate — that is a human, one-time action in the buyer portal. The agent only needs the connect token; the SEPA rail is selected server-side.",
           "SEPA-backed calls succeed immediately even with no wallet balance and no x402 proof; settlement is deferred to the batch.",
-          "Use apiosk_get_credits_status / the buyer portal to inspect outstanding (unbatched) SEPA balance and upcoming collections.",
+          "Use the buyer portal to inspect outstanding (unbatched) SEPA balance and upcoming collections.",
         ],
       },
       connect_string_note:
@@ -2275,11 +2252,10 @@ export function createApioskMcpRuntime(options = {}) {
         record.email_confirmation_required ?
           [
             "Tell the user to confirm their email from the Supabase/Apiosk email they just received.",
-            "After confirmation, call apiosk_sign_in and then apiosk_buy_credits.",
+            "After confirmation, call apiosk_sign_in.",
           ] :
           [
-            "Call apiosk_buy_credits to create an Adyen payment link.",
-            "After the human pays, call apiosk_get_credits_status to confirm the credits landed.",
+            "Explore the Apiosk catalog with apiosk_search or apiosk_explore.",
           ],
     });
   }
@@ -2324,67 +2300,8 @@ export function createApioskMcpRuntime(options = {}) {
       saved_session: savedSession,
       local_config_paths: createApioskLocalConfigPaths(env),
       next_steps: [
-        "Call apiosk_buy_credits to create an Adyen payment link.",
-        "After the human pays, call apiosk_get_credits_status to reconcile pending top-ups and confirm the balance.",
+        "Explore the Apiosk catalog with apiosk_search or apiosk_explore.",
       ],
-    });
-  }
-
-  async function handleBuyCredits(argumentsObject = {}, authInfo = null) {
-    const authError = ensureDashboardSessionTool("apiosk_buy_credits", authInfo);
-    if (authError) return authError;
-
-    const amountEur = Number(argumentsObject.amount_eur);
-    if (!Number.isFinite(amountEur) || amountEur <= 0) {
-      return errorContent("amount_eur must be a positive number");
-    }
-
-    const payload = await requestDashboard(
-      "/api/credits/topup",
-      {
-        method: "POST",
-        body: {
-          amount_eur: amountEur,
-        },
-      },
-      {},
-      authInfo
-    );
-    const record = asObject(payload) || {};
-
-    return content({
-      ...record,
-      payment_url: typeof record.checkout_url === "string" ? record.checkout_url : null,
-      instructions: [
-        "Open payment_url in a browser and complete the Adyen checkout.",
-        "After payment, call apiosk_get_credits_status with the payment_intent_id to confirm the credits landed.",
-      ],
-    });
-  }
-
-  async function handleCreditsStatus(argumentsObject = {}, authInfo = null) {
-    const authError = ensureDashboardSessionTool("apiosk_get_credits_status", authInfo);
-    if (authError) return authError;
-
-    const paymentIntentId = trimString(argumentsObject.payment_intent_id);
-    const body = paymentIntentId ? { payment_intent_id: paymentIntentId } : {};
-    const payload = await requestDashboard(
-      "/api/credits/reconcile",
-      {
-        method: "POST",
-        body,
-      },
-      {},
-      authInfo
-    );
-    const record = asObject(payload) || {};
-
-    return content({
-      ...record,
-      summary:
-        Number(record.reconciled || 0) > 0 ?
-          "At least one pending credit top-up was reconciled successfully." :
-          "Checked pending credit top-ups and returned the current balance.",
     });
   }
 
@@ -3163,9 +3080,6 @@ export function createApioskMcpRuntime(options = {}) {
 
       if (name === "apiosk_create_account") return await handleCreateAccount(argumentsObject);
       if (name === "apiosk_sign_in") return await handleSignIn(argumentsObject);
-      if (name === "apiosk_buy_credits") return await handleBuyCredits(argumentsObject, authInfo);
-      if (name === "apiosk_get_credits_status") return await handleCreditsStatus(argumentsObject, authInfo);
-
       if (name === "apiosk_list_wallets") return await handleWalletList(authInfo);
       if (name === "apiosk_create_wallet") return await handleWalletCreate(argumentsObject, authInfo);
       if (name === "apiosk_update_wallet") return await handleWalletUpdate(argumentsObject, authInfo);

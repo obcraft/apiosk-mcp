@@ -37,7 +37,7 @@ export const SETTLEMENT_RAILS = [
     summary:
       "A human tops up a credits balance once (via Adyen/Mollie) and the agent spends it down per call.",
     best_for: "Letting a human fund usage once and then handing the agent autonomy.",
-    setup: "Call apiosk_buy_credits to create a checkout link, then apiosk_get_credits_status to confirm.",
+    setup: "Top up credits via the Apiosk buyer portal; the agent spends them down automatically.",
   },
 ];
 
@@ -143,7 +143,7 @@ function buildHowToPaySteps({ readiness, localWalletsEnabled, mode, slug }) {
     return [
       "Authorize the Apiosk app when your MCP client prompts, so calls settle against your managed wallet/rails.",
       execHint,
-      "If a call returns payment_required, top up credits (apiosk_buy_credits) or fund your managed wallet, then retry.",
+      "If a call returns payment_required, top up credits via the buyer portal or fund your managed wallet, then retry.",
     ];
   }
 
