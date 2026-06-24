@@ -97,6 +97,122 @@ async function proxyControlPlaneRequest(req, res) {
   res.send(text);
 }
 
+function resolvePublicMcpUrl(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const proto = forwardedProto || req.protocol || "https";
+  const host = req.headers.host || "mcp.apiosk.com";
+  return `${proto}://${host}/mcp`;
+}
+
+function renderMcpWelcomeHtml(mcpUrl) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Apiosk MCP</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(1200px 600px at 50% -10%, #1b2230, #0b0e14 60%);
+    color: #e6e9ef; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 32px;
+  }
+  main { max-width: 640px; width: 100%; }
+  .badge {
+    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
+    color: #8aa0c6; border: 1px solid #2a3344; border-radius: 999px; padding: 4px 12px; margin-bottom: 20px;
+  }
+  h1 { font-size: 30px; margin: 0 0 12px; letter-spacing: -.02em; }
+  p { color: #b8c0cf; margin: 0 0 16px; }
+  .lead { color: #d6dce6; font-size: 17px; }
+  ul { color: #b8c0cf; margin: 0 0 16px; padding-left: 20px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+    background: #141a24; border: 1px solid #232c3a; border-radius: 6px; padding: 2px 7px; color: #cfe0ff;
+  }
+  .card { background: #0f141c; border: 1px solid #1f2937; border-radius: 14px; padding: 28px 30px; }
+  .endpoint {
+    display: block; margin: 4px 0 20px; padding: 12px 14px; background: #141a24;
+    border: 1px solid #232c3a; border-radius: 8px; color: #cfe0ff; word-break: break-all;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  }
+  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: #7f8aa0; margin: 24px 0 8px; }
+  a { color: #7aa2ff; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; padding-top: 18px; border-top: 1px solid #1f2937; }
+  footer { color: #6b7689; font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <span class="badge">Model Context Protocol</span>
+    <h1>Welcome to Apiosk MCP</h1>
+    <p class="lead">
+      This is the Apiosk MCP server endpoint &mdash; it lets AI agents discover, pay for,
+      execute, and publish APIs through the Apiosk gateway. It is a machine endpoint, not a
+      website, so connect it from an MCP client (Claude, Cursor, ChatGPT, and others) rather
+      than browsing it here.
+    </p>
+
+    <h2>What you can do with it</h2>
+    <ul>
+      <li><strong>Discover</strong> APIs, datasets, and services in the Apiosk catalog.</li>
+      <li><strong>Pay</strong> per call automatically over USDC (x402 on Base), SEPA incasso, or prepaid credits.</li>
+      <li><strong>Execute</strong> any listing through a uniform contract or its API-specific tool.</li>
+      <li><strong>Publish &amp; manage</strong> your own APIs so other agents can find and pay for them.</li>
+    </ul>
+
+    <h2>Endpoint</h2>
+    <code class="endpoint">${mcpUrl}</code>
+
+    <h2>Connect from Claude Code</h2>
+    <code>claude mcp add --transport http apiosk ${mcpUrl}</code>
+
+    <div class="links">
+      <a href="/health">Health</a>
+      <a href="https://dashboard.apiosk.com" target="_blank" rel="noopener">Dashboard</a>
+      <a href="https://github.com/obcraft/apiosk-mcp" target="_blank" rel="noopener">Docs &amp; source</a>
+    </div>
+    <footer>Apiosk MCP &middot; ${SERVER_INFO.name} v${SERVER_INFO.version}</footer>
+  </div>
+</main>
+</body>
+</html>`;
+}
+
+// Browsers (Accept: text/html) get a friendly welcome page; other non-protocol
+// callers get a JSON welcome. MCP protocol clients (Accept: text/event-stream)
+// are handled separately with the spec-compliant 405.
+function sendMcpWelcome(req, res) {
+  const mcpUrl = resolvePublicMcpUrl(req);
+  const accept = String(req.headers.accept || "");
+
+  if (accept.includes("text/html")) {
+    res.status(200).type("html").send(renderMcpWelcomeHtml(mcpUrl));
+    return;
+  }
+
+  res.status(200).json({
+    name: "Apiosk MCP",
+    server: SERVER_INFO,
+    description:
+      "Apiosk MCP server endpoint. Connect it from an MCP client to discover, pay for, execute, and publish APIs through the Apiosk gateway.",
+    transport: "streamable-http",
+    endpoint: mcpUrl,
+    connect: {
+      claude_code: `claude mcp add --transport http apiosk ${mcpUrl}`,
+    },
+    docs: "https://github.com/obcraft/apiosk-mcp",
+    health: "/health",
+  });
+}
+
 // Public Fly deployment must accept the Fly hostname instead of localhost-only
 // host validation defaults.
 const app = createMcpExpressApp({ host: "0.0.0.0" });
@@ -207,14 +323,24 @@ app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
 });
 
 app.get("/mcp", (req, res) => {
-  res.status(405).json({
-    jsonrpc: "2.0",
-    id: null,
-    error: {
-      code: -32000,
-      message: "Method not allowed.",
-    },
-  });
+  const accept = String(req.headers.accept || "");
+
+  // MCP Streamable HTTP clients open the optional SSE stream via a GET with
+  // Accept: text/event-stream. This stateless server does not provide that
+  // stream, so keep the spec-compliant 405 for protocol clients.
+  if (accept.includes("text/event-stream")) {
+    return res.status(405).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32000,
+        message: "Method not allowed.",
+      },
+    });
+  }
+
+  // Humans navigating here in a browser (or curling the URL) get a welcome.
+  return sendMcpWelcome(req, res);
 });
 
 app.delete("/mcp", (req, res) => {
