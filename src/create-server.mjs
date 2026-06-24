@@ -7,7 +7,7 @@ import { createApioskMcpRuntime } from "./runtime.mjs";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.2.3",
+  version: "1.3.0",
 };
 
 function resolveRuntime(options = {}) {

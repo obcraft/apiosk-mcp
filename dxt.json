@@ -1,6 +1,6 @@
 {
   "name": "apiosk-mcp",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
   "author": "Apiosk",
   "license": "MIT",
@@ -17,6 +17,10 @@
     {
       "name": "apiosk_search",
       "description": "Search the Apiosk catalog and discover API-specific dynamic tools."
+    },
+    {
+      "name": "apiosk_payment_guide",
+      "description": "Guide for paying through the Apiosk gateway — buyer (how to settle a paid call) and provider (how to publish and get paid)."
     },
     {
       "name": "apiosk_get_api",

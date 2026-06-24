@@ -5,6 +5,11 @@ import { buildFundingOptions } from "./funding-options.mjs";
 import { requestGatewayManagement } from "./gateway-management.mjs";
 import { buildListingMetadata, resolveCategory } from "./listing-metadata.mjs";
 import {
+  buildDiscoveryPaymentHint,
+  buildPaymentGuidance,
+  buildPaymentGuide,
+} from "./payment-guidance.mjs";
+import {
   createApioskLocalConfigPaths,
   parseConnectString,
   readLocalApioskConfig,
@@ -703,8 +708,67 @@ const HEALTH_TOOL = {
   },
 };
 
-const DISCOVERY_TOOLS = [HELP_TOOL, EXPLORE_TOOL, SEARCH_TOOL, GET_API_TOOL, EXECUTE_TOOL];
-const HOSTED_REMOTE_TOOLS = [EXPLORE_TOOL, METADATA_TOOL, EXECUTE_TOOL, HEALTH_TOOL];
+const PAYMENT_GUIDE_TOOL = {
+  name: "apiosk_payment_guide",
+  description:
+    "Explain how to pay through the Apiosk gateway. Returns a buyer guide (how an agent settles a paid API call over USDC/x402, SEPA incasso, or credits, tailored to the current auth) and a provider guide (how to publish an API and get paid). Pass slug to scope buyer guidance to one listing, or role to pick a side.",
+  annotations: {
+    readOnlyHint: true,
+    openWorldHint: false,
+    destructiveHint: false,
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      role: {
+        type: "string",
+        enum: ["buyer", "provider", "both"],
+        description: "Which side to explain. Defaults to both.",
+      },
+      slug: {
+        type: "string",
+        description: "Optional API slug to scope buyer guidance (price, payment steps) to one listing.",
+      },
+    },
+  },
+};
+
+const DISCOVERY_TOOLS = [
+  HELP_TOOL,
+  PAYMENT_GUIDE_TOOL,
+  EXPLORE_TOOL,
+  SEARCH_TOOL,
+  GET_API_TOOL,
+  EXECUTE_TOOL,
+];
+// Discovery + payment guidance available to every remote buyer, even before
+// they authorize (these tools are public / read-only).
+const HOSTED_DISCOVERY_TOOLS = [
+  HELP_TOOL,
+  PAYMENT_GUIDE_TOOL,
+  SEARCH_TOOL,
+  EXPLORE_TOOL,
+  GET_API_TOOL,
+  METADATA_TOOL,
+  EXECUTE_TOOL,
+  HEALTH_TOOL,
+];
+
+// Managed buyer tools that work over request-scoped dashboard auth on the
+// hosted endpoint: prepaid credits + full managed agent-wallet CRUD. These are
+// protected (the OAuth layer requires authorization before they run).
+// apiosk_show_wallet_funding is intentionally excluded — it resolves a local /
+// env wallet, which does not exist on the hosted surface.
+const HOSTED_MANAGED_TOOLS = [
+  ...REMOTE_CREDITS_TOOLS,
+  ...DASHBOARD_WALLET_TOOLS.filter((tool) => tool.name !== "apiosk_show_wallet_funding"),
+];
+
+// The hosted/remote surface is fully capable: discovery, payment guidance,
+// generic + dynamic per-API execution, credits, and managed-wallet management.
+// Publishing stays local/portal-only because it requires a client-side signing
+// key the hosted server never holds.
+const HOSTED_REMOTE_TOOLS = [...HOSTED_DISCOVERY_TOOLS, ...HOSTED_MANAGED_TOOLS];
 
 const ALL_STATIC_TOOLS = [
   ...DISCOVERY_TOOLS,
@@ -1066,6 +1130,7 @@ function summarizeDynamicToolResult(tool, result) {
 function buildHelpPayload(topic = "overview", options = {}) {
   const selectedTopic = String(topic || "overview");
   const localWalletsEnabled = Boolean(options.localWalletsEnabled);
+  const hostedAuthEnabled = Boolean(options.hostedAuthEnabled);
 
   const topics = {
     overview: {
@@ -1078,13 +1143,16 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Autonomous payment with APIOSK_PRIVATE_KEY or a selected local wallet",
         localWalletsEnabled
           ? "Local wallet and publish tools that do not require the dashboard"
-          : "Wallet and publish tools are disabled in this server mode unless local wallets are enabled",
+          : hostedAuthEnabled
+            ? "Managed wallet CRUD and prepaid-credits tools over your authorized session; publishing is local/portal-only"
+            : "Wallet and publish tools are disabled in this server mode unless local wallets are enabled",
       ],
       next_steps: [
         localWalletsEnabled
           ? "Use apiosk_get_started first to save a connect string or create a wallet and run a test call"
           : "Start with apiosk_search or apiosk_explore to discover APIs",
         "Use apiosk_explore or apiosk_search to find an API",
+        "Use apiosk_payment_guide to learn exactly how to pay (buyer) or publish (provider)",
         "Use apiosk_get_api to inspect detail and metadata",
         "Use the API-specific dynamic tool or apiosk_execute to call it",
         localWalletsEnabled
@@ -1367,6 +1435,47 @@ export function createApioskMcpRuntime(options = {}) {
     return readLocalApioskConfig(env);
   }
 
+  // Summarize whether the agent can settle a paid call right now, and how, so
+  // discovery responses and apiosk_payment_guide can give tailored buyer
+  // instructions without a second round trip.
+  async function resolvePaymentCapability(authInfo = null) {
+    const savedConfig = await getSavedConfig().catch(() => null);
+    let activeWallet = null;
+    try {
+      activeWallet = await getActiveExecutionWallet();
+    } catch {
+      activeWallet = null;
+    }
+
+    const requestConnectToken = trimString(authInfo?.extra?.apiosk_connect_token);
+    const envConnectToken = trimString(env.APIOSK_CONNECT_TOKEN || savedConfig?.connect_token);
+    const envAuthorization = trimString(
+      env.APIOSK_CONNECT_AUTHORIZATION || savedConfig?.connect_authorization
+    );
+    const envWalletAddress = trimString(env.APIOSK_WALLET_ADDRESS).toLowerCase();
+    const savedWalletAddress = trimString(savedConfig?.agent_wallet_address).toLowerCase();
+
+    let method = "none";
+    if (activeWallet?.source === "env_private_key") method = "env_private_key";
+    else if (activeWallet?.source === "local_store") method = "local_wallet";
+    else if (requestConnectToken) method = "request_connect_token";
+    else if (envConnectToken || envAuthorization) method = "connect_token";
+    else if (envWalletAddress || savedWalletAddress || activeWallet?.address) method = "wallet_address";
+
+    const mode = hostedAuthEnabled ? "hosted" : localWalletStore ? "local" : "remote";
+
+    return {
+      method,
+      ready: ["env_private_key", "local_wallet", "connect_token", "request_connect_token"].includes(
+        method
+      ),
+      wallet_address: activeWallet?.address || envWalletAddress || savedWalletAddress || null,
+      has_connect_token: Boolean(requestConnectToken || envConnectToken),
+      local_wallets_enabled: Boolean(localWalletStore),
+      mode,
+    };
+  }
+
   function hasConfiguredDashboardAccess(authInfo = null) {
     if (hasRequestScopedDashboardAccess(authInfo)) {
       return true;
@@ -1514,13 +1623,6 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   async function getTools(force = false, authInfo = null) {
-    if (hostedAuthEnabled) {
-      cache.dynamicTools = [];
-      cache.toolIndex = new Map();
-      cache.toolNamesBySlug = new Map();
-      return [...HOSTED_REMOTE_TOOLS];
-    }
-
     if (!force && cache.dynamicTools && Date.now() < cache.expiresAt) {
       return [...getStaticTools(authInfo), ...cache.dynamicTools];
     }
@@ -1880,14 +1982,22 @@ export function createApioskMcpRuntime(options = {}) {
 
   async function handleExplore(argumentsObject = {}, authInfo = null) {
     const client = await getClient(authInfo);
+    const capability = await resolvePaymentCapability(authInfo);
+    const paymentHint = buildDiscoveryPaymentHint({
+      capability,
+      mode: capability.mode,
+      localWalletsEnabled: capability.local_wallets_enabled,
+    });
+
     if (!argumentsObject.listing_type) {
       const response = await client.requestJson("/types", { method: "GET" });
       return content({
         ...response,
+        payment: paymentHint,
         next_steps:
           hostedAuthEnabled ?
-            "Pick a listing_type and call apiosk_explore again. Then use apiosk_metadata for a slug you want to inspect or apiosk_execute to run it." :
-            "Pick a listing_type and call apiosk_explore again, or use apiosk_search for full-text discovery.",
+            "Pick a listing_type and call apiosk_explore again. Then use apiosk_metadata for a slug you want to inspect or apiosk_execute to run it. Call apiosk_payment_guide to learn how to pay." :
+            "Pick a listing_type and call apiosk_explore again, or use apiosk_search for full-text discovery. Call apiosk_payment_guide to learn how to pay.",
       });
     }
 
@@ -1905,10 +2015,11 @@ export function createApioskMcpRuntime(options = {}) {
 
     return content({
       ...response,
+      payment: paymentHint,
       next_steps:
         hostedAuthEnabled ?
-          "Use apiosk_metadata for listing detail and apiosk_execute when you are ready to run a slug." :
-          "Use apiosk_get_api for detail or call apiosk_search if you want category filtering across the whole catalog.",
+          "Use apiosk_metadata for listing detail and apiosk_execute when you are ready to run a slug. Call apiosk_payment_guide to learn how to pay." :
+          "Use apiosk_get_api for detail or call apiosk_search if you want category filtering across the whole catalog. Call apiosk_payment_guide to learn how to pay.",
     });
   }
 
@@ -1925,11 +2036,20 @@ export function createApioskMcpRuntime(options = {}) {
 
     const catalog = response.apis || [];
     await getTools(false, authInfo);
+    const capability = await resolvePaymentCapability(authInfo);
 
     return content({
       apis: catalog.map((api) => buildCatalogEntry(api, cache.toolNamesBySlug.get(api.slug) || null)),
       meta: response.meta,
-      next_steps: "Call apiosk_get_api for full metadata, or use the API-specific tool directly when tool_name is present.",
+      payment: buildDiscoveryPaymentHint({
+        capability,
+        mode: capability.mode,
+        localWalletsEnabled: capability.local_wallets_enabled,
+      }),
+      for_providers:
+        "Listing your own API? Call apiosk_payment_guide with role='provider' (or apiosk_publish_api) to publish it for other agents.",
+      next_steps:
+        "Call apiosk_get_api for full metadata plus a per-listing payment block, use the API-specific tool directly when tool_name is present, or call apiosk_payment_guide to learn exactly how to settle a paid call.",
     });
   }
 
@@ -1939,14 +2059,25 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     const client = await getClient(authInfo);
-    const [detail, metadata] = await Promise.all([
+    const [detail, metadata, capability] = await Promise.all([
       client.getApi(argumentsObject.slug),
       client.getMetadata(argumentsObject.slug).catch(() => null),
+      resolvePaymentCapability(authInfo),
     ]);
 
     return content({
       detail,
       metadata,
+      payment: buildPaymentGuidance({
+        api: {
+          slug: argumentsObject.slug,
+          price_usd: detail?.price_usd ?? metadata?.cost_per_call ?? null,
+          listing_metadata: metadata || detail?.listing_metadata || null,
+        },
+        capability,
+        mode: capability.mode,
+        localWalletsEnabled: capability.local_wallets_enabled,
+      }),
     });
   }
 
@@ -2043,6 +2174,40 @@ export function createApioskMcpRuntime(options = {}) {
     return content(
       buildHelpPayload(argumentsObject.topic, {
         localWalletsEnabled: Boolean(localWalletStore),
+        hostedAuthEnabled,
+      })
+    );
+  }
+
+  async function handlePaymentGuide(argumentsObject = {}, authInfo = null) {
+    const capability = await resolvePaymentCapability(authInfo);
+    const slug = trimString(argumentsObject.slug);
+
+    let api = null;
+    if (slug) {
+      try {
+        const client = await getClient(authInfo);
+        const [detail, metadata] = await Promise.all([
+          client.getApi(slug).catch(() => null),
+          client.getMetadata(slug).catch(() => null),
+        ]);
+        api = {
+          slug,
+          price_usd: detail?.price_usd ?? metadata?.cost_per_call ?? null,
+          listing_metadata: metadata || detail?.listing_metadata || null,
+        };
+      } catch {
+        api = { slug };
+      }
+    }
+
+    return content(
+      buildPaymentGuide({
+        role: argumentsObject.role,
+        api,
+        capability,
+        mode: capability.mode,
+        localWalletsEnabled: capability.local_wallets_enabled,
       })
     );
   }
@@ -2970,6 +3135,7 @@ export function createApioskMcpRuntime(options = {}) {
   async function callTool(name, argumentsObject = {}, authInfo = null) {
     try {
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
+      if (name === "apiosk_payment_guide") return await handlePaymentGuide(argumentsObject, authInfo);
       if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
       if (name === "apiosk_search") return await handleSearch(argumentsObject, authInfo);
       if (name === "apiosk_get_api" || name === "apiosk_metadata") {

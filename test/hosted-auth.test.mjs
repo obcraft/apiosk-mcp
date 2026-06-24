@@ -52,7 +52,7 @@ function createFakeGatewayClient() {
   };
 }
 
-test("hosted runtime exposes only the slim remote tool surface and forwards request-scoped dashboard auth", async () => {
+test("hosted runtime exposes the full remote surface (discovery + managed + dynamic) and forwards request-scoped dashboard auth", async () => {
   let capturedClientOptions = null;
   const runtime = createApioskMcpRuntime({
     env: {},
@@ -66,11 +66,49 @@ test("hosted runtime exposes only the slim remote tool surface and forwards requ
     walletManager: { isConfigured: () => false, request: async () => ({}) },
   });
 
-  const tools = await runtime.listTools();
-  assert.deepEqual(
-    tools.map((tool) => tool.name),
-    ["apiosk_explore", "apiosk_metadata", "apiosk_execute", "apiosk_health"]
-  );
+  const toolNames = (await runtime.listTools()).map((tool) => tool.name);
+
+  // Discovery + payment guidance (public, pre-auth).
+  for (const name of [
+    "apiosk_help",
+    "apiosk_payment_guide",
+    "apiosk_search",
+    "apiosk_explore",
+    "apiosk_get_api",
+    "apiosk_metadata",
+    "apiosk_execute",
+    "apiosk_health",
+  ]) {
+    assert.ok(toolNames.includes(name), `hosted surface should expose ${name}`);
+  }
+
+  // Managed buyer tools now available remotely over request-scoped auth.
+  for (const name of [
+    "apiosk_buy_credits",
+    "apiosk_get_credits_status",
+    "apiosk_list_wallets",
+    "apiosk_create_wallet",
+    "apiosk_update_wallet",
+    "apiosk_delete_wallet",
+    "apiosk_create_wallet_connect_string",
+    "apiosk_create_wallet_api_key",
+  ]) {
+    assert.ok(toolNames.includes(name), `hosted surface should expose managed tool ${name}`);
+  }
+
+  // Dynamic per-API tools are now generated for hosted clients too.
+  assert.ok(toolNames.includes("demo-api"), "hosted surface should expose dynamic per-API tools");
+
+  // Local-only tools stay off the hosted surface (no client-side signing key).
+  for (const name of ["apiosk_get_started", "apiosk_wallet_create", "apiosk_publish_api", "apiosk_show_wallet_funding"]) {
+    assert.ok(!toolNames.includes(name), `hosted surface should not expose local-only tool ${name}`);
+  }
+
+  // Protection model: discovery/guidance public, paid execute + managed tools protected.
+  assert.equal(await runtime.isToolProtected("apiosk_payment_guide"), false);
+  assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
+  assert.equal(await runtime.isToolProtected("apiosk_list_wallets"), true);
+  assert.equal(await runtime.isToolProtected("demo-api"), true); // paid dynamic tool
 
   const result = await runtime.callTool(
     "apiosk_execute",
@@ -103,12 +141,8 @@ test("hosted runtime exposes only the slim remote tool surface and forwards requ
 
   assert.equal(healthPayload.status, "ok");
   assert.equal(healthPayload.gateway.status, "ok");
-  assert.deepEqual(healthPayload.mcp.tools, [
-    "apiosk_explore",
-    "apiosk_metadata",
-    "apiosk_execute",
-    "apiosk_health",
-  ]);
+  assert.ok(healthPayload.mcp.tools.includes("apiosk_payment_guide"));
+  assert.ok(healthPayload.mcp.tools.includes("apiosk_list_wallets"));
 });
 
 function createMockResponse(req) {

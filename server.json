@@ -3,7 +3,7 @@
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk",
   "description": "Discover, pay for, execute, and publish Apiosk APIs through MCP.",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "repository": {
     "url": "https://github.com/obcraft/apiosk-mcp",
     "source": "github"

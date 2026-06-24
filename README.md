@@ -145,24 +145,29 @@ Use the hosted MCP endpoint:
 https://mcp.apiosk.com/mcp
 ```
 
-Protected tools on the hosted server use OAuth. The remote MCP surface is intentionally slim for ChatGPT-style clients: `apiosk_explore`, `apiosk_metadata`, `apiosk_execute`, and `apiosk_health`.
+Protected tools on the hosted server use OAuth. The remote MCP surface is fully
+capable — discovery, payment guidance, generic **and** dynamic per-API
+execution, prepaid credits, and managed agent-wallet CRUD. Public tools
+(discovery + guidance) work before authorization; paid execution and managed
+tools require OAuth. Publishing stays local/portal-only because it needs a
+client-side signing key the hosted server never holds.
 
 ## Available Tools
 
 Static tools:
 
 - `apiosk_help`
+- `apiosk_payment_guide` — buyer + provider guide for paying through and publishing on the gateway
 - `apiosk_explore`
 - `apiosk_search`
 - `apiosk_get_api`
 - `apiosk_execute`
 
-Hosted remote MCP tools:
+Hosted remote MCP tools (in addition to dynamic per-API tools):
 
-- `apiosk_explore`
-- `apiosk_metadata`
-- `apiosk_execute`
-- `apiosk_health`
+- Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
+- Prepaid credits: `apiosk_buy_credits`, `apiosk_get_credits_status`
+- Managed wallets: `apiosk_list_wallets`, `apiosk_create_wallet`, `apiosk_update_wallet`, `apiosk_delete_wallet`, `apiosk_get_wallet_activity`, `apiosk_create_wallet_connect_string`, `apiosk_list_wallet_api_keys`, `apiosk_create_wallet_api_key`, `apiosk_update_wallet_api_key`, `apiosk_delete_wallet_api_key`
 
 Local wallet tools in stdio mode:
 
@@ -217,6 +222,29 @@ Dynamic tools:
 ```json
 { "search": "diff", "limit": 5 }
 ```
+
+Search, explore, and `apiosk_get_api` responses now embed a `payment` block that
+tells the agent exactly how to settle a paid call given the current auth — so an
+agent that finds, say, a weather API immediately knows whether it can pay and
+what to do next.
+
+### Payment guide (buyer + provider)
+
+```json
+{}
+```
+
+```json
+{ "role": "provider" }
+```
+
+```json
+{ "role": "buyer", "slug": "weather-now" }
+```
+
+Returns a buyer guide (USDC/x402, SEPA incasso, or credits — tailored to the
+configured auth) and a provider guide (how to publish an API and get paid). Pass
+`slug` to scope buyer guidance to one listing, or `role` to pick a side.
 
 ### Create a local wallet
 

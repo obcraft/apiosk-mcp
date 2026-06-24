@@ -391,6 +391,104 @@ test("local-wallet-disabled mode hides configure and wallet-create tools", async
   assert.equal(tools.some((tool) => tool.name === "apiosk_sign_in"), false);
 });
 
+test("search surfaces a payment hint and provider pointer so agents learn how to pay", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-search-pay-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  const result = await runtime.callTool("apiosk_search", { search: "weather" });
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.ok(payload.payment, "search response should carry a payment hint");
+  assert.deepEqual(payload.payment.settlement_rails, ["usdc_x402", "sepa_incasso", "credits"]);
+  assert.ok(payload.payment.how_to_pay, "payment hint should explain how to pay");
+  assert.match(payload.for_providers, /apiosk_payment_guide|apiosk_publish_api/);
+  assert.match(payload.next_steps, /apiosk_payment_guide/);
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
+test("get_api attaches a listing-scoped buyer payment guide with price", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-getapi-pay-${Date.now()}`);
+  const runtime = createApioskMcpRuntime({
+    env: { APIOSK_HOME: homeDir },
+    enableLocalWallets: true,
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+    client: {
+      async listApis() {
+        return { apis: [], meta: { total: 0 } };
+      },
+      async getApi(slug) {
+        return { slug, price_usd: 0.02 };
+      },
+      async getMetadata(slug) {
+        return { slug, cost_per_call: 0.02 };
+      },
+      async execute(slug, input) {
+        return { slug, input, status: "success" };
+      },
+      async requestJson() {
+        return { apis: [], meta: { total: 0 } };
+      },
+    },
+  });
+
+  const result = await runtime.callTool("apiosk_get_api", { slug: "weather-now" });
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.equal(payload.payment.role, "buyer");
+  assert.equal(payload.payment.cost_per_call_usd, 0.02);
+  assert.equal(payload.payment.free, false);
+  assert.match(payload.payment.summary, /weather-now/);
+  assert.ok(Array.isArray(payload.payment.how_to_pay));
+  assert.ok(Array.isArray(payload.payment.settlement_rails));
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
+test("apiosk_payment_guide returns both buyer and provider guidance", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-guide-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  const result = await runtime.callTool("apiosk_payment_guide", {});
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.equal(payload.role, "both");
+  assert.equal(payload.buyer.role, "buyer");
+  assert.equal(payload.provider.role, "provider");
+  assert.ok(payload.quickstart.buyer.length > 0);
+  assert.ok(payload.quickstart.provider.length > 0);
+  assert.ok(
+    payload.provider.tools.includes("apiosk_publish_api"),
+    "provider guide should point to the publish tool",
+  );
+
+  const providerOnly = await runtime.callTool("apiosk_payment_guide", { role: "provider" });
+  const providerPayload = JSON.parse(providerOnly.content[0].text);
+  assert.equal(providerPayload.role, "provider");
+  assert.equal(providerPayload.buyer, undefined);
+  assert.ok(providerPayload.provider);
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
+test("hosted remote surface exposes discovery + payment guidance tools", async () => {
+  const runtime = createApioskMcpRuntime({
+    client: createFakeClient(),
+    env: {},
+    enableLocalWallets: false,
+    hostedAuthEnabled: true,
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+  });
+
+  const tools = (await runtime.listTools()).map((tool) => tool.name);
+  assert.ok(tools.includes("apiosk_payment_guide"), "hosted should expose the payment guide");
+  assert.ok(tools.includes("apiosk_help"), "hosted should expose help");
+  assert.ok(tools.includes("apiosk_search"), "hosted should expose search");
+  // The payment guide is public/unprotected so buyers can read it pre-auth.
+  assert.equal(await runtime.isToolProtected("apiosk_payment_guide"), false);
+  assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
+});
+
 test("dynamic order tools return a human confirmation summary with structured content", async () => {
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-order-${Date.now()}`);
   const runtime = createApioskMcpRuntime({
