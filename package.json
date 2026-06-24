@@ -1,7 +1,8 @@
 {
   "name": "apiosk-mcp-server",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
+  "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "bin": {
     "apiosk-mcp-server": "./index.mjs",
