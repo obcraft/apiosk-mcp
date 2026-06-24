@@ -3,8 +3,8 @@
 // This module turns the Apiosk settlement model into agent-readable guidance
 // that is surfaced at discovery time (search/explore/get_api) and through the
 // dedicated apiosk_payment_guide tool. It covers BOTH sides of the gateway:
-//   - buyers: how an agent pays for a paid API call (USDC x402, SEPA incasso,
-//     prepaid credits), tailored to what auth the runtime currently has.
+//   - buyers: how an agent pays for a paid API call (USDC x402 or prepaid credits),
+//     tailored to what auth the runtime currently has.
 //   - providers (sellers): how to publish an API so other agents can pay for it.
 //
 // Everything here is pure (no I/O) so it stays trivially testable and fast.
@@ -24,18 +24,10 @@ export const SETTLEMENT_RAILS = [
     setup: "Fund a wallet with Base mainnet USDC, then settlement happens automatically per call.",
   },
   {
-    id: "sepa_incasso",
-    label: "SEPA incasso (EU direct debit)",
-    summary:
-      "Paid calls are appended to a ledger and collected later in one batched SEPA Direct Debit from the buyer's bank account. No per-call bank transaction, no wallet balance needed.",
-    best_for: "EU buyers with high call volume who want the lowest per-call cost.",
-    setup: "A human authorizes a one-time SEPA mandate in the buyer portal; the agent only needs the connect token.",
-  },
-  {
     id: "credits",
     label: "Prepaid credits",
     summary:
-      "A human tops up a credits balance once (via Adyen/Mollie) and the agent spends it down per call.",
+      "A human tops up a credits balance once and the agent spends it down per call.",
     best_for: "Letting a human fund usage once and then handing the agent autonomy.",
     setup: "Top up credits via the Apiosk buyer portal; the agent spends them down automatically.",
   },
@@ -45,8 +37,7 @@ export const SETTLEMENT_RAILS = [
 // when none of the buyer's enabled rails can settle.
 export const RAIL_FALLBACK_ORDER = [
   "1. USDC / x402 wallet when the agent can produce a payment proof.",
-  "2. SEPA incasso ledger when the buyer has an active SEPA mandate (the call is recorded, not blocked).",
-  "3. Prepaid credits balance.",
+  "2. Prepaid credits balance.",
 ];
 
 function resolvePrice(api) {
@@ -92,7 +83,7 @@ function describeReadiness(capability = {}, { localWalletsEnabled = false, mode 
         status: "ready_to_pay",
         active_method: "Apiosk connect token",
         detail:
-          "A managed connect token is active. The gateway settles each call over the buyer's enabled rails (USDC managed wallet, SEPA incasso, or credits) server-side — no signing needed here.",
+          "A managed connect token is active. The gateway settles each call over the buyer's enabled rails (USDC managed wallet or credits) server-side — no signing needed here.",
       };
     case "wallet_address":
       return {
@@ -100,7 +91,7 @@ function describeReadiness(capability = {}, { localWalletsEnabled = false, mode 
         status: "setup_required",
         active_method: "wallet address only",
         detail:
-          "A wallet address is known but no signing key or connect token is configured, so this surface cannot settle x402 calls itself. The gateway may still settle over SEPA/credits if a mandate exists for this buyer.",
+          "A wallet address is known but no signing key or connect token is configured, so this surface cannot settle x402 calls itself. The gateway may still settle over credits if a balance exists for this buyer.",
       };
     default:
       return {
@@ -134,7 +125,7 @@ function buildHowToPaySteps({ readiness, localWalletsEnabled, mode, slug }) {
   if (localWalletsEnabled) {
     return [
       "Run apiosk_get_started to create or select a local wallet (or import a dashboard connect string).",
-      "Fund the wallet with Base mainnet USDC using apiosk_show_wallet_funding, or set up SEPA/credits for managed settlement.",
+      "Fund the wallet with Base mainnet USDC using apiosk_show_wallet_funding, or top up credits for managed settlement.",
       execHint,
     ];
   }
@@ -201,7 +192,7 @@ export function buildPaymentGuidance({
     settlement_rails: SETTLEMENT_RAILS,
     rail_fallback_order: RAIL_FALLBACK_ORDER,
     on_payment_required:
-      "A paid call can return a structured payment_required error when no enabled rail can cover it. Fund the wallet, top up credits, or set up a SEPA mandate, then retry the same call.",
+      "A paid call can return a structured payment_required error when no enabled rail can cover it. Fund the wallet or top up credits, then retry the same call.",
     base_chain: { chain_id: BASE_CHAIN_ID, usdc_contract: BASE_USDC_CONTRACT, network: "base" },
     learn_more: "Call apiosk_help with topic='rails' for the full settlement model.",
   };
@@ -242,7 +233,6 @@ export function buildProviderGuidance({ mode = "remote", localWalletsEnabled = f
     earnings: {
       summary: "Providers receive each call's gross minus the 3% Apiosk platform fee.",
       usdc: "USDC earnings settle to the API's payout wallet (the publishing wallet address).",
-      eur: "EUR via SEPA: a provider's share of buyer SEPA collections is paid to a KYB-verified receiver IBAN (provider portal).",
       offramp:
         "Optional crypto→EUR off-ramp: providers can sign a non-custodial mandate so accumulated USDC auto-converts to EUR and redeems to their IBAN.",
     },
@@ -268,7 +258,7 @@ export function buildPaymentGuide({
   const payload = {
     role: normalizedRole,
     overview:
-      "Apiosk is one mandate, any rail: a single buyer identity can pay for any API over USDC (x402 on Base), SEPA incasso (EU direct debit), or prepaid credits — the gateway picks the rail per call. Providers list APIs once and get paid per call.",
+      "Apiosk is one gateway, any rail: a single buyer identity can pay for any API over USDC (x402 on Base) or prepaid credits — the gateway picks the rail per call. Providers list APIs once and get paid per call.",
     quickstart: {
       buyer: [
         "Discover: apiosk_search or apiosk_explore.",

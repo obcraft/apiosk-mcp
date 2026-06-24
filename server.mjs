@@ -165,7 +165,7 @@ function renderMcpWelcomeHtml(mcpUrl) {
       <li><strong>Discover</strong> APIs, datasets, and services in the Apiosk catalog.</li>
       <li><strong>Pay</strong> per call automatically in USDC (x402 on Base).</li>
       <li><strong>Execute</strong> any listing through a uniform contract or its API-specific tool.</li>
-      <li><strong>Publish &amp; manage</strong> your own APIs so other agents can find and pay for them &mdash; and automatically off-ramp your USDC earnings to EUR via SEPA.</li>
+      <li><strong>Publish &amp; manage</strong> your own APIs so other agents can find and pay for them.</li>
     </ul>
 
     <h2>Endpoint</h2>

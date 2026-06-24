@@ -242,9 +242,9 @@ what to do next.
 { "role": "buyer", "slug": "weather-now" }
 ```
 
-Returns a buyer guide (USDC/x402, SEPA incasso, or credits — tailored to the
-configured auth) and a provider guide (how to publish an API and get paid). Pass
-`slug` to scope buyer guidance to one listing, or `role` to pick a side.
+Returns a buyer guide (USDC/x402 or credits — tailored to the configured auth)
+and a provider guide (how to publish an API and get paid). Pass `slug` to scope
+buyer guidance to one listing, or `role` to pick a side.
 
 ### Create a local wallet
 
@@ -290,14 +290,10 @@ Or save a dashboard-managed connect string locally and verify it:
 ```
 
 The connect string identifies the buyer's managed wallet and connect token. The
-`APIO_WALLET_*` limits bound the USDC (x402) rail. The **same** connect token
-also settles over the buyer's other enabled rails — **SEPA incasso** (EU bank
-direct debit) and **prepaid credits** — chosen by the gateway per call. The SEPA
-mandate and its threshold/age terms live server-side against the same buyer
-account, so an agent that only holds the connect token can keep making paid
-calls even with no on-chain balance: the call is recorded to a SEPA ledger and
-collected later in a batched direct debit. See **[Settlement rails](docs/sepa-rail.md)**
-or call `apiosk_help` with `topic="rails"` for the full incasso logic.
+`APIO_WALLET_*` limits bound the USDC (x402) rail. The same connect token also
+settles over prepaid credits when USDC is unavailable — the gateway picks the
+rail per call. Call `apiosk_help` with `topic="rails"` for the full settlement
+model.
 
 ### Open the configure menu
 
