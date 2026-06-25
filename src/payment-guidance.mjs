@@ -140,7 +140,7 @@ function buildHowToPaySteps({ readiness, localWalletsEnabled, mode, slug }) {
 
   return [
     "Configure settlement: set APIOSK_PRIVATE_KEY (autonomous x402) or APIOSK_CONNECT_TOKEN (managed rails) in the MCP environment.",
-    "Or run the local stdio package (npx -y apiosk-mcp-server) and call apiosk_get_started.",
+    "Or run the local stdio package (npx -y @apiosk/mcp) and call apiosk_get_started.",
     execHint,
   ];
 }
@@ -208,12 +208,12 @@ export function buildProviderGuidance({ mode = "remote", localWalletsEnabled = f
   return {
     role: "provider",
     summary:
-      "How to list an API on Apiosk so other agents discover it and pay you per call.",
+      "How to list an API or MCP toolset on Apiosk so other agents discover it and pay you per call.",
     publish_channel: canPublishHere
       ? "This local stdio package can publish directly with a signed wallet (apiosk_publish_api)."
       : mode === "hosted"
         ? "This hosted surface is read-only for publishing. Publish from the provider portal or the local stdio package."
-        : "Run the local stdio package (npx -y apiosk-mcp-server) to publish with a signed wallet, or use the provider portal.",
+        : "Run the local stdio package (npx -y @apiosk/mcp, or the legacy apiosk-mcp-server package) to publish with a signed wallet, or use the provider portal.",
     steps: [
       canPublishHere
         ? "Create or select a signing wallet: apiosk_wallet_create then apiosk_wallet_select (or set APIOSK_PRIVATE_KEY). This wallet receives USDC payouts."
@@ -223,15 +223,23 @@ export function buildProviderGuidance({ mode = "remote", localWalletsEnabled = f
       "Verify it is live: apiosk_list_my_apis. It now appears in apiosk_search/apiosk_explore for every agent.",
       "Manage it over time with apiosk_update_api (price, endpoint, active) and apiosk_delete_api.",
     ],
+    mcp_provider_flow: [
+      "Host your MCP over HTTPS and support initialize, tools/list, and tools/call.",
+      "Protect the upstream MCP with bearer auth or another server-side secret; Apiosk injects that credential after payment.",
+      "Import the MCP in the provider portal. Apiosk scans tools/list and creates one paid action per selected tool.",
+      "Buyers should use https://mcp.apiosk.com/mcp, GET https://gateway.apiosk.com/<slug>/metadata, or POST https://gateway.apiosk.com/<slug>/execute — not your raw MCP URL.",
+      "Your MCP should not return 402 or inspect X-Payment. Apiosk handles payment challenges, settlement, and revenue splits before calling your MCP.",
+    ],
     requirements: [
       "A signing wallet must be active (local wallet or APIOSK_PRIVATE_KEY).",
       "endpoint_url must use HTTPS.",
       "slug must use lowercase letters, numbers, and hyphens only.",
+      "For MCP imports, the provider MCP should be reachable over HTTPS and locked down so only Apiosk can call it directly.",
     ],
     listing_metadata_note:
       "MCP-native metadata (operations, input/output schema, default_operation, mcp_tool) is generated automatically from your inputs. Override it via the listing_metadata argument when you need a custom tool shape.",
     earnings: {
-      summary: "Providers receive each call's gross minus the 3% Apiosk platform fee.",
+      summary: "Providers receive each call's gross minus the current Apiosk platform fee. The gateway default is 2%.",
       usdc: "USDC earnings settle to the API's payout wallet (the publishing wallet address).",
       offramp:
         "Optional crypto→EUR off-ramp: providers can sign a non-custodial mandate so accumulated USDC auto-converts to EUR and redeems to their IBAN.",

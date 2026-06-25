@@ -1145,8 +1145,8 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Verify: claude mcp get apiosk",
       ],
       local_stdio: [
-        "npx -y apiosk-mcp-server",
-        "Or add a stdio config that runs npx -y apiosk-mcp-server",
+        "npx -y @apiosk/mcp",
+        "Or add a stdio config that runs npx -y @apiosk/mcp",
         "Then call apiosk_get_started to save a managed connect string or create a local wallet and run a test call",
         "Use apiosk_create_account or apiosk_sign_in when you want a human to fund credits through Adyen and let the agent spend those credits later",
       ],

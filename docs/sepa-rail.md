@@ -82,11 +82,11 @@ edge function to create the direct debit.
 
 ## Economics
 
-- **Apiosk platform fee: 3%** of each call's gross, recorded per ledger row.
+- **Apiosk platform fee: 2% by default** of each call's gross, recorded per ledger row.
 - **Mollie SEPA Direct Debit fee: ~€0.30 per collection (per batch)** — not per
   call. This is why sub-€25 thresholds are not offered: batching amortizes the
   fixed bank fee across many calls.
-- The provider receives gross minus the 3% Apiosk fee; the Mollie fee is netted
+- The provider receives gross minus the Apiosk platform fee; the Mollie fee is netted
   at collection time.
 
 ## Operational defaults

@@ -4,22 +4,42 @@ Official MCP server for discovering, paying for, and publishing Apiosk APIs.
 
 ## Quick Start
 
+### Package names
+
+The scoped npm package is the canonical client SDK package:
+
+```bash
+npm install @apiosk/mcp
+```
+
+It exposes the same CLI binaries as the legacy package:
+
+```bash
+npx -y @apiosk/mcp
+apiosk-mcp
+apiosk-mcp-server
+apiosk
+```
+
+The previous public package name, `apiosk-mcp-server`, remains supported as a
+compatibility install path for existing MCP client configs.
+
 ### Local stdio package
 
 ```bash
-npx -y apiosk-mcp-server
+npx -y @apiosk/mcp
 ```
 
 ### With automatic x402 payments from an env wallet
 
 ```bash
-APIOSK_PRIVATE_KEY=0x... npx -y apiosk-mcp-server
+APIOSK_PRIVATE_KEY=0x... npx -y @apiosk/mcp
 ```
 
 ### With dashboard-managed access
 
 ```bash
-APIOSK_CONNECT_TOKEN=... npx -y apiosk-mcp-server
+APIOSK_CONNECT_TOKEN=... npx -y @apiosk/mcp
 ```
 
 After the MCP server is installed in Claude, Codex, or another client, the fastest first-run path in local stdio mode is:
@@ -58,7 +78,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp-server"]
+      "args": ["-y", "@apiosk/mcp"]
     }
   }
 }
@@ -71,7 +91,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp-server"]
+      "args": ["-y", "@apiosk/mcp"]
     }
   }
 }
@@ -84,7 +104,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp-server"]
+      "args": ["-y", "@apiosk/mcp"]
     }
   }
 }
@@ -105,7 +125,7 @@ Local stdio:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp-server"]
+      "args": ["-y", "@apiosk/mcp"]
     }
   }
 }
@@ -118,7 +138,7 @@ Local stdio:
   "mcpServers": {
     "apiosk": {
       "command": "npx",
-      "args": ["-y", "apiosk-mcp-server"]
+      "args": ["-y", "@apiosk/mcp"]
     }
   }
 }
@@ -151,6 +171,46 @@ execution, prepaid credits, and managed agent-wallet CRUD. Public tools
 (discovery + guidance) work before authorization; paid execution and managed
 tools require OAuth. Publishing stays local/portal-only because it needs a
 client-side signing key the hosted server never holds.
+
+## Provider MCP Monetization
+
+If you own an MCP server and want to sell its tools through Apiosk, keep payment
+logic out of your MCP. Apiosk is the paid edge.
+
+Provider requirements:
+
+- Host your MCP over HTTPS, for example `https://tools.example.com/mcp`.
+- Support normal MCP `initialize`, `tools/list`, and `tools/call`.
+- Keep tool names stable; imported tools become paid operation ids.
+- Provide useful descriptions and JSON schemas; these become buyer-facing
+  discovery metadata.
+- Protect the provider MCP with bearer auth or another upstream secret, then
+  configure Apiosk to inject that secret so buyers cannot bypass the gateway.
+
+Provider portal flow:
+
+1. Open the provider portal and choose `Import MCP`.
+2. Enter the MCP URL and optional bearer token.
+3. Apiosk scans `tools/list` and creates one paid action per selected tool.
+4. Review tool paths, schemas, descriptions, and per-call prices.
+5. Publish the draft after linking a payout wallet.
+
+Buyer-facing surfaces after publish:
+
+- Hosted Apiosk MCP: `https://mcp.apiosk.com/mcp`
+- Catalog search: `https://gateway.apiosk.com/v1/apis?search=<slug>`
+- Metadata: `GET https://gateway.apiosk.com/<slug>/metadata`
+- Execution: `POST https://gateway.apiosk.com/<slug>/execute`
+
+The traffic path is:
+
+```text
+buyer agent -> Apiosk MCP/gateway -> payment rail -> provider MCP tools/call
+```
+
+The provider MCP should reject direct unauthenticated traffic, but it should not
+return `402 Payment Required` or inspect `X-Payment`. Payment challenges,
+credits, x402 proof verification, and revenue splits are handled by Apiosk.
 
 ## Available Tools
 
