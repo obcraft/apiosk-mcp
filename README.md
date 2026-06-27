@@ -24,10 +24,52 @@ apiosk
 The previous public package name, `apiosk-mcp-server`, remains supported as a
 compatibility install path for existing MCP client configs.
 
+For MCP registry submission forms, use:
+
+- npm Package: `@apiosk/mcp`
+- PyPI Package: `apiosk-mcp`
+- Short Description: `Discover, pay for, execute, and publish Apiosk APIs through MCP.`
+
+The PyPI package is a launcher for the canonical npm package, so `uvx
+apiosk-mcp` starts the same MCP server as `npx -y @apiosk/mcp`.
+
 ### Local stdio package
 
 ```bash
 npx -y @apiosk/mcp
+```
+
+Python/uv users can install through PyPI:
+
+```bash
+uvx apiosk-mcp
+```
+
+The PyPI launcher requires Node.js 20+ and `npx` on `PATH`. By default it runs
+`npx -y @apiosk/mcp@1.3.0`; set `APIOSK_MCP_NPM_PACKAGE=@apiosk/mcp@next` to
+override the npm package spec.
+
+### Publishing packages
+
+From this `mcp/` directory:
+
+```bash
+npm run pack:check
+npm publish --access public
+```
+
+```bash
+python3 -m pip install --upgrade build twine
+python3 -m build
+python3 -m twine upload dist/apiosk_mcp-1.3.0*
+```
+
+After both uploads are live, the MCP registry package fields are:
+
+```text
+npm Package: @apiosk/mcp
+PyPI Package: apiosk-mcp
+Short Description: Discover, pay for, execute, and publish Apiosk APIs through MCP.
 ```
 
 ### With automatic x402 payments from an env wallet

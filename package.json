@@ -4,12 +4,18 @@
   "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
+  "exports": {
+    ".": "./src/create-server.mjs",
+    "./runtime": "./src/runtime.mjs",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "apiosk-mcp-server": "./index.mjs",
     "apiosk-mcp": "./index.mjs",
     "apiosk": "./index.mjs"
   },
   "scripts": {
+    "pack:check": "npm pack --dry-run",
     "smoke:new-env": "bash scripts/smoke-new-env.sh",
     "test:macbook-air": "bash scripts/test-macbook-air.sh",
     "test:live": "bash scripts/test-live-url.sh",
@@ -28,6 +34,9 @@
   ],
   "author": "Apiosk",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "type": "module",
   "homepage": "https://apiosk.com",
   "repository": {
