@@ -824,6 +824,18 @@ function buildCatalogEntry(api, toolName) {
 function buildDynamicTools(catalog, reservedTools) {
   const tools = [];
   const toolIndex = new Map();
+
+  // Per-API "dynamic" tools surface one MCP tool per gateway listing, which
+  // DUPLICATES every paid API. Exposing them also lets the provider-portal MCP
+  // import create separate /tools/<slug> gateway endpoints that undercut (or
+  // give away for free) the real API listings. Agents must instead discover via
+  // apiosk_search / apiosk_explore and call any API through apiosk_execute,
+  // which settles the real per-call price. So these are OFF by default; set
+  // APIOSK_MCP_DYNAMIC_TOOLS=true to opt back in.
+  if (process.env.APIOSK_MCP_DYNAMIC_TOOLS !== "true") {
+    return { tools, toolIndex };
+  }
+
   const usedNames = new Set(reservedTools.map((tool) => tool.name));
 
   for (const api of catalog) {
