@@ -1,6 +1,23 @@
+<p align="center">
+  <img src="https://apiosk.com/logo.svg" alt="Apiosk" width="120" />
+</p>
+
 # Apiosk MCP Server
 
+**AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent — over USDC/x402 or prepaid credits — through the Model Context Protocol.
+
+`payments` · `finance` · `x402` · `commerce` · `crypto`
+
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.obcraft%2Fapiosk--mcp-2ea44f)](https://registry.modelcontextprotocol.io)
+[![npm](https://img.shields.io/npm/v/@apiosk/mcp?label=npm%20%40apiosk%2Fmcp)](https://www.npmjs.com/package/@apiosk/mcp)
+[![PyPI](https://img.shields.io/pypi/v/apiosk-mcp?label=PyPI%20apiosk-mcp)](https://pypi.org/project/apiosk-mcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
+
 Official MCP server for discovering, paying for, and publishing Apiosk APIs.
+
+- **Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io)** as `io.github.obcraft/apiosk-mcp`.
+- **Hosted endpoint:** `https://mcp.apiosk.com/mcp` (streamable HTTP, OAuth-protected for paid tools).
+- **Local stdio package:** `npx -y @apiosk/mcp` or `uvx apiosk-mcp` for wallet + publish tools.
 
 ## Quick Start
 
@@ -46,7 +63,7 @@ uvx apiosk-mcp
 ```
 
 The PyPI launcher requires Node.js 20+ and `npx` on `PATH`. By default it runs
-`npx -y @apiosk/mcp@1.3.0`; set `APIOSK_MCP_NPM_PACKAGE=@apiosk/mcp@next` to
+`npx -y @apiosk/mcp@1.3.2`; set `APIOSK_MCP_NPM_PACKAGE=@apiosk/mcp@next` to
 override the npm package spec.
 
 ### Publishing packages
@@ -61,7 +78,7 @@ npm publish --access public
 ```bash
 python3 -m pip install --upgrade build twine
 python3 -m build
-python3 -m twine upload dist/apiosk_mcp-1.3.0*
+python3 -m twine upload dist/apiosk_mcp-1.3.2*
 ```
 
 After both uploads are live, the MCP registry package fields are:
@@ -121,6 +138,40 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "apiosk": {
       "command": "npx",
       "args": ["-y", "@apiosk/mcp"]
+    }
+  }
+}
+```
+
+### VS Code
+
+Add the server with the CLI:
+
+```bash
+code --add-mcp '{"name":"apiosk","command":"npx","args":["-y","@apiosk/mcp"]}'
+```
+
+Or create `.vscode/mcp.json` in your workspace (VS Code uses a `servers` key):
+
+```json
+{
+  "servers": {
+    "apiosk": {
+      "command": "npx",
+      "args": ["-y", "@apiosk/mcp"]
+    }
+  }
+}
+```
+
+To use the hosted endpoint instead of the local package:
+
+```json
+{
+  "servers": {
+    "apiosk": {
+      "type": "http",
+      "url": "https://mcp.apiosk.com/mcp"
     }
   }
 }

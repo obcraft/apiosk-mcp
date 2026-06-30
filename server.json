@@ -2,8 +2,21 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk",
-  "description": "Discover, pay for, execute, and publish Apiosk APIs through MCP.",
-  "version": "1.3.0",
+  "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
+  "version": "1.3.2",
+  "websiteUrl": "https://apiosk.com",
+  "icons": [
+    {
+      "src": "https://apiosk.com/logo.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    },
+    {
+      "src": "https://apiosk.com/apple-touch-icon.png",
+      "mimeType": "image/png",
+      "sizes": ["180x180"]
+    }
+  ],
   "repository": {
     "url": "https://github.com/obcraft/apiosk-mcp",
     "source": "github"
@@ -13,5 +26,11 @@
       "type": "streamable-http",
       "url": "https://mcp.apiosk.com/mcp"
     }
-  ]
+  ],
+  "_meta": {
+    "com.apiosk": {
+      "tags": ["payments", "finance", "x402", "commerce", "crypto"],
+      "categories": ["payments", "finance"]
+    }
+  }
 }

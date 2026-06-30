@@ -1,7 +1,7 @@
 {
   "name": "@apiosk/mcp",
-  "version": "1.3.0",
-  "description": "Official MCP server for browsing, paying for, and publishing Apiosk APIs",
+  "version": "1.3.2",
+  "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "exports": {
@@ -28,9 +28,12 @@
     "apiosk",
     "api",
     "model-context-protocol",
-    "x402",
     "agent-tools",
-    "payments"
+    "payments",
+    "finance",
+    "x402",
+    "commerce",
+    "crypto"
   ],
   "author": "Apiosk",
   "license": "MIT",
@@ -41,10 +44,10 @@
   "homepage": "https://apiosk.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/apiosk/mcp.git"
+    "url": "https://github.com/obcraft/apiosk-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/apiosk/mcp/issues"
+    "url": "https://github.com/obcraft/apiosk-mcp/issues"
   },
   "publishConfig": {
     "access": "public"
