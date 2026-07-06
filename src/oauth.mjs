@@ -6,6 +6,8 @@ import { authorizationHandler } from "@modelcontextprotocol/sdk/server/auth/hand
 import { tokenHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/token.js";
 import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/register.js";
 
+import { isProviderApiKey, verifyProviderKey } from "./publisher.mjs";
+
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -747,6 +749,15 @@ class ApioskHostedOAuthProvider {
       return this.verifyConnectTokenAccess(trimmed);
     }
 
+    // Accept Apiosk provider API keys (sk_live_…) as bearer-equivalent. This
+    // is the publisher path: a coding agent configures
+    // `Authorization: Bearer sk_live_…` in its MCP client and can publish
+    // x402 routes without an interactive OAuth handshake. Verified against
+    // the provider_api_keys table (verify_provider_api_key RPC).
+    if (isProviderApiKey(trimmed)) {
+      return this.verifyProviderKeyAccess(trimmed);
+    }
+
     const payload = parseSignedToken(this.secret, token);
     if (payload.typ !== "access") {
       throw new Error("Invalid access token");
@@ -768,6 +779,33 @@ class ApioskHostedOAuthProvider {
         dashboardSessionExpiresAt: payload.dashboardSessionExpiresAt,
         userId: payload.userId,
         email: payload.email,
+      },
+    };
+  }
+
+  async verifyProviderKeyAccess(providerKey) {
+    // verifyProviderKey caches successful lookups for 60s, so bursts of tool
+    // calls don't hammer the verify RPC while revocations in the provider
+    // portal still take effect within a minute.
+    let context;
+    try {
+      context = await verifyProviderKey(providerKey, { env: this.env });
+    } catch (error) {
+      throw new Error(
+        error instanceof Error ? error.message : "Invalid Apiosk provider token"
+      );
+    }
+
+    return {
+      token: providerKey,
+      clientId: `provider:${context.ownerId}`,
+      scopes: [DEFAULT_SCOPE],
+      expiresAt: Math.floor(Date.now() / 1000) + 60,
+      resource: new URL(this.mcpServerUrl.href),
+      extra: {
+        apiosk_provider_key: providerKey,
+        apiosk_provider_owner_id: context.ownerId,
+        apiosk_provider_key_label: context.label,
       },
     };
   }

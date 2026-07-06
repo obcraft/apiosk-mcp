@@ -1,6 +1,6 @@
 {
   "name": "@apiosk/mcp",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",

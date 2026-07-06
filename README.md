@@ -305,6 +305,59 @@ The provider MCP should reject direct unauthenticated traffic, but it should not
 return `402 Payment Required` or inspect `X-Payment`. Payment challenges,
 credits, x402 proof verification, and revenue splits are handled by Apiosk.
 
+## Publish Paid x402 Routes from a Coding Agent
+
+The hosted MCP doubles as a **publisher** for coding agents (Claude Code,
+Cursor, Codex, and friends): build an API, then publish it as a paid x402
+endpoint on the Apiosk gateway in one tool call.
+
+Authenticate with an Apiosk **provider API key** (`sk_live_…`, minted in the
+provider portal under Settings → API keys):
+
+```json
+{
+  "mcpServers": {
+    "apiosk": {
+      "url": "https://mcp.apiosk.com/mcp",
+      "headers": {
+        "Authorization": "Bearer sk_live_YOUR_PROVIDER_KEY"
+      }
+    }
+  }
+}
+```
+
+Tools:
+
+- `publish_x402_route` — create a paid route: name, `upstream_url`, `price`
+  (USDC per call), `settlement_address`, optional `method`/`path`/schemas/tags.
+  Returns the `paid_url` on `gateway.apiosk.com` plus the route's status.
+- `list_x402_routes` — all your routes with paid URLs, prices, and status.
+- `update_x402_route` — change price, description, upstream URL, schemas,
+  settlement address, or status.
+- `unpublish_x402_route` — disable a route (reversible).
+- `test_x402_route` — fire an unpaid request at the paid URL and verify it
+  returns `402 Payment Required` with a valid x402 `accepts[]` offer.
+- `generate_openapi_spec` — host an OpenAPI 3.1 spec for the route at
+  `https://mcp.apiosk.com/openapi/<route_id>.json`.
+- `publish_project` — publish several routes of one project in a single call.
+
+Lifecycle: new routes land in Apiosk's operator review queue
+(`status: "pending_review"`). On approval they serve x402 payments, appear in
+`https://gateway.apiosk.com/.well-known/x402`, and are auto-indexed in the
+Coinbase x402 Bazaar. Settlement pays 98% of each call to your
+`settlement_address` (Apiosk keeps a 2% platform fee).
+
+Discovery endpoints for machines:
+
+- `https://mcp.apiosk.com/.well-known/apiosk-routes.json` (alias `/discovery`)
+  — machine-readable index of every paid route on the gateway.
+- `https://mcp.apiosk.com/openapi/<route_id>.json` — per-route OpenAPI spec.
+
+Local stdio use: set `APIOSK_PROVIDER_TOKEN=sk_live_…` instead of the header.
+Hosted server operators must configure `APIOSK_SUPABASE_SERVICE_ROLE_KEY` (the
+tools verify provider keys and write listings through the gateway database).
+
 ## Available Tools
 
 Static tools:
@@ -340,6 +393,16 @@ Publish tools in stdio mode:
 - `apiosk_list_my_apis`
 - `apiosk_update_api`
 - `apiosk_delete_api`
+
+x402 publisher tools (all modes, provider-token auth):
+
+- `publish_x402_route`
+- `list_x402_routes`
+- `update_x402_route`
+- `unpublish_x402_route`
+- `test_x402_route`
+- `generate_openapi_spec`
+- `publish_project`
 
 Optional dashboard-managed wallet tools:
 

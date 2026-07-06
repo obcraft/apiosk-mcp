@@ -17,6 +17,11 @@ import {
   saveLocalApioskConfig,
 } from "./local-config.mjs";
 import { createLocalWalletStore } from "./wallet-store.mjs";
+import {
+  PUBLISHER_TOOLS,
+  handlePublisherTool,
+  isPublisherTool,
+} from "./publisher.mjs";
 
 const DEFAULT_LIMIT = 25;
 const CACHE_TTL_MS = 60_000;
@@ -743,9 +748,15 @@ const HOSTED_MANAGED_TOOLS = [
 
 // The hosted/remote surface is fully capable: discovery, payment guidance,
 // generic + dynamic per-API execution, credits, and managed-wallet management.
-// Publishing stays local/portal-only because it requires a client-side signing
-// key the hosted server never holds.
-const HOSTED_REMOTE_TOOLS = [...HOSTED_DISCOVERY_TOOLS, ...HOSTED_MANAGED_TOOLS];
+// Wallet-signed publishing (apiosk_publish_api & co.) stays local/portal-only
+// because it requires a client-side signing key the hosted server never
+// holds; the x402 publisher tools work hosted because they authenticate with
+// a provider token (sk_live_…) instead of a wallet.
+const HOSTED_REMOTE_TOOLS = [
+  ...HOSTED_DISCOVERY_TOOLS,
+  ...HOSTED_MANAGED_TOOLS,
+  ...PUBLISHER_TOOLS,
+];
 
 const ALL_STATIC_TOOLS = [
   ...DISCOVERY_TOOLS,
@@ -754,6 +765,7 @@ const ALL_STATIC_TOOLS = [
   ...LOCAL_WALLET_TOOLS,
   ...DASHBOARD_WALLET_TOOLS,
   ...PUBLISH_TOOLS,
+  ...PUBLISHER_TOOLS,
 ];
 
 const PUBLIC_STATIC_TOOL_NAMES = new Set(
@@ -763,6 +775,7 @@ const REMOTE_PROTECTED_STATIC_TOOL_NAMES = new Set([
   "apiosk_execute",
   ...REMOTE_CREDITS_TOOLS.map((tool) => tool.name),
   ...DASHBOARD_WALLET_TOOLS.map((tool) => tool.name),
+  ...PUBLISHER_TOOLS.map((tool) => tool.name),
 ]);
 
 function trimString(value) {
@@ -1561,6 +1574,10 @@ export function createApioskMcpRuntime(options = {}) {
     } else if (hasConfiguredDashboardAccess(authInfo)) {
       tools.push(...DASHBOARD_WALLET_TOOLS);
     }
+
+    // Provider-token x402 publishing works in every mode: hosted callers pass
+    // Authorization: Bearer sk_live_…, stdio callers set APIOSK_PROVIDER_TOKEN.
+    tools.push(...PUBLISHER_TOOLS);
 
     return tools;
   }
@@ -3053,6 +3070,8 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_wallet_delete") return await handleLocalWalletDelete(argumentsObject);
       if (name === "apiosk_wallet_reveal_secret") return await handleLocalWalletReveal(argumentsObject);
       if (name === "apiosk_wallet_save_secret") return await handleLocalWalletSave(argumentsObject);
+
+      if (isPublisherTool(name)) return await handlePublisherTool(name, argumentsObject, authInfo, { env });
 
       if (name === "apiosk_publish_api") return await handlePublishApi(argumentsObject);
       if (name === "apiosk_list_my_apis") return await handleListMyApis(argumentsObject);

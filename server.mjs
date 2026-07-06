@@ -11,6 +11,10 @@ import {
   resolveOpenAiAppsChallengeToken,
   sendOpenAiAppsChallenge,
 } from "./well-known.mjs";
+import {
+  buildDiscoveryDocument,
+  getOpenApiRouteDocument,
+} from "./src/publisher.mjs";
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
@@ -166,6 +170,9 @@ function renderMcpWelcomeHtml(mcpUrl) {
       <li><strong>Pay</strong> per call automatically in USDC (x402 on Base).</li>
       <li><strong>Execute</strong> any listing through a uniform contract or its API-specific tool.</li>
       <li><strong>Publish &amp; manage</strong> your own APIs so other agents can find and pay for them.</li>
+      <li><strong>Ship paid x402 routes from a coding agent</strong> &mdash; connect with
+        <code>Authorization: Bearer sk_live_&hellip;</code> (a provider API key) and use
+        <code>publish_x402_route</code>, <code>test_x402_route</code>, and friends.</li>
     </ul>
 
     <h2>Endpoint</h2>
@@ -261,6 +268,49 @@ app.all("/api/*path", async (req, res) => {
     }
 
     await proxyControlPlaneRequest(req, res);
+  } catch (error) {
+    res.status(502).json({
+      error: "bad_gateway",
+      message: error instanceof Error ? error.message : String(error),
+      status: 502,
+    });
+  }
+});
+
+// Hosted OpenAPI spec for a published x402 route (generate_openapi_spec
+// returns this URL). Built live from the gateway database, so it always
+// reflects the current listing. Accepts /openapi/<route_id> and
+// /openapi/<route_id>.json.
+app.get("/openapi/:routeId", async (req, res) => {
+  try {
+    const document = await getOpenApiRouteDocument(req.params.routeId, {
+      env: process.env,
+    });
+    if (!document) {
+      return res.status(404).json({
+        error: "not_found",
+        message: "No published route matches this id.",
+        status: 404,
+      });
+    }
+    res.setHeader("cache-control", "public, max-age=60");
+    res.json(document);
+  } catch (error) {
+    res.status(502).json({
+      error: "bad_gateway",
+      message: error instanceof Error ? error.message : String(error),
+      status: 502,
+    });
+  }
+});
+
+// Machine-readable index of every paid x402 route published through Apiosk,
+// reshaped from the gateway's /.well-known/x402 document (60s cache).
+app.get(["/.well-known/apiosk-routes.json", "/discovery"], async (req, res) => {
+  try {
+    const document = await buildDiscoveryDocument({ env: process.env });
+    res.setHeader("cache-control", "public, max-age=60");
+    res.json(document);
   } catch (error) {
     res.status(502).json({
       error: "bad_gateway",
