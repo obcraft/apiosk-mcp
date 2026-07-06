@@ -435,7 +435,9 @@ export async function verifyProviderKey(token, { env = process.env, fetchImpl } 
   const row = Array.isArray(rows) ? rows[0] : rows;
   const ownerId = trimString(row?.owner_id);
   if (!ownerId) {
-    throw new Error("Invalid or revoked Apiosk provider token. Mint one in the provider portal (Settings → API keys).");
+    // Header-safe ASCII only: this message can end up inside a
+    // WWW-Authenticate challenge header, where non-ASCII throws.
+    throw new Error("Invalid or revoked Apiosk provider token. Mint one in the provider portal (Settings, API keys).");
   }
 
   const context = {
@@ -467,7 +469,7 @@ async function requireProvider(authInfo, ctx) {
   const token = extractProviderToken(authInfo, ctx.env);
   if (!token) {
     throw new Error(
-      "Publisher tools need an Apiosk provider token. Connect with header `Authorization: Bearer sk_live_…` (mint the key in the provider portal → Settings → API keys), or set APIOSK_PROVIDER_TOKEN for local stdio use."
+      "Publisher tools need an Apiosk provider token. Connect with header `Authorization: Bearer sk_live_...` (mint the key in the provider portal under Settings, API keys), or set APIOSK_PROVIDER_TOKEN for local stdio use."
     );
   }
 

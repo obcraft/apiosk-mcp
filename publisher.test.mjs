@@ -134,6 +134,21 @@ describe("verifyProviderKey", () => {
     );
   });
 
+  it("throws header-safe ASCII messages (they end up in WWW-Authenticate)", async () => {
+    const { fetchImpl } = scriptedFetch([
+      {
+        match: (url) => url.includes("rpc/verify_provider_api_key"),
+        respond: jsonResponse([]),
+      },
+    ]);
+    try {
+      await verifyProviderKey("sk_live_ascii_check", { env: TEST_ENV, fetchImpl });
+      assert.fail("expected rejection");
+    } catch (error) {
+      assert.match(error.message, /^[\x20-\x7e]+$/, "message must be printable ASCII");
+    }
+  });
+
   it("fails clearly when the service-role key is not configured", async () => {
     await assert.rejects(
       () => verifyProviderKey("sk_live_whatever", { env: { APIOSK_SUPABASE_URL: "https://sb.test" } }),

@@ -908,9 +908,17 @@ function extractBearerToken(req) {
 }
 
 function writeAuthChallenge(res, { status, code, message, resourceMetadataUrl }) {
+  // HTTP header values must be ASCII: strip quotes and replace any
+  // non-printable/non-ASCII characters so an upstream error message (which
+  // may contain arrows, em-dashes, etc.) can never crash setHeader.
+  const headerSafeMessage = String(message)
+    .replaceAll('"', "'")
+    .replace(/[^\x20-\x7e]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const parts = [
     `Bearer error="${code}"`,
-    `error_description="${String(message).replaceAll('"', "'")}"`,
+    `error_description="${headerSafeMessage}"`,
     `scope="${DEFAULT_SCOPE}"`,
   ];
 
