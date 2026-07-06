@@ -1,6 +1,6 @@
 {
   "name": "apiosk-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
   "author": "Apiosk",
   "license": "MIT",
@@ -23,7 +23,7 @@
     },
     {
       "name": "apiosk_payment_guide",
-      "description": "Guide for paying through the Apiosk gateway — buyer (how to settle a paid call) and provider (how to publish and get paid)."
+      "description": "Guide for paying through the Apiosk gateway, buyer (how to settle a paid call) and provider (how to publish and get paid)."
     },
     {
       "name": "apiosk_get_api",

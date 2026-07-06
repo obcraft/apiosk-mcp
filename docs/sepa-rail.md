@@ -1,7 +1,7 @@
-# Settlement rails — USDC, SEPA incasso, credits
+# Settlement rails: USDC, SEPA incasso, credits
 
 Apiosk is **one mandate, any rail**. A single buyer connect token can settle a
-paid API call over any of three rails. The gateway picks the rail per call —
+paid API call over any of three rails. The gateway picks the rail per call -
 the agent does not need to know or choose which one is used.
 
 | Rail | What it is | Best for |
@@ -12,8 +12,8 @@ the agent does not need to know or choose which one is used.
 
 ### Rail fallback order
 
-1. **USDC / x402 wallet** — when the agent can produce a payment proof.
-2. **SEPA incasso ledger** — when the buyer has an active SEPA mandate. No proof
+1. **USDC / x402 wallet**: when the agent can produce a payment proof.
+2. **SEPA incasso ledger**: when the buyer has an active SEPA mandate. No proof
    needed: the call is *recorded*, not blocked.
 3. **Prepaid credits** balance.
 
@@ -28,7 +28,7 @@ An incasso lets Apiosk pull euros from the buyer's bank account under a one-time
 mandate, so an agent can keep calling paid APIs without signing or funding each
 call.
 
-### 1. Mandate setup — once, by a human
+### 1. Mandate setup: once, by a human
 
 In the buyer portal the buyer authorizes a recurring SEPA mandate:
 
@@ -37,9 +37,9 @@ In the buyer portal the buyer authorizes a recurring SEPA mandate:
 - **PayPal** / **card**: alternative mandates for non-NL buyers (recurring calls
   use `method=paypal` / `method=creditcard`).
 
-Agents never perform this step — they only need the connect token afterward.
+Agents never perform this step, they only need the connect token afterward.
 
-### 2. Collection terms — once, by the buyer
+### 2. Collection terms: once, by the buyer
 
 The mandate authorizes bounded collection:
 
@@ -49,7 +49,7 @@ The mandate authorizes bounded collection:
 These bound how much, and for how long, calls can accrue before a collection is
 triggered.
 
-### 3. Per call — automatic, deferred
+### 3. Per call: automatic, deferred
 
 When a paid call settles over SEPA, the gateway appends a **SEPA ledger debit**
 row carrying the full breakdown and returns success immediately:
@@ -64,9 +64,9 @@ row carrying the full breakdown and returns success immediately:
 }
 ```
 
-No bank transaction happens yet — only a ledger entry.
+No bank transaction happens yet, only a ledger entry.
 
-### 4. Batch collection — background worker
+### 4. Batch collection: background worker
 
 A worker flushes a buyer's unbatched ledger into **one** Mollie SEPA Direct
 Debit when either condition is met:
@@ -83,7 +83,7 @@ edge function to create the direct debit.
 ## Economics
 
 - **Apiosk platform fee: 2% by default** of each call's gross, recorded per ledger row.
-- **Mollie SEPA Direct Debit fee: ~€0.30 per collection (per batch)** — not per
+- **Mollie SEPA Direct Debit fee: ~€0.30 per collection (per batch)**, not per
   call. This is why sub-€25 thresholds are not offered: batching amortizes the
   fixed bank fee across many calls.
 - The provider receives gross minus the Apiosk platform fee; the Mollie fee is netted
@@ -118,13 +118,13 @@ export APIO_WALLET_PER_TX_LIMIT_USDC=1
 The `APIO_WALLET_*` limits only bound the **USDC** rail. The **SEPA mandate and
 its threshold/age terms live server-side** against the same buyer account, so the
 identical connect token transparently settles over SEPA incasso when USDC is
-unavailable — no extra connect-string fields are required. An agent holding only
+unavailable, no extra connect-string fields are required. An agent holding only
 this connect token can therefore make paid calls with no on-chain balance; those
 calls land on the SEPA ledger and are collected in the next batch.
 
 ## Agent guidance
 
-- Agents do **not** set up the mandate — that is a one-time human action in the
+- Agents do **not** set up the mandate: that is a one-time human action in the
   buyer portal.
 - SEPA-backed calls succeed immediately even with no wallet balance and no x402
   proof; settlement is deferred to the batch.

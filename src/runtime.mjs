@@ -739,7 +739,7 @@ const HOSTED_DISCOVERY_TOOLS = [
 // Managed buyer tools that work over request-scoped dashboard auth on the
 // hosted endpoint: prepaid credits + full managed agent-wallet CRUD. These are
 // protected (the OAuth layer requires authorization before they run).
-// apiosk_show_wallet_funding is intentionally excluded — it resolves a local /
+// apiosk_show_wallet_funding is intentionally excluded, it resolves a local /
 // env wallet, which does not exist on the hosted surface.
 const HOSTED_MANAGED_TOOLS = [
   ...REMOTE_CREDITS_TOOLS,
@@ -799,7 +799,7 @@ function sanitizeToolName(name, fallback) {
  * active but unverified -> pending review, active + verified -> live.
  *
  * NOTE: the public catalog (GET /v1/apis) hard-filters to active AND verified
- * rows, so entries built from it are always "live" — the field documents that
+ * rows, so entries built from it are always "live", the field documents that
  * invariant for catalog readers. The pending/disabled branches are reached when
  * this runs over a richer object (e.g. a get_api_detail response, which returns
  * the real active/verified flags).
@@ -1251,10 +1251,10 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "The connect string identifies the buyer's managed wallet and connect token; APIO_WALLET_* limits bound the USDC rail. See help topic 'setup' for the connect string format.",
       provider_settlement: {
         what_it_is:
-          "The settlement_rails above are how BUYERS pay. This is the PROVIDER (seller) side: how an API owner receives their earnings. Agents do not interact with it — it is provider-account configuration in the provider portal.",
+          "The settlement_rails above are how BUYERS pay. This is the PROVIDER (seller) side: how an API owner receives their earnings. Agents do not interact with it, it is provider-account configuration in the provider portal.",
         how_it_works: [
           "USDC earnings settle to the API's payout wallet (apis.wallet_address), which the portal links to a verified, Monerium-linked payout_wallets row.",
-          "Crypto -> EUR off-ramp mandate (optional): the provider signs an EIP-191 authorization and an on-chain mandate (ApioskOfframpExecutor on Base). Apiosk's offramp keeper then auto-converts their accumulated USDC to EURe via Monerium and redeems it to their IBAN over SEPA once the balance crosses their bundle threshold. Non-custodial — the keeper can never redirect funds or exceed the provider's on-chain per-run cap or cooldown.",
+          "Crypto -> EUR off-ramp mandate (optional): the provider signs an EIP-191 authorization and an on-chain mandate (ApioskOfframpExecutor on Base). Apiosk's offramp keeper then auto-converts their accumulated USDC to EURe via Monerium and redeems it to their IBAN over SEPA once the balance crosses their bundle threshold. Non-custodial, the keeper can never redirect funds or exceed the provider's on-chain per-run cap or cooldown.",
         ],
       },
     },
@@ -1291,7 +1291,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "slug must use lowercase letters, numbers, and hyphens",
       ],
       identity_note:
-        "These tools manage listings via WALLET SIGNATURE — the community/MCP publish channel, owned by a synthetic platform account. That is a different identity from the provider portal, where providers manage APIs under a Supabase-auth account (owner_id) after Monerium KYB, and where listings auto-verify on create. A listing published here and one created in the portal are managed through different identities and do not currently round-trip between the two surfaces.",
+        "These tools manage listings via WALLET SIGNATURE, the community/MCP publish channel, owned by a synthetic platform account. That is a different identity from the provider portal, where providers manage APIs under a Supabase-auth account (owner_id) after Monerium KYB, and where listings auto-verify on create. A listing published here and one created in the portal are managed through different identities and do not currently round-trip between the two surfaces.",
     },
     configure: {
       topic: "configure",
@@ -2499,7 +2499,7 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     // Force include_qr_data_url so we can append an inline image content
-    // block below — clients that render images (Claude Desktop, MCP
+    // block below, clients that render images (Claude Desktop, MCP
     // Inspector) will then show the funding QR right next to the
     // newly-created wallet without a follow-up tool call.
     created.configure = await buildConfigurePayload({
@@ -2552,7 +2552,7 @@ export function createApioskMcpRuntime(options = {}) {
       `Token:   USDC (${baseUsdcContract})`,
       "",
       "WARNING: only Base mainnet USDC. Sending from Ethereum, Polygon, Solana,",
-      "or any other network will permanently lose the funds — this address is",
+      "or any other network will permanently lose the funds, this address is",
       "Base only.",
       "",
       `Block explorer: ${receive.explorer_url}`,
@@ -2567,7 +2567,7 @@ export function createApioskMcpRuntime(options = {}) {
 
     // Render the QR inline via MCP image content when the buyer's client
     // supports images (Claude Desktop, the MCP Inspector, etc.). Falls back
-    // gracefully on terminals without image support — the text block above
+    // gracefully on terminals without image support, the text block above
     // still has the address and the ANSI QR.
     const dataUrl = receive.qr_code_data_url;
     if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/png;base64,")) {

@@ -9,7 +9,7 @@
 // (sk_live_…, minted in the provider portal) passed as
 // `Authorization: Bearer sk_live_…`. The key is verified through the
 // gateway database's verify_provider_api_key() RPC and resolves to the
-// provider's owner_id — the same identity the provider portal writes with.
+// provider's owner_id, the same identity the provider portal writes with.
 // Routes therefore show up in the portal, the gateway /.well-known/x402
 // document, and the Bazaar indexing pipeline like any portal-published API.
 //
@@ -68,6 +68,14 @@ function errorContent(value) {
 export const PUBLISHER_TOOLS = [
   {
     name: "publish_x402_route",
+    title: "Publish a paid x402 route",
+    annotations: {
+      title: "Publish a paid x402 route",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     description:
       "Publish an API endpoint as a paid x402 route on the Apiosk gateway. The route gets a paid URL that returns 402 Payment Required until the caller pays in USDC, then forwards to your upstream API. New routes enter Apiosk's review queue (status pending_review) and go live on approval. Requires an Apiosk provider token (Authorization: Bearer sk_live_…).",
     inputSchema: {
@@ -111,6 +119,14 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "update_x402_route",
+    title: "Update a paid x402 route",
+    annotations: {
+      title: "Update a paid x402 route",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     description:
       "Update a published x402 route: price, description, upstream URL, schemas, settlement address, or status. Requires an Apiosk provider token.",
     inputSchema: {
@@ -138,6 +154,12 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "list_x402_routes",
+    title: "List my paid x402 routes",
+    annotations: {
+      title: "List my paid x402 routes",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     description:
       "List all x402 routes published by the authenticated provider, with paid URLs, prices, and live status. Requires an Apiosk provider token.",
     inputSchema: {
@@ -154,6 +176,14 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "unpublish_x402_route",
+    title: "Unpublish (disable) a paid x402 route",
+    annotations: {
+      title: "Unpublish (disable) a paid x402 route",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     description:
       "Disable a paid x402 route (its gateway listing stops serving). Reversible with update_x402_route {status: 'active'}. Requires an Apiosk provider token.",
     inputSchema: {
@@ -166,6 +196,12 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "test_x402_route",
+    title: "Test a route's x402 payment behavior",
+    annotations: {
+      title: "Test a route's x402 payment behavior",
+      readOnlyHint: true,
+      openWorldHint: true,
+    },
     description:
       "Send an unpaid test request to a route's paid URL and verify x402 behavior: expects 402 Payment Required with a valid accepts[] payment offer. Requires an Apiosk provider token.",
     inputSchema: {
@@ -183,6 +219,14 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "generate_openapi_spec",
+    title: "Generate a hosted OpenAPI spec",
+    annotations: {
+      title: "Generate a hosted OpenAPI spec",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     description:
       "Generate a hosted OpenAPI 3.1 spec for a route's API listing (all its endpoints) and return its public URL. Requires an Apiosk provider token.",
     inputSchema: {
@@ -202,6 +246,14 @@ export const PUBLISHER_TOOLS = [
   },
   {
     name: "publish_project",
+    title: "Publish a whole project's routes",
+    annotations: {
+      title: "Publish a whole project's routes",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     description:
       "Publish multiple API routes from one project in a single call. Creates one gateway listing for the project and one paid x402 route per entry. Requires an Apiosk provider token.",
     inputSchema: {

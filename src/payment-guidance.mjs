@@ -83,7 +83,7 @@ function describeReadiness(capability = {}, { localWalletsEnabled = false, mode 
         status: "ready_to_pay",
         active_method: "Apiosk connect token",
         detail:
-          "A managed connect token is active. The gateway settles each call over the buyer's enabled rails (USDC managed wallet or credits) server-side — no signing needed here.",
+          "A managed connect token is active. The gateway settles each call over the buyer's enabled rails (USDC managed wallet or credits) server-side, no signing needed here.",
       };
     case "wallet_address":
       return {
@@ -117,7 +117,7 @@ function buildHowToPaySteps({ readiness, localWalletsEnabled, mode, slug }) {
   if (readiness.ready) {
     return [
       execHint,
-      "Settlement is automatic — the gateway charges the active method and returns the result.",
+      "Settlement is automatic, the gateway charges the active method and returns the result.",
       "If a call still returns payment_required, fund the wallet (apiosk_show_wallet_funding) or enable another rail, then retry.",
     ];
   }
@@ -163,7 +163,7 @@ export function buildPaymentGuidance({
   if (isFree) {
     return {
       role: "buyer",
-      summary: `This listing is free (cost_per_call ${price}). Call it directly — no payment required.`,
+      summary: `This listing is free (cost_per_call ${price}). Call it directly, no payment required.`,
       cost_per_call_usd: price,
       free: true,
       status: "ready_to_pay",
@@ -227,7 +227,7 @@ export function buildProviderGuidance({ mode = "remote", localWalletsEnabled = f
       "Host your MCP over HTTPS and support initialize, tools/list, and tools/call.",
       "Protect the upstream MCP with bearer auth or another server-side secret; Apiosk injects that credential after payment.",
       "Import the MCP in the provider portal. Apiosk scans tools/list and creates one paid action per selected tool.",
-      "Buyers should use https://mcp.apiosk.com/mcp, GET https://gateway.apiosk.com/<slug>/metadata, or POST https://gateway.apiosk.com/<slug>/execute — not your raw MCP URL.",
+      "Buyers should use https://mcp.apiosk.com/mcp, GET https://gateway.apiosk.com/<slug>/metadata, or POST https://gateway.apiosk.com/<slug>/execute, not your raw MCP URL.",
       "Your MCP should not return 402 or inspect X-Payment. Apiosk handles payment challenges, settlement, and revenue splits before calling your MCP.",
     ],
     requirements: [
@@ -266,17 +266,17 @@ export function buildPaymentGuide({
   const payload = {
     role: normalizedRole,
     overview:
-      "Apiosk is one gateway, any rail: a single buyer identity can pay for any API over USDC (x402 on Base) or prepaid credits — the gateway picks the rail per call. Providers list APIs once and get paid per call.",
+      "Apiosk is one gateway, any rail: a single buyer identity can pay for any API over USDC (x402 on Base) or prepaid credits, the gateway picks the rail per call. Providers list APIs once and get paid per call.",
     quickstart: {
       buyer: [
         "Discover: apiosk_search or apiosk_explore.",
         "Inspect: apiosk_get_api for price, schema, and a per-listing payment block.",
-        "Pay & run: call the dynamic tool or apiosk_execute — settlement is automatic once a rail is configured.",
+        "Pay & run: call the dynamic tool or apiosk_execute, settlement is automatic once a rail is configured.",
       ],
       provider: [
         "Get a signing wallet (apiosk_wallet_create or APIOSK_PRIVATE_KEY).",
         "Publish: apiosk_publish_api with name, slug, https endpoint_url, price_usd, description.",
-        "Confirm: apiosk_list_my_apis — your listing is now discoverable and payable.",
+        "Confirm: apiosk_list_my_apis, your listing is now discoverable and payable.",
       ],
     },
   };
@@ -299,7 +299,7 @@ export function buildDiscoveryPaymentHint({ capability = {}, mode = "remote", lo
     payment_ready: readiness.ready,
     active_method: readiness.active_method,
     how_to_pay: readiness.ready
-      ? "Paid calls settle automatically — just call the tool or apiosk_execute."
+      ? "Paid calls settle automatically, just call the tool or apiosk_execute."
       : readiness.detail,
     settlement_rails: SETTLEMENT_RAILS.map((rail) => rail.id),
     learn_more: "Call apiosk_payment_guide for full buyer + provider instructions.",

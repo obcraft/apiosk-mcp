@@ -4,7 +4,7 @@
 
 # Apiosk MCP Server
 
-**AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent — over USDC/x402 or prepaid credits — through the Model Context Protocol.
+**AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent, over USDC/x402 or prepaid credits, through the Model Context Protocol.
 
 `payments` · `finance` · `x402` · `commerce` · `crypto`
 
@@ -259,7 +259,7 @@ https://mcp.apiosk.com/mcp
 ```
 
 Protected tools on the hosted server use OAuth. The remote MCP surface is fully
-capable — discovery, payment guidance, generic **and** dynamic per-API
+capable, discovery, payment guidance, generic **and** dynamic per-API
 execution, prepaid credits, and managed agent-wallet CRUD. Public tools
 (discovery + guidance) work before authorization; paid execution and managed
 tools require OAuth. Publishing stays local/portal-only because it needs a
@@ -329,18 +329,18 @@ provider portal under Settings → API keys):
 
 Tools:
 
-- `publish_x402_route` — create a paid route: name, `upstream_url`, `price`
+- `publish_x402_route`: create a paid route: name, `upstream_url`, `price`
   (USDC per call), `settlement_address`, optional `method`/`path`/schemas/tags.
   Returns the `paid_url` on `gateway.apiosk.com` plus the route's status.
-- `list_x402_routes` — all your routes with paid URLs, prices, and status.
-- `update_x402_route` — change price, description, upstream URL, schemas,
+- `list_x402_routes`: all your routes with paid URLs, prices, and status.
+- `update_x402_route`: change price, description, upstream URL, schemas,
   settlement address, or status.
-- `unpublish_x402_route` — disable a route (reversible).
-- `test_x402_route` — fire an unpaid request at the paid URL and verify it
+- `unpublish_x402_route`: disable a route (reversible).
+- `test_x402_route`: fire an unpaid request at the paid URL and verify it
   returns `402 Payment Required` with a valid x402 `accepts[]` offer.
-- `generate_openapi_spec` — host an OpenAPI 3.1 spec for the route at
+- `generate_openapi_spec`: host an OpenAPI 3.1 spec for the route at
   `https://mcp.apiosk.com/openapi/<route_id>.json`.
-- `publish_project` — publish several routes of one project in a single call.
+- `publish_project`: publish several routes of one project in a single call.
 
 Lifecycle: new routes land in Apiosk's operator review queue
 (`status: "pending_review"`). On approval they serve x402 payments, appear in
@@ -351,8 +351,8 @@ Coinbase x402 Bazaar. Settlement pays 98% of each call to your
 Discovery endpoints for machines:
 
 - `https://mcp.apiosk.com/.well-known/apiosk-routes.json` (alias `/discovery`)
-  — machine-readable index of every paid route on the gateway.
-- `https://mcp.apiosk.com/openapi/<route_id>.json` — per-route OpenAPI spec.
+ , machine-readable index of every paid route on the gateway.
+- `https://mcp.apiosk.com/openapi/<route_id>.json`: per-route OpenAPI spec.
 
 Local stdio use: set `APIOSK_PROVIDER_TOKEN=sk_live_…` instead of the header.
 Hosted server operators must configure `APIOSK_SUPABASE_SERVICE_ROLE_KEY` (the
@@ -363,7 +363,7 @@ tools verify provider keys and write listings through the gateway database).
 Static tools:
 
 - `apiosk_help`
-- `apiosk_payment_guide` — buyer + provider guide for paying through and publishing on the gateway
+- `apiosk_payment_guide`: buyer + provider guide for paying through and publishing on the gateway
 - `apiosk_explore`
 - `apiosk_search`
 - `apiosk_get_api`
@@ -440,7 +440,7 @@ Dynamic tools:
 ```
 
 Search, explore, and `apiosk_get_api` responses now embed a `payment` block that
-tells the agent exactly how to settle a paid call given the current auth — so an
+tells the agent exactly how to settle a paid call given the current auth, so an
 agent that finds, say, a weather API immediately knows whether it can pay and
 what to do next.
 
@@ -458,7 +458,7 @@ what to do next.
 { "role": "buyer", "slug": "weather-now" }
 ```
 
-Returns a buyer guide (USDC/x402 or credits — tailored to the configured auth)
+Returns a buyer guide (USDC/x402 or credits, tailored to the configured auth)
 and a provider guide (how to publish an API and get paid). Pass `slug` to scope
 buyer guidance to one listing, or `role` to pick a side.
 
@@ -507,7 +507,7 @@ Or save a dashboard-managed connect string locally and verify it:
 
 The connect string identifies the buyer's managed wallet and connect token. The
 `APIO_WALLET_*` limits bound the USDC (x402) rail. The same connect token also
-settles over prepaid credits when USDC is unavailable — the gateway picks the
+settles over prepaid credits when USDC is unavailable, the gateway picks the
 rail per call. Call `apiosk_help` with `topic="rails"` for the full settlement
 model.
 

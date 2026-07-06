@@ -743,7 +743,7 @@ class ApioskHostedOAuthProvider {
     // can mint a connect token in the buyer portal and call the hosted MCP
     // straight away, no interactive OAuth handshake. The gateway is the
     // authoritative store for connect tokens, so we validate by calling
-    // its /v1/me endpoint — one source of truth, no shared secret.
+    // its /v1/me endpoint, one source of truth, no shared secret.
     const trimmed = typeof token === "string" ? token.trim() : "";
     if (/^aw_(live|test)_/i.test(trimmed)) {
       return this.verifyConnectTokenAccess(trimmed);
@@ -862,7 +862,7 @@ class ApioskHostedOAuthProvider {
     }
     // Cache for 60s. Long enough to absorb a burst of tool calls, short
     // enough that a revocation in the buyer portal takes effect within a
-    // minute — same TTL the dashboard uses for similar permission caches.
+    // minute, same TTL the dashboard uses for similar permission caches.
     this.connectTokenCache.set(connectToken, {
       auth,
       expiresAt: now + 60_000,
