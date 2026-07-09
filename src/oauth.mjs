@@ -18,6 +18,8 @@ const CLIENT_ID_TTL_SECONDS = 20 * 365 * 24 * 60 * 60;
 const DEFAULT_SCOPE = "mcp:tools";
 const OFFLINE_ACCESS_SCOPE = "offline_access";
 const SUPPORTED_SCOPES = [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE];
+const DEFAULT_SUPABASE_URL = "https://jgjoiyqdyypouskftzeq.supabase.co";
+const EVM_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 // Every transport surface an MCP client may connect to and treat as the
 // OAuth "resource". Streamable HTTP clients target /mcp; the legacy HTTP+SSE
 // transport (ChatGPT's connector) opens /sse and posts to /messages. We
@@ -43,6 +45,10 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function jsStringLiteral(value) {
+  return JSON.stringify(String(value)).replaceAll("<", "\\u003c");
 }
 
 function toBase64Url(value) {
@@ -135,6 +141,26 @@ function buildRedirectUri(baseRedirectUri, params) {
   return redirectUrl.toString();
 }
 
+function normalizeSessionExpiry(value) {
+  const sessionExpiry = Number(value);
+  return Number.isFinite(sessionExpiry) && sessionExpiry > getIssuedAtSeconds()
+    ? sessionExpiry
+    : null;
+}
+
+function responseMessage(body, fallback) {
+  if (body && typeof body === "object") {
+    return trimString(body.message) || trimString(body.error) || fallback;
+  }
+  return trimString(body) || fallback;
+}
+
+function statusError(message, status = 500) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 function deriveClientSecret(secret, clientId) {
   return crypto.createHmac("sha256", secret).update(`client-secret:${clientId}`).digest("hex");
 }
@@ -193,6 +219,8 @@ function createAuthorizePage({
   errorMessage = "",
   infoMessage = "",
   oauthParams,
+  walletEnabled = true,
+  walletNoncePath = "/api/auth/mcp-wallet-nonce",
 }) {
   const scope = Array.isArray(oauthParams.scopes) ? oauthParams.scopes.join(" ") : "";
   const resource = oauthParams.resource ? oauthParams.resource.href : "";
@@ -221,16 +249,40 @@ function createAuthorizePage({
     <title>Connect ${escapeHtml(appName)}</title>
     <style>
       :root {
-        color-scheme: dark;
-        --bg: #07111c;
-        --panel: rgba(11, 24, 38, 0.94);
-        --border: rgba(119, 159, 214, 0.22);
-        --text: #edf4ff;
-        --muted: #94a8c7;
-        --accent: #68b4ff;
-        --accent-strong: #4d98ff;
-        --danger: #ff9d9d;
-        --success: #9ef0ba;
+        color-scheme: light dark;
+        --background: #f8f9fb;
+        --foreground: #191c1e;
+        --card: #ffffff;
+        --border: #e5e3ec;
+        --muted: #5d5a68;
+        --muted-surface: #f2f4f6;
+        --primary: #6b38d4;
+        --primary-strong: #5516be;
+        --primary-soft: #f3effd;
+        --danger: #ba1a1a;
+        --danger-soft: #ffdad6;
+        --success: #1f8a5b;
+        --success-soft: #e6f4ee;
+        --shadow: 0 12px 28px rgba(26, 35, 53, 0.12), 0 4px 8px rgba(26, 35, 53, 0.05);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #101015;
+          --foreground: #eceef2;
+          --card: #17171d;
+          --border: #2a2b35;
+          --muted: #9aa0ad;
+          --muted-surface: #20212a;
+          --primary: #8b5cf6;
+          --primary-strong: #a78bfa;
+          --primary-soft: rgba(139, 92, 246, 0.14);
+          --danger: #f25a5a;
+          --danger-soft: rgba(242, 90, 90, 0.12);
+          --success: #34c98a;
+          --success-soft: rgba(52, 201, 138, 0.12);
+          --shadow: 0 14px 32px rgba(0, 0, 0, 0.6), 0 4px 8px rgba(0, 0, 0, 0.45);
+        }
       }
 
       * {
@@ -240,30 +292,69 @@ function createAuthorizePage({
       body {
         margin: 0;
         min-height: 100vh;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--background);
+        color: var(--foreground);
+      }
+
+      .shell {
+        width: 100%;
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .topbar,
+      footer {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px clamp(20px, 5vw, 42px);
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--foreground);
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      .brand-mark {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        display: inline-grid;
+        place-items: center;
+        color: #fff;
+        background: linear-gradient(100deg, #6b38d4 0%, #8455ef 50%, #a78bfa 100%);
+        box-shadow: 0 8px 20px rgba(107, 56, 212, 0.22);
+        font-weight: 800;
+      }
+
+      .page {
+        width: 100%;
         display: grid;
         place-items: center;
         padding: 24px;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background:
-          radial-gradient(circle at top left, rgba(72, 136, 255, 0.22), transparent 32%),
-          radial-gradient(circle at bottom right, rgba(55, 217, 169, 0.18), transparent 28%),
-          linear-gradient(180deg, #02070d 0%, var(--bg) 100%);
-        color: var(--text);
       }
 
       main {
-        width: min(100%, 460px);
+        width: min(100%, 440px);
         border: 1px solid var(--border);
-        background: var(--panel);
-        border-radius: 20px;
-        padding: 28px;
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+        background: var(--card);
+        border-radius: 8px;
+        padding: 22px;
+        box-shadow: var(--shadow);
       }
 
       h1 {
         margin: 0 0 8px;
-        font-size: 1.8rem;
-        line-height: 1.1;
+        font-size: 1.35rem;
+        line-height: 1.2;
+        letter-spacing: 0;
       }
 
       p {
@@ -274,25 +365,41 @@ function createAuthorizePage({
 
       .stack {
         display: grid;
-        gap: 16px;
+        gap: 14px;
+      }
+
+      .header {
+        gap: 8px;
+      }
+
+      .eyebrow {
+        margin-bottom: 6px;
+        color: var(--primary);
+        font-size: 0.83rem;
+        font-weight: 700;
       }
 
       .message {
-        border-radius: 14px;
+        border-radius: 8px;
         padding: 12px 14px;
-        font-size: 0.96rem;
+        font-size: 0.9rem;
       }
 
       .message.error {
-        border: 1px solid rgba(255, 157, 157, 0.28);
-        background: rgba(106, 26, 26, 0.24);
+        border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+        background: var(--danger-soft);
         color: var(--danger);
       }
 
       .message.info {
-        border: 1px solid rgba(158, 240, 186, 0.22);
-        background: rgba(21, 71, 42, 0.24);
+        border: 1px solid color-mix(in srgb, var(--success) 26%, transparent);
+        background: var(--success-soft);
         color: var(--success);
+      }
+
+      .panel {
+        display: grid;
+        gap: 10px;
       }
 
       label {
@@ -304,84 +411,534 @@ function createAuthorizePage({
 
       input {
         width: 100%;
-        border: 1px solid rgba(119, 159, 214, 0.18);
-        border-radius: 12px;
-        background: rgba(2, 10, 18, 0.82);
-        color: var(--text);
-        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--foreground);
+        padding: 10px 12px;
         font-size: 1rem;
+        outline: none;
+      }
+
+      input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
       }
 
       button {
         appearance: none;
-        border: 0;
-        border-radius: 12px;
+        border: 1px solid transparent;
+        border-radius: 8px;
         padding: 12px 14px;
         font-size: 0.98rem;
         font-weight: 600;
         cursor: pointer;
+        min-height: 40px;
+        transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
       }
 
       button.primary {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
-        color: #04101d;
+        background: var(--primary);
+        color: #fff;
+      }
+
+      button.primary:hover:not(:disabled) {
+        background: var(--primary-strong);
       }
 
       button.secondary {
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--text);
+        background: transparent;
+        border-color: var(--border);
+        color: var(--foreground);
+      }
+
+      button.secondary:hover:not(:disabled) {
+        background: var(--muted-surface);
+      }
+
+      .wallet-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .wallet-option {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        color: var(--foreground);
+        text-align: left;
+      }
+
+      .wallet-option:hover:not(:disabled) {
+        border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+        background: var(--primary-soft);
+      }
+
+      .wallet-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .wallet-action {
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-size: 0.78rem;
       }
 
       .actions {
         display: grid;
-        gap: 10px;
+        gap: 8px;
       }
 
       .meta {
         font-size: 0.84rem;
         color: var(--muted);
+        padding-top: 2px;
       }
 
       code {
         font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, monospace;
-        color: #cbe1ff;
+        color: var(--foreground);
+        word-break: break-word;
+      }
+
+      .separator {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .separator::before,
+      .separator::after {
+        content: "";
+        height: 1px;
+        background: var(--border);
+      }
+
+      .email-auth {
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+      }
+
+      footer {
+        justify-content: center;
+        gap: 18px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      footer a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      footer a:hover {
+        color: var(--foreground);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 560px) {
+        .topbar {
+          padding: 16px 20px;
+        }
+
+        .page {
+          padding: 16px;
+          place-items: start center;
+        }
+
+        main {
+          padding: 20px;
+        }
       }
     </style>
   </head>
   <body>
-    <main class="stack">
-      <header class="stack">
-        <div>
-          <p>${escapeHtml(clientName.client_name || "Remote MCP client")}</p>
-          <h1>Connect ${escapeHtml(appName)}</h1>
-        </div>
-        <p>Sign in with your Apiosk dashboard account to unlock paid gateway calls, managed wallets, and credit-backed execution from this MCP app.</p>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="https://apiosk.com" rel="noreferrer">
+          <span class="brand-mark">A</span>
+          <span>Apiosk</span>
+        </a>
       </header>
-      ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
-      ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
-      <form method="post" action="${escapeHtml(actionPath)}" class="stack">
-        ${hiddenInputs}
-        <label>
-          Email
-          <input type="email" name="email" autocomplete="username" value="${escapeHtml(email)}" required />
-        </label>
-        <label>
-          Password
-          <input type="password" name="password" autocomplete="current-password" required />
-        </label>
-        <div class="actions">
-          <button class="primary" type="submit" name="action" value="sign_in">Sign in and continue</button>
-          <button class="secondary" type="submit" name="action" value="sign_up">Create account</button>
-          <button class="secondary" type="submit" name="action" value="cancel">Cancel</button>
-        </div>
-      </form>
-      <div class="meta">
-        Requested scope: <code>${escapeHtml(scope || DEFAULT_SCOPE)}</code><br />
-        Resource: <code>${escapeHtml(resource || "default")}</code>
+      <div class="page">
+        <main class="stack">
+          <header class="stack header">
+            <div>
+              <p class="eyebrow">${escapeHtml(clientName.client_name || "Remote MCP client")}</p>
+              <h1>Connect ${escapeHtml(appName)}</h1>
+            </div>
+            <p>Sign in with your Apiosk account to unlock paid gateway calls, managed wallets, and credit-backed execution from this MCP app.</p>
+          </header>
+          ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
+          ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
+          <section class="panel" aria-label="Wallet sign in">
+            <div id="wallet-list" class="wallet-list">
+              <button id="wallet-fallback" class="wallet-option" type="button" ${walletEnabled ? "" : "disabled"}>
+                <span class="wallet-name">Connect browser wallet</span>
+                <span class="wallet-action">${walletEnabled ? "Sign" : "Unavailable"}</span>
+              </button>
+            </div>
+            <p id="wallet-status" class="meta">${walletEnabled ? "Use MetaMask, Coinbase Wallet, Rabby, or another injected wallet." : "Wallet sign-in is not configured on this MCP server."}</p>
+          </section>
+          <form method="post" action="${escapeHtml(actionPath)}" class="stack email-auth">
+            ${hiddenInputs}
+            <label>
+              Email
+              <input type="email" name="email" autocomplete="username" value="${escapeHtml(email)}" required />
+            </label>
+            <label>
+              Password
+              <input type="password" name="password" autocomplete="current-password" required />
+            </label>
+            <div class="actions">
+              <button class="primary" type="submit" name="action" value="sign_in">Sign in and continue</button>
+              <button class="secondary" type="submit" name="action" value="sign_up">Create account</button>
+              <button class="secondary" type="submit" name="action" value="cancel" formnovalidate>Cancel</button>
+            </div>
+          </form>
+          <form id="wallet-form" method="post" action="${escapeHtml(actionPath)}" class="hidden">
+            ${hiddenInputs}
+            <input type="hidden" name="action" value="wallet_sign_in" />
+            <input type="hidden" name="wallet_address" />
+            <input type="hidden" name="wallet_message" />
+            <input type="hidden" name="wallet_signature" />
+            <input type="hidden" name="wallet_method" value="connected_wallet" />
+          </form>
+          <div class="meta">
+            Requested scope: <code>${escapeHtml(scope || DEFAULT_SCOPE)}</code><br />
+            Resource: <code>${escapeHtml(resource || "default")}</code>
+          </div>
+        </main>
       </div>
-    </main>
+      <footer>
+        <span>© Apiosk</span>
+        <a href="https://apiosk.com/terms" target="_blank" rel="noreferrer">Terms</a>
+        <a href="https://apiosk.com/privacy" target="_blank" rel="noreferrer">Privacy</a>
+      </footer>
+    </div>
+    <script>
+      (() => {
+        const walletEnabled = ${walletEnabled ? "true" : "false"};
+        const noncePath = ${jsStringLiteral(walletNoncePath)};
+        const walletForm = document.getElementById("wallet-form");
+        const walletList = document.getElementById("wallet-list");
+        const walletStatus = document.getElementById("wallet-status");
+        const providers = new Map();
+        let busy = false;
+
+        function setStatus(message, tone = "muted") {
+          walletStatus.textContent = message;
+          walletStatus.style.color = tone === "error" ? "var(--danger)" : tone === "success" ? "var(--success)" : "var(--muted)";
+        }
+
+        function hexEncode(value) {
+          return "0x" + Array.from(new TextEncoder().encode(value))
+            .map((byte) => byte.toString(16).padStart(2, "0"))
+            .join("");
+        }
+
+        function providerLabel(detail) {
+          return detail?.info?.name || "Browser wallet";
+        }
+
+        function rememberProvider(detail) {
+          if (!detail?.provider) return;
+          const key = detail?.info?.rdns || detail?.info?.uuid || providerLabel(detail);
+          providers.set(key, detail);
+          renderProviders();
+        }
+
+        function renderProviders() {
+          if (!walletEnabled) return;
+          walletList.innerHTML = "";
+          const entries = [...providers.entries()];
+          if (!entries.length) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "wallet-option";
+            button.innerHTML = '<span class="wallet-name">Connect browser wallet</span><span class="wallet-action">Sign</span>';
+            button.addEventListener("click", () => {
+              const provider = window.ethereum;
+              if (!provider) {
+                setStatus("No browser wallet found. Install MetaMask, Coinbase Wallet, or Rabby and refresh.", "error");
+                return;
+              }
+              signWithProvider({ provider, info: { name: "Browser wallet" } });
+            });
+            walletList.appendChild(button);
+            return;
+          }
+
+          for (const [, detail] of entries) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "wallet-option";
+            button.disabled = busy;
+            button.innerHTML = '<span class="wallet-name"></span><span class="wallet-action">Sign</span>';
+            button.querySelector(".wallet-name").textContent = providerLabel(detail);
+            button.addEventListener("click", () => signWithProvider(detail));
+            walletList.appendChild(button);
+          }
+        }
+
+        async function requestAccounts(provider) {
+          try {
+            await provider.request({
+              method: "wallet_requestPermissions",
+              params: [{ eth_accounts: {} }],
+            });
+          } catch (error) {
+            if (error && error.code === 4001) throw error;
+          }
+
+          const accounts = await provider.request({ method: "eth_requestAccounts" });
+          if (!Array.isArray(accounts) || !accounts.length) {
+            throw new Error("No wallet account was returned.");
+          }
+          return String(accounts[0]);
+        }
+
+        async function fetchNonce() {
+          const response = await fetch(noncePath, {
+            method: "POST",
+            headers: { accept: "application/json" },
+            credentials: "same-origin",
+          });
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok || !body.nonce) {
+            throw new Error(body.message || body.error || "Could not start wallet sign-in.");
+          }
+          return body.nonce;
+        }
+
+        async function signWithProvider(detail) {
+          if (!walletEnabled || busy) return;
+          busy = true;
+          renderProviders();
+          setStatus("Opening wallet...");
+          try {
+            const provider = detail.provider;
+            const address = await requestAccounts(provider);
+            const nonce = await fetchNonce();
+            const message = [
+              "Apiosk Provider wallet sign-in",
+              "wallet: " + address.toLowerCase(),
+              "origin: " + window.location.origin,
+              "nonce: " + nonce,
+              "issued_at: " + new Date().toISOString(),
+            ].join("\\n");
+            setStatus("Confirm the signature in your wallet...");
+            const signature = await provider.request({
+              method: "personal_sign",
+              params: [hexEncode(message), address],
+            });
+
+            walletForm.elements.wallet_address.value = address;
+            walletForm.elements.wallet_message.value = message;
+            walletForm.elements.wallet_signature.value = signature;
+            setStatus("Wallet verified. Continuing...", "success");
+            walletForm.submit();
+          } catch (error) {
+            setStatus(error instanceof Error ? error.message : "Wallet sign-in failed.", "error");
+            busy = false;
+            renderProviders();
+          }
+        }
+
+        if (!walletEnabled) return;
+        window.addEventListener("eip6963:announceProvider", (event) => rememberProvider(event.detail));
+        window.dispatchEvent(new Event("eip6963:requestProvider"));
+        window.setTimeout(() => {
+          if (!providers.size && window.ethereum) {
+            rememberProvider({ provider: window.ethereum, info: { name: "Browser wallet", rdns: "legacy.injected" } });
+          }
+          renderProviders();
+        }, 250);
+        renderProviders();
+      })();
+    </script>
   </body>
 </html>`;
+}
+
+function resolveMcpWalletAuthConfig(env = process.env) {
+  const supabaseUrl = normalizeBaseUrl(
+    env.APIOSK_SUPABASE_URL || env.SUPABASE_URL,
+    DEFAULT_SUPABASE_URL
+  );
+  const key =
+    trimString(env.APIOSK_SUPABASE_SERVICE_ROLE_KEY) ||
+    trimString(env.SUPABASE_SERVICE_ROLE_KEY) ||
+    trimString(env.SUPABASE_SERVICE_KEY) ||
+    trimString(env.APIOSK_SUPABASE_PUBLISHABLE_KEY) ||
+    trimString(env.APIOSK_SUPABASE_ANON_KEY) ||
+    trimString(env.SUPABASE_PUBLISHABLE_KEY) ||
+    trimString(env.SUPABASE_ANON_KEY);
+  const walletAuthUrl = normalizeBaseUrl(
+    env.APIOSK_WALLET_AUTH_URL || env.APIOSK_WALLET_AUTH_BASE_URL,
+    `${supabaseUrl}/functions/v1/wallet-auth`
+  );
+
+  return {
+    configured: Boolean(supabaseUrl && key && walletAuthUrl),
+    key,
+    supabaseUrl,
+    walletAuthUrl,
+  };
+}
+
+export function isMcpWalletAuthConfigured(env = process.env) {
+  return resolveMcpWalletAuthConfig(env).configured;
+}
+
+async function fetchJsonWithBody(url, options) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text || null;
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    body,
+  };
+}
+
+async function fetchWalletAuthJson(env, path, payload = {}) {
+  const config = resolveMcpWalletAuthConfig(env);
+  if (!config.configured) {
+    throw statusError("Wallet sign-in is not configured on this MCP server.", 503);
+  }
+
+  const response = await fetchJsonWithBody(`${config.walletAuthUrl}/${path}`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      apikey: config.key,
+      authorization: `Bearer ${config.key}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw statusError(
+      responseMessage(response.body, "Wallet sign-in is temporarily unavailable."),
+      response.status
+    );
+  }
+
+  return response.body && typeof response.body === "object" ? response.body : {};
+}
+
+export async function createMcpWalletAuthNonce({ env = process.env } = {}) {
+  const body = await fetchWalletAuthJson(env, "nonce");
+  const nonce = trimString(body.nonce);
+  if (!nonce) {
+    throw statusError("Wallet sign-in did not return a nonce.", 502);
+  }
+  return body;
+}
+
+async function verifySupabaseTokenHash(env, tokenHash) {
+  const config = resolveMcpWalletAuthConfig(env);
+  if (!config.configured) {
+    throw statusError("Wallet sign-in is not configured on this MCP server.", 503);
+  }
+
+  const response = await fetchJsonWithBody(`${config.supabaseUrl}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      apikey: config.key,
+      authorization: `Bearer ${config.key}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      token_hash: tokenHash,
+      type: "magiclink",
+    }),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw statusError(
+      responseMessage(response.body, "Could not establish an Apiosk dashboard session."),
+      response.status
+    );
+  }
+
+  const body = response.body && typeof response.body === "object" ? response.body : {};
+  const session = body.session && typeof body.session === "object" ? body.session : body;
+  const user = body.user && typeof body.user === "object" ? body.user : session.user || {};
+  const sessionToken = trimString(session.access_token);
+  if (!sessionToken) {
+    throw statusError("Wallet sign-in did not return a dashboard session.", 502);
+  }
+
+  const expiresAt =
+    Number(session.expires_at) ||
+    (Number.isFinite(Number(session.expires_in))
+      ? getIssuedAtSeconds() + Number(session.expires_in)
+      : null);
+
+  return {
+    session_token: sessionToken,
+    expires_at: expiresAt,
+    user_id: trimString(user.id),
+    email: trimString(user.email),
+  };
+}
+
+async function verifyWalletDashboardSession(env, { address, message, signature, method }) {
+  const normalizedAddress = trimString(address);
+  if (!EVM_ADDRESS_PATTERN.test(normalizedAddress)) {
+    throw statusError("Invalid wallet address.", 400);
+  }
+  if (!trimString(message) || !trimString(signature)) {
+    throw statusError("Missing wallet message or signature.", 400);
+  }
+
+  const walletAuth = await fetchWalletAuthJson(env, "verify", {
+    address: normalizedAddress,
+    message,
+    signature,
+    method: method === "created_wallet" ? "created_wallet" : "connected_wallet",
+  });
+  const tokenHash = trimString(walletAuth.tokenHash || walletAuth.token_hash);
+  if (!tokenHash) {
+    throw statusError("Wallet sign-in did not return a session token.", 502);
+  }
+
+  const session = await verifySupabaseTokenHash(env, tokenHash);
+  return {
+    ...session,
+    email: session.email || trimString(walletAuth.email),
+    wallet_address: normalizedAddress.toLowerCase(),
+  };
 }
 
 async function fetchDashboardJson(baseUrl, pathname, payload) {
@@ -536,10 +1093,9 @@ class ApioskHostedOAuthProvider {
     const submittedAction = trimString(req?.body?.action);
     const email = trimString(req?.body?.email).toLowerCase();
     const password = trimString(req?.body?.password);
-
-    if (!req || req.method !== "POST" || !submittedAction) {
+    const renderPage = (status, options = {}) =>
       res
-        .status(200)
+        .status(status)
         .setHeader("content-type", "text/html; charset=utf-8")
         .send(
           createAuthorizePage({
@@ -547,8 +1103,13 @@ class ApioskHostedOAuthProvider {
             appName: this.appName,
             clientName: client,
             oauthParams: params,
+            walletEnabled: isMcpWalletAuthConfigured(this.env),
+            ...options,
           })
         );
+
+    if (!req || req.method !== "POST" || !submittedAction) {
+      renderPage(200);
       return;
     }
 
@@ -564,20 +1125,32 @@ class ApioskHostedOAuthProvider {
       return;
     }
 
+    if (submittedAction === "wallet_sign_in") {
+      try {
+        const session = await verifyWalletDashboardSession(this.env, {
+          address: req.body.wallet_address,
+          message: req.body.wallet_message,
+          signature: req.body.wallet_signature,
+          method: req.body.wallet_method,
+        });
+        this.finishAuthorization(res, client, params, session);
+      } catch (error) {
+        renderPage(error.status && error.status >= 400 ? error.status : 400, {
+          email,
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Could not sign in with this wallet. Try again.",
+        });
+      }
+      return;
+    }
+
     if (!email || !password) {
-      res
-        .status(400)
-        .setHeader("content-type", "text/html; charset=utf-8")
-        .send(
-          createAuthorizePage({
-            actionPath: new URL("/authorize", this.issuerUrl).pathname,
-            appName: this.appName,
-            clientName: client,
-            oauthParams: params,
-            email,
-            errorMessage: "Email and password are required.",
-          })
-        );
+      renderPage(400, {
+        email,
+        errorMessage: "Email and password are required.",
+      });
       return;
     }
 
@@ -589,25 +1162,13 @@ class ApioskHostedOAuthProvider {
 
     const body = authResponse.body && typeof authResponse.body === "object" ? authResponse.body : {};
     const sessionToken = trimString(body.session_token);
-    const sessionExpiry = Number(body.expires_at);
-    const normalizedSessionExpiry =
-      Number.isFinite(sessionExpiry) && sessionExpiry > getIssuedAtSeconds() ? sessionExpiry : null;
 
     if (submittedAction === "sign_up" && !sessionToken && body.email_confirmation_required) {
-      res
-        .status(200)
-        .setHeader("content-type", "text/html; charset=utf-8")
-        .send(
-          createAuthorizePage({
-            actionPath: new URL("/authorize", this.issuerUrl).pathname,
-            appName: this.appName,
-            clientName: client,
-            oauthParams: params,
-            email,
-            infoMessage:
-              "Account created. Confirm your email from the Apiosk message we sent, then come back and sign in to finish connecting the app.",
-          })
-        );
+      renderPage(200, {
+        email,
+        infoMessage:
+          "Account created. Confirm your email from the Apiosk message we sent, then come back and sign in to finish connecting the app.",
+      });
       return;
     }
 
@@ -617,22 +1178,24 @@ class ApioskHostedOAuthProvider {
         trimString(body.error) ||
         "Could not sign in to Apiosk. Check your credentials and try again.";
 
-      res
-        .status(authResponse.ok ? 400 : authResponse.status)
-        .setHeader("content-type", "text/html; charset=utf-8")
-        .send(
-          createAuthorizePage({
-            actionPath: new URL("/authorize", this.issuerUrl).pathname,
-            appName: this.appName,
-            clientName: client,
-            oauthParams: params,
-            email,
-            errorMessage: message,
-          })
-        );
+      renderPage(authResponse.ok ? 400 : authResponse.status, {
+        email,
+        errorMessage: message,
+      });
       return;
     }
 
+    this.finishAuthorization(res, client, params, {
+      session_token: sessionToken,
+      expires_at: body.expires_at,
+      user_id: body.user_id,
+      email: trimString(body.email) || email,
+    });
+  }
+
+  finishAuthorization(res, client, params, session) {
+    const sessionToken = trimString(session.session_token);
+    const normalizedSessionExpiry = normalizeSessionExpiry(session.expires_at);
     const authorizationCode = buildIssuedToken(
       this.secret,
       "code",
@@ -644,8 +1207,9 @@ class ApioskHostedOAuthProvider {
         resource: params.resource ? params.resource.href : this.mcpServerUrl.href,
         dashboardSessionToken: sessionToken,
         dashboardSessionExpiresAt: normalizedSessionExpiry || undefined,
-        userId: trimString(body.user_id),
-        email: trimString(body.email) || email,
+        userId: trimString(session.user_id),
+        email: trimString(session.email),
+        walletAddress: trimString(session.wallet_address) || undefined,
       },
       AUTHORIZATION_CODE_TTL_SECONDS,
       normalizedSessionExpiry
@@ -696,6 +1260,7 @@ class ApioskHostedOAuthProvider {
       dashboardSessionExpiresAt: payload.dashboardSessionExpiresAt,
       userId: payload.userId,
       email: payload.email,
+      walletAddress: payload.walletAddress,
     };
 
     const accessToken = buildIssuedToken(
@@ -748,6 +1313,7 @@ class ApioskHostedOAuthProvider {
         dashboardSessionExpiresAt: payload.dashboardSessionExpiresAt,
         userId: payload.userId,
         email: payload.email,
+        walletAddress: payload.walletAddress,
       },
       ACCESS_TOKEN_TTL_SECONDS,
       maxExpiry
@@ -804,6 +1370,7 @@ class ApioskHostedOAuthProvider {
         dashboardSessionExpiresAt: payload.dashboardSessionExpiresAt,
         userId: payload.userId,
         email: payload.email,
+        walletAddress: payload.walletAddress,
       },
     };
   }

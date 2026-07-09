@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createHostedOAuthSupport } from "../src/oauth.mjs";
+import {
+  createHostedOAuthSupport,
+  createMcpWalletAuthNonce,
+} from "../src/oauth.mjs";
 import { createApioskMcpRuntime } from "../src/runtime.mjs";
 
 function createFakeGatewayClient() {
@@ -322,6 +325,115 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
   }
 });
 
+test("hosted authorize form POSTs handle cancel and valid email sign-in", async () => {
+  const express = (await import("express")).default;
+  const support = createHostedOAuthSupport({
+    env: { NODE_ENV: "test" },
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-form-client",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+
+  const app = express();
+  app.use("/authorize", support.authorizationRouter);
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const originalFetch = globalThis.fetch;
+
+  function form(action, extra = {}) {
+    return new URLSearchParams({
+      client_id: client.client_id,
+      redirect_uri: "https://chatgpt.com/connector/oauth/callback",
+      response_type: "code",
+      code_challenge: "challenge_form",
+      code_challenge_method: "S256",
+      scope: "mcp:tools offline_access",
+      state: "state_form",
+      resource: "http://localhost:3000/sse",
+      action,
+      ...extra,
+    });
+  }
+
+  try {
+    globalThis.fetch = async (url) => {
+      throw new Error(`Unexpected dashboard call during cancel: ${url}`);
+    };
+    const cancelResponse = await originalFetch(new URL("/authorize", base), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form("cancel"),
+      redirect: "manual",
+    });
+    assert.equal(cancelResponse.status, 302);
+    const cancelLocation = new URL(cancelResponse.headers.get("location"));
+    assert.equal(cancelLocation.searchParams.get("error"), "access_denied");
+    assert.equal(cancelLocation.searchParams.get("state"), "state_form");
+
+    globalThis.fetch = async (url) => {
+      assert.ok(
+        [
+          "https://dashboard.apiosk.com/api/auth/mcp-sign-in",
+          "https://dashboard.apiosk.com/api/auth/mcp-sign-up",
+        ].includes(String(url)),
+        `Unexpected dashboard auth route: ${url}`
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          signed_in: true,
+          email: "demo@example.com",
+          user_id: "user_form_123",
+          session_token: "jwt_form_dashboard_session",
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    };
+    const signInResponse = await originalFetch(new URL("/authorize", base), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form("sign_in", {
+        email: "demo@example.com",
+        password: "correct-password",
+      }),
+      redirect: "manual",
+    });
+    assert.equal(signInResponse.status, 302);
+    const signInLocation = new URL(signInResponse.headers.get("location"));
+    assert.ok(signInLocation.searchParams.get("code"));
+    assert.equal(signInLocation.searchParams.get("state"), "state_form");
+
+    const createResponse = await originalFetch(new URL("/authorize", base), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form("sign_up", {
+        email: "new@example.com",
+        password: "correct-password",
+      }),
+      redirect: "manual",
+    });
+    assert.equal(createResponse.status, 302);
+    const createLocation = new URL(createResponse.headers.get("location"));
+    assert.ok(createLocation.searchParams.get("code"));
+    assert.equal(createLocation.searchParams.get("state"), "state_form");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("dynamic registered OAuth clients survive a fresh provider instance", async () => {
   const env = {
     NODE_ENV: "test",
@@ -477,6 +589,146 @@ test("access tokens minted for the /sse resource verify against the hosted serve
     const authInfo = await support.provider.verifyAccessToken(tokens.access_token);
     assert.equal(authInfo.resource.href, "https://mcp.apiosk.com/sse");
     assert.equal(authInfo.scopes.includes("mcp:tools"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("hosted wallet nonce helper proxies the provider wallet-auth nonce", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    return new Response(
+      JSON.stringify({
+        nonce: "nonce_123",
+        expiresAt: "2026-07-09T22:40:00.000Z",
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+  };
+
+  try {
+    const body = await createMcpWalletAuthNonce({
+      env: {
+        APIOSK_SUPABASE_URL: "https://sb.test",
+        APIOSK_SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+      },
+    });
+
+    assert.equal(body.nonce, "nonce_123");
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "https://sb.test/functions/v1/wallet-auth/nonce");
+    assert.equal(calls[0].init.headers.apikey, "service-role-test");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("hosted OAuth support issues tokens after wallet sign-in", async () => {
+  const env = {
+    NODE_ENV: "test",
+    APIOSK_SUPABASE_URL: "https://sb.test",
+    APIOSK_SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+  };
+  const support = createHostedOAuthSupport({
+    env,
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("https://mcp.apiosk.com"),
+    mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-wallet-client",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    calls.push({ href, init });
+    if (href === "https://sb.test/functions/v1/wallet-auth/verify") {
+      const payload = JSON.parse(init.body);
+      assert.equal(payload.address, "0x1111111111111111111111111111111111111111");
+      assert.equal(payload.method, "connected_wallet");
+      assert.match(payload.message, /nonce: nonce_wallet/);
+      return new Response(
+        JSON.stringify({
+          tokenHash: "wallet_token_hash",
+          email: "0x1111111111111111111111111111111111111111@wallet.apiosk.com",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (href === "https://sb.test/auth/v1/verify") {
+      const payload = JSON.parse(init.body);
+      assert.deepEqual(payload, {
+        token_hash: "wallet_token_hash",
+        type: "magiclink",
+      });
+      return new Response(
+        JSON.stringify({
+          access_token: "jwt_wallet_dashboard_session",
+          expires_in: 3600,
+          user: {
+            id: "wallet_user_123",
+            email: "0x1111111111111111111111111111111111111111@wallet.apiosk.com",
+          },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    const oauthParams = {
+      state: "state_wallet",
+      scopes: ["mcp:tools", "offline_access"],
+      codeChallenge: "challenge_wallet",
+      redirectUri: "https://chatgpt.com/connector/oauth/callback",
+      resource: new URL("https://mcp.apiosk.com/sse"),
+    };
+    const authorizeRequest = {
+      method: "POST",
+      body: {
+        action: "wallet_sign_in",
+        wallet_address: "0x1111111111111111111111111111111111111111",
+        wallet_message:
+          "Apiosk Provider wallet sign-in\nwallet: 0x1111111111111111111111111111111111111111\norigin: https://mcp.apiosk.com\nnonce: nonce_wallet\nissued_at: 2026-07-09T22:40:00.000Z",
+        wallet_signature: "0xsignature",
+      },
+    };
+    const authorizeResponse = createMockResponse(authorizeRequest);
+
+    await support.provider.authorize(client, oauthParams, authorizeResponse);
+
+    assert.equal(authorizeResponse.statusCode, 302);
+    const authorizationCode = new URL(authorizeResponse.redirectedTo).searchParams.get("code");
+    assert.ok(authorizationCode);
+    assert.equal(calls.length, 2);
+
+    const tokens = await support.provider.exchangeAuthorizationCode(
+      client,
+      authorizationCode,
+      undefined,
+      "https://chatgpt.com/connector/oauth/callback",
+      new URL("https://mcp.apiosk.com/sse")
+    );
+    const authInfo = await support.provider.verifyAccessToken(tokens.access_token);
+
+    assert.equal(authInfo.extra.dashboardSessionToken, "jwt_wallet_dashboard_session");
+    assert.equal(authInfo.extra.userId, "wallet_user_123");
+    assert.equal(
+      authInfo.extra.walletAddress,
+      "0x1111111111111111111111111111111111111111"
+    );
+    assert.equal(authInfo.resource.href, "https://mcp.apiosk.com/sse");
   } finally {
     globalThis.fetch = originalFetch;
   }

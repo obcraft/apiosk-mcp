@@ -6,7 +6,11 @@ import {
   createApioskMcpServer,
   listApioskTools,
 } from "./src/create-server.mjs";
-import { createHostedOAuthSupport, resolveHostedMcpUrls } from "./src/oauth.mjs";
+import {
+  createHostedOAuthSupport,
+  createMcpWalletAuthNonce,
+  resolveHostedMcpUrls,
+} from "./src/oauth.mjs";
 import { createApioskMcpRuntime } from "./src/runtime.mjs";
 import {
   resolveOpenAiAppsChallengeToken,
@@ -259,6 +263,23 @@ if (hostedOAuth.oauthMetadata.registration_endpoint) {
 
 app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
   return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
+});
+
+app.post("/api/auth/mcp-wallet-nonce", async (req, res) => {
+  try {
+    const nonce = await createMcpWalletAuthNonce({ env: process.env });
+    res.status(200).json(nonce);
+  } catch (error) {
+    const status = Number.isFinite(error?.status) ? error.status : 502;
+    res.status(status).json({
+      error: "wallet_auth_unavailable",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Wallet sign-in is temporarily unavailable.",
+      status,
+    });
+  }
 });
 
 app.all("/api/*path", async (req, res) => {
