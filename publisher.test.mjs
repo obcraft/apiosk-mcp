@@ -537,6 +537,79 @@ describe("unpublish_x402_route", () => {
   });
 });
 
+describe("update_x402_route status transitions", () => {
+  function routeGetRule(apiOverrides) {
+    return {
+      match: (url, method) => method === "GET" && url.includes("api_endpoints?id=eq.route-1"),
+      respond: jsonResponse([
+        {
+          id: "route-1",
+          method: "GET",
+          path: "/extract",
+          price: 0.05,
+          apis: {
+            id: "api-1",
+            owner_id: "owner-1",
+            slug: "pdf-tools",
+            name: "PDF Tools API",
+            status: "inactive",
+            approved_at: null,
+            wallet_address: "0x1111111111111111111111111111111111111111",
+            listing_metadata: {},
+            ...apiOverrides,
+          },
+        },
+      ]),
+    };
+  }
+
+  // supabaseRest writes with the service-role key, so trg_apis_review_gate's
+  // `auth.uid() is not null` check never fires for these calls — the DB can't
+  // force a never-approved listing back into 'pending' on its own. This must
+  // be enforced in handleUpdateRoute instead (see the fix in src/publisher.mjs).
+  it("re-enters review instead of going active when the listing was never approved", async () => {
+    const { fetchImpl, calls } = scriptedFetch([
+      verifyKeyRule(),
+      routeGetRule({ approved_at: null }),
+      {
+        match: (url, method) => method === "PATCH" && url.includes("apis?id=eq.api-1"),
+        respond: jsonResponse([{ id: "api-1", slug: "pdf-tools", status: "pending" }]),
+      },
+    ]);
+
+    await handlePublisherTool(
+      "update_x402_route",
+      { route_id: "route-1", status: "active" },
+      { token: "sk_live_update" },
+      { env: TEST_ENV, fetchImpl }
+    );
+
+    const patch = calls.find((call) => call.method === "PATCH" && call.url.includes("apis?id=eq.api-1"));
+    assert.deepEqual(JSON.parse(patch.init.body), { status: "pending" });
+  });
+
+  it("goes straight active when the listing already cleared review once", async () => {
+    const { fetchImpl, calls } = scriptedFetch([
+      verifyKeyRule(),
+      routeGetRule({ approved_at: "2026-06-01T00:00:00Z" }),
+      {
+        match: (url, method) => method === "PATCH" && url.includes("apis?id=eq.api-1"),
+        respond: jsonResponse([{ id: "api-1", slug: "pdf-tools", status: "active" }]),
+      },
+    ]);
+
+    await handlePublisherTool(
+      "update_x402_route",
+      { route_id: "route-1", status: "active" },
+      { token: "sk_live_update" },
+      { env: TEST_ENV, fetchImpl }
+    );
+
+    const patch = calls.find((call) => call.method === "PATCH" && call.url.includes("apis?id=eq.api-1"));
+    assert.deepEqual(JSON.parse(patch.init.body), { status: "active" });
+  });
+});
+
 describe("publish_project", () => {
   it("creates one listing with a route per project entry", async () => {
     const { fetchImpl } = scriptedFetch([

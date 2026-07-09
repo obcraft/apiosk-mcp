@@ -861,10 +861,17 @@ async function handleUpdateRoute(args, authInfo, ctx) {
     listingPatch.listing_metadata = buildListingMetadataPatch(api.listing_metadata, { tags: args.tags });
   }
   if (args.status !== undefined) {
-    // 'active' requests re-entry into serving; the DB review gate decides
-    // whether that lands as 'active' or 'pending'. 'disabled' maps to
-    // 'inactive'.
-    listingPatch.status = trimString(args.status) === "disabled" ? "inactive" : "active";
+    if (trimString(args.status) === "disabled") {
+      listingPatch.status = "inactive";
+    } else {
+      // This write goes through supabaseRest with the service-role key, so
+      // trg_apis_review_gate's `auth.uid() is not null` check never applies —
+      // the DB can't force a never-approved listing back into 'pending' for
+      // us. Mirror that gate here: only a listing that has already cleared
+      // review once (approved_at set) gets to go straight to 'active';
+      // everything else re-enters the review queue.
+      listingPatch.status = api.approved_at ? "active" : "pending";
+    }
   }
 
   let updatedEndpoint = endpoint;
