@@ -55,10 +55,11 @@ function normalizeControlPlanePath(pathname = "") {
 }
 
 function shouldProxyControlPlanePath(pathname = "") {
+  // Hosted sign-in is wallet-only now (see src/oauth.mjs); the email/password
+  // /api/auth/mcp-sign-in|sign-up routes never existed on the control plane, so
+  // they are no longer proxied.
   const normalizedPath = normalizeControlPlanePath(pathname);
   return (
-    normalizedPath === "/api/auth/mcp-sign-in" ||
-    normalizedPath === "/api/auth/mcp-sign-up" ||
     normalizedPath.startsWith("/api/credits/") ||
     normalizedPath === "/api/agent-wallets" ||
     normalizedPath.startsWith("/api/agent-wallets/")
@@ -243,7 +244,6 @@ const runtime = createApioskMcpRuntime({
 });
 const hostedOAuth = createHostedOAuthSupport({
   env: process.env,
-  controlPlaneBaseUrl: CONTROL_PLANE_BACKEND_URL,
   issuerUrl,
   mcpServerUrl,
   appName: "Apiosk",

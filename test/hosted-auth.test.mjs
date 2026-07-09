@@ -184,10 +184,64 @@ function createMockResponse(req) {
   };
 }
 
+// Env that makes the wallet sign-in path "configured" (needs a Supabase URL +
+// key). Sign-in on the hosted authorize page is wallet-only; email/password was
+// removed because its dashboard backend route never existed.
+const WALLET_TEST_ENV = {
+  NODE_ENV: "test",
+  APIOSK_SUPABASE_URL: "https://sb.test",
+  APIOSK_SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+};
+
+// A signed wallet message the way the browser builds it (multi-line, "\n").
+function walletMessage(address) {
+  return [
+    "Apiosk Provider wallet sign-in",
+    `wallet: ${address.toLowerCase()}`,
+    "origin: https://mcp.apiosk.com",
+    "nonce: nonce_wallet",
+    "issued_at: 2026-07-09T22:40:00.000Z",
+  ].join("\n");
+}
+
+// Replace globalThis.fetch with a stub that answers the two calls a wallet
+// sign-in makes: the wallet-auth /verify (recovers the signer) and the Supabase
+// /auth/v1/verify (mints the dashboard session). Returns a restore function.
+function stubWalletAuthFetch({
+  address,
+  sessionToken = "jwt_wallet_dashboard_session",
+  userId = "wallet_user_123",
+} = {}) {
+  const email = `${address.toLowerCase()}@wallet.apiosk.com`;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    if (href === "https://sb.test/functions/v1/wallet-auth/verify") {
+      return new Response(
+        JSON.stringify({ tokenHash: "wallet_token_hash", email }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    if (href === "https://sb.test/auth/v1/verify") {
+      return new Response(
+        JSON.stringify({
+          access_token: sessionToken,
+          expires_in: 3600,
+          user: { id: userId, email },
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
 test("hosted OAuth support issues tokens and challenges protected MCP tools", async () => {
   const support = createHostedOAuthSupport({
-    env: { NODE_ENV: "test" },
-    controlPlaneBaseUrl: "https://apiosk.com",
+    env: WALLET_TEST_ENV,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
     appName: "Apiosk",
@@ -206,24 +260,12 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
     token_endpoint_auth_method: "none",
   });
 
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        success: true,
-        signed_in: true,
-        email: "demo@example.com",
-        user_id: "user_123",
-        session_token: "jwt_dashboard_session",
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-      }),
-      {
-        status: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-      }
-    );
+  const address = "0x1111111111111111111111111111111111111111";
+  const restoreFetch = stubWalletAuthFetch({
+    address,
+    sessionToken: "jwt_dashboard_session",
+    userId: "user_123",
+  });
 
   try {
     const oauthParams = {
@@ -236,9 +278,10 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
     const authorizeRequest = {
       method: "POST",
       body: {
-        action: "sign_in",
-        email: "demo@example.com",
-        password: "secret123",
+        action: "wallet_sign_in",
+        wallet_address: address,
+        wallet_message: walletMessage(address),
+        wallet_signature: "0xsignature",
       },
     };
     const authorizeResponse = createMockResponse(authorizeRequest);
@@ -321,15 +364,14 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
     assert.equal(nextCalled, true);
     assert.equal(authenticatedReq.auth.extra.dashboardSessionToken, "jwt_dashboard_session");
   } finally {
-    globalThis.fetch = originalFetch;
+    restoreFetch();
   }
 });
 
-test("hosted authorize form POSTs handle cancel and valid email sign-in", async () => {
+test("hosted authorize form POSTs handle cancel and wallet sign-in over a real form encoding", async () => {
   const express = (await import("express")).default;
   const support = createHostedOAuthSupport({
-    env: { NODE_ENV: "test" },
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    env: WALLET_TEST_ENV,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
     appName: "Apiosk",
@@ -366,6 +408,20 @@ test("hosted authorize form POSTs handle cancel and valid email sign-in", async 
     });
   }
 
+  const address = "0x2222222222222222222222222222222222222222";
+  // The exact bytes the wallet signs — multi-line, joined with "\n".
+  const message = walletMessage(address);
+  // The client base64url-encodes the signed message before putting it in the
+  // hidden field. This is what protects the "\n" bytes from being rewritten to
+  // "\r\n" by form submission, which would otherwise break signature recovery
+  // on the wallet-auth server. Assert the encoded field carries no raw newline.
+  const encodedMessage = Buffer.from(message, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  assert.ok(!/[\r\n]/.test(encodedMessage), "encoded message must be newline-free");
+
   try {
     globalThis.fetch = async (url) => {
       throw new Error(`Unexpected dashboard call during cancel: ${url}`);
@@ -381,32 +437,43 @@ test("hosted authorize form POSTs handle cancel and valid email sign-in", async 
     assert.equal(cancelLocation.searchParams.get("error"), "access_denied");
     assert.equal(cancelLocation.searchParams.get("state"), "state_form");
 
-    globalThis.fetch = async (url) => {
-      assert.ok(
-        [
-          "https://dashboard.apiosk.com/api/auth/mcp-sign-in",
-          "https://dashboard.apiosk.com/api/auth/mcp-sign-up",
-        ].includes(String(url)),
-        `Unexpected dashboard auth route: ${url}`
-      );
-      return new Response(
-        JSON.stringify({
-          success: true,
-          signed_in: true,
-          email: "demo@example.com",
-          user_id: "user_form_123",
-          session_token: "jwt_form_dashboard_session",
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-        }),
-        { status: 200, headers: { "content-type": "application/json" } }
-      );
+    // The wallet-auth server must receive the message with its original "\n"
+    // line breaks intact (decoded from base64url) — not the "\r\n" a raw text
+    // field would have produced.
+    let seenMessage = null;
+    globalThis.fetch = async (url, init = {}) => {
+      const href = String(url);
+      if (href === "https://sb.test/functions/v1/wallet-auth/verify") {
+        seenMessage = JSON.parse(init.body).message;
+        return new Response(
+          JSON.stringify({
+            tokenHash: "wallet_token_hash",
+            email: `${address.toLowerCase()}@wallet.apiosk.com`,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (href === "https://sb.test/auth/v1/verify") {
+        return new Response(
+          JSON.stringify({
+            access_token: "jwt_form_dashboard_session",
+            expires_in: 3600,
+            user: { id: "user_form_123", email: `${address.toLowerCase()}@wallet.apiosk.com` },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch: ${href}`);
     };
     const signInResponse = await originalFetch(new URL("/authorize", base), {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: form("sign_in", {
-        email: "demo@example.com",
-        password: "correct-password",
+      body: form("wallet_sign_in", {
+        wallet_address: address,
+        wallet_message: encodedMessage,
+        wallet_message_encoding: "base64url",
+        wallet_signature: "0xsignature",
+        wallet_method: "connected_wallet",
       }),
       redirect: "manual",
     });
@@ -414,20 +481,7 @@ test("hosted authorize form POSTs handle cancel and valid email sign-in", async 
     const signInLocation = new URL(signInResponse.headers.get("location"));
     assert.ok(signInLocation.searchParams.get("code"));
     assert.equal(signInLocation.searchParams.get("state"), "state_form");
-
-    const createResponse = await originalFetch(new URL("/authorize", base), {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: form("sign_up", {
-        email: "new@example.com",
-        password: "correct-password",
-      }),
-      redirect: "manual",
-    });
-    assert.equal(createResponse.status, 302);
-    const createLocation = new URL(createResponse.headers.get("location"));
-    assert.ok(createLocation.searchParams.get("code"));
-    assert.equal(createLocation.searchParams.get("state"), "state_form");
+    assert.equal(seenMessage, message, "server must recover the exact signed message bytes");
   } finally {
     globalThis.fetch = originalFetch;
     await new Promise((resolve) => server.close(resolve));
@@ -441,7 +495,6 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
   };
   const support = createHostedOAuthSupport({
     env,
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
     appName: "Apiosk",
@@ -465,7 +518,6 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
 
   const freshSupport = createHostedOAuthSupport({
     env,
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
     appName: "Apiosk",
@@ -486,7 +538,6 @@ test("protected-resource metadata is served for every transport surface so ChatG
   const express = (await import("express")).default;
   const support = createHostedOAuthSupport({
     env: { NODE_ENV: "test" },
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
     appName: "Apiosk",
@@ -532,8 +583,7 @@ test("protected-resource metadata is served for every transport surface so ChatG
 
 test("access tokens minted for the /sse resource verify against the hosted server", async () => {
   const support = createHostedOAuthSupport({
-    env: { NODE_ENV: "test" },
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    env: WALLET_TEST_ENV,
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
     appName: "Apiosk",
@@ -547,19 +597,8 @@ test("access tokens minted for the /sse resource verify against the hosted serve
     token_endpoint_auth_method: "none",
   });
 
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        success: true,
-        signed_in: true,
-        email: "demo@example.com",
-        user_id: "user_123",
-        session_token: "jwt_dashboard_session",
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-      }),
-      { status: 200, headers: { "content-type": "application/json" } }
-    );
+  const address = "0x3333333333333333333333333333333333333333";
+  const restoreFetch = stubWalletAuthFetch({ address });
 
   try {
     // ChatGPT connected via /sse, so it requests resource=<origin>/sse.
@@ -572,7 +611,12 @@ test("access tokens minted for the /sse resource verify against the hosted serve
     };
     const authorizeRequest = {
       method: "POST",
-      body: { action: "sign_in", email: "demo@example.com", password: "secret123" },
+      body: {
+        action: "wallet_sign_in",
+        wallet_address: address,
+        wallet_message: walletMessage(address),
+        wallet_signature: "0xsignature",
+      },
     };
     const authorizeResponse = createMockResponse(authorizeRequest);
     await support.provider.authorize(client, oauthParams, authorizeResponse);
@@ -590,7 +634,7 @@ test("access tokens minted for the /sse resource verify against the hosted serve
     assert.equal(authInfo.resource.href, "https://mcp.apiosk.com/sse");
     assert.equal(authInfo.scopes.includes("mcp:tools"), true);
   } finally {
-    globalThis.fetch = originalFetch;
+    restoreFetch();
   }
 });
 
@@ -633,7 +677,6 @@ test("hosted OAuth support issues tokens after wallet sign-in", async () => {
   };
   const support = createHostedOAuthSupport({
     env,
-    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
     appName: "Apiosk",
