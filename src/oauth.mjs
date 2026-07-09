@@ -1,10 +1,13 @@
 import crypto from "node:crypto";
 
+import express from "express";
+
 import { OAuthClientMetadataSchema } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { createOAuthMetadata, getOAuthProtectedResourceMetadataUrl, mcpAuthMetadataRouter } from "@modelcontextprotocol/sdk/server/auth/router.js";
+import { createOAuthMetadata, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { authorizationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
 import { tokenHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/token.js";
 import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/register.js";
+import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/metadata.js";
 
 import { isProviderApiKey, verifyProviderKey } from "./publisher.mjs";
 
@@ -15,6 +18,12 @@ const CLIENT_ID_TTL_SECONDS = 20 * 365 * 24 * 60 * 60;
 const DEFAULT_SCOPE = "mcp:tools";
 const OFFLINE_ACCESS_SCOPE = "offline_access";
 const SUPPORTED_SCOPES = [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE];
+// Every transport surface an MCP client may connect to and treat as the
+// OAuth "resource". Streamable HTTP clients target /mcp; the legacy HTTP+SSE
+// transport (ChatGPT's connector) opens /sse and posts to /messages. We
+// publish protected-resource metadata for each, plus the origin root, so a
+// client's discovery probe succeeds no matter which surface it connected to.
+const TRANSPORT_RESOURCE_PATHS = ["/mcp", "/sse", "/messages"];
 const UUID_LIKE_CLIENT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -504,6 +513,22 @@ class ApioskHostedOAuthProvider {
     this.appName = appName;
     this.resourceName = resourceName;
     this.clientsStore = new ApioskOAuthClientsStore(secret);
+    // Audiences we honour on an access token. A client that connected via
+    // /sse (ChatGPT) requests resource=<origin>/sse; one via /mcp requests
+    // <origin>/mcp. The origin root is accepted for clients that omit the
+    // path. All map to the same underlying Apiosk MCP server.
+    this.allowedResources = new Set(
+      [
+        ...TRANSPORT_RESOURCE_PATHS.map((path) => new URL(path, this.mcpServerUrl).href),
+        new URL("/", this.mcpServerUrl).href,
+        this.mcpServerUrl.href,
+      ].map((href) => href.replace(/\/+$/, "") || href)
+    );
+  }
+
+  isAllowedResource(resourceHref) {
+    const normalized = String(resourceHref || "").replace(/\/+$/, "");
+    return this.allowedResources.has(normalized) || this.allowedResources.has(resourceHref);
   }
 
   async authorize(client, params, res) {
@@ -763,7 +788,7 @@ class ApioskHostedOAuthProvider {
       throw new Error("Invalid access token");
     }
 
-    if (payload.resource && payload.resource !== this.mcpServerUrl.href) {
+    if (payload.resource && !this.isAllowedResource(payload.resource)) {
       throw new Error("Token was issued for a different resource");
     }
 
@@ -933,6 +958,63 @@ function writeAuthChallenge(res, { status, code, message, resourceMetadataUrl })
   });
 }
 
+function protectedResourceMetadataPath(resourceUrl) {
+  const rsPath = new URL(resourceUrl.href).pathname;
+  return `/.well-known/oauth-protected-resource${rsPath === "/" ? "" : rsPath}`;
+}
+
+// One router that serves protected-resource metadata (RFC 9728) for the
+// origin root AND every transport surface (/mcp, /sse, /messages), so an MCP
+// client's discovery probe resolves regardless of which URL it connected to.
+// Longer paths are registered first because express `use()` matches by prefix
+// and the root path would otherwise shadow the transport-specific documents.
+function buildResourceMetadataRouter({
+  oauthMetadata,
+  resourceUrls,
+  scopesSupported,
+  resourceName,
+  serviceDocumentationUrl,
+}) {
+  checkResourceRouterIssuer(oauthMetadata.issuer);
+  const router = express.Router();
+
+  const sorted = [...resourceUrls].sort(
+    (a, b) => new URL(b.href).pathname.length - new URL(a.href).pathname.length
+  );
+
+  for (const resourceUrl of sorted) {
+    const document = {
+      resource: resourceUrl.href,
+      authorization_servers: [oauthMetadata.issuer],
+      scopes_supported: scopesSupported,
+      resource_name: resourceName,
+      resource_documentation: serviceDocumentationUrl?.href,
+    };
+    router.use(protectedResourceMetadataPath(resourceUrl), metadataHandler(document));
+  }
+
+  // RFC 8414 authorization-server metadata, so clients that only speak the
+  // AS-metadata discovery path still find the issuer.
+  router.use("/.well-known/oauth-authorization-server", metadataHandler(oauthMetadata));
+
+  return router;
+}
+
+function checkResourceRouterIssuer(issuer) {
+  const issuerUrl = new URL(issuer);
+  const allowInsecure =
+    process.env.MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL === "true" ||
+    process.env.MCP_DANGEROUSLY_ALLOW_INSECURE_ISSUER_URL === "1";
+  if (
+    issuerUrl.protocol !== "https:" &&
+    issuerUrl.hostname !== "localhost" &&
+    issuerUrl.hostname !== "127.0.0.1" &&
+    !allowInsecure
+  ) {
+    throw new Error("Issuer URL must be HTTPS");
+  }
+}
+
 export function createHostedOAuthSupport({
   env = process.env,
   controlPlaneBaseUrl,
@@ -962,24 +1044,56 @@ export function createHostedOAuthSupport({
   });
   oauthMetadata.client_id_metadata_document_supported = true;
 
+  const serviceDocumentationUrl = new URL("https://apiosk.com");
+
+  // Every transport surface published as its own OAuth resource, plus the
+  // Streamable HTTP /mcp URL and the origin root.
+  const resourceUrls = [
+    ...TRANSPORT_RESOURCE_PATHS.map((path) => new URL(path, mcpServerUrl)),
+    mcpServerUrl,
+    new URL("/", mcpServerUrl),
+  ];
+
   const resourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(mcpServerUrl);
+  // PRM URL for the legacy HTTP+SSE transport, so a client that connected via
+  // /sse (and posts to /messages) is handed metadata whose `resource` matches
+  // the surface it is actually talking to.
+  const sseResourceMetadataUrl = getOAuthProtectedResourceMetadataUrl(
+    new URL("/sse", mcpServerUrl)
+  );
+
+  // The tool-call challenge rides in on the transport the client chose. Point
+  // it at that transport's protected-resource metadata so the `resource` the
+  // client discovers matches the URL it connected to (RFC 9728 / RFC 8707).
+  function resolveResourceMetadataUrl(req) {
+    const pathname = String(req?.path || req?.originalUrl || "")
+      .split("?")[0]
+      .replace(/\/+$/, "");
+    if (pathname === "/messages" || pathname === "/sse") {
+      return sseResourceMetadataUrl;
+    }
+    return resourceMetadataUrl;
+  }
 
   return {
     provider,
     oauthMetadata,
     resourceMetadataUrl,
-    metadataRouter: mcpAuthMetadataRouter({
+    sseResourceMetadataUrl,
+    resourceUrls,
+    metadataRouter: buildResourceMetadataRouter({
       oauthMetadata,
-      resourceServerUrl: mcpServerUrl,
+      resourceUrls,
       scopesSupported: SUPPORTED_SCOPES,
       resourceName,
-      serviceDocumentationUrl: new URL("https://apiosk.com"),
+      serviceDocumentationUrl,
     }),
     authorizationRouter: authorizationHandler({ provider }),
     tokenRouter: tokenHandler({ provider }),
     registrationRouter: clientRegistrationHandler({ clientsStore: provider.clientsStore }),
     createMcpAuthMiddleware(runtime) {
       return async (req, res, next) => {
+        const challengeResourceMetadataUrl = resolveResourceMetadataUrl(req);
         const bearerToken = extractBearerToken(req);
 
         if (bearerToken) {
@@ -990,7 +1104,7 @@ export function createHostedOAuthSupport({
               status: 401,
               code: "invalid_token",
               message: error instanceof Error ? error.message : "Invalid access token",
-              resourceMetadataUrl,
+              resourceMetadataUrl: challengeResourceMetadataUrl,
             });
             return;
           }
@@ -1016,7 +1130,7 @@ export function createHostedOAuthSupport({
             status: 401,
             code: "invalid_token",
             message: "This Apiosk tool requires sign-in before it can run.",
-            resourceMetadataUrl,
+            resourceMetadataUrl: challengeResourceMetadataUrl,
           });
           return;
         }
@@ -1026,7 +1140,7 @@ export function createHostedOAuthSupport({
             status: 403,
             code: "insufficient_scope",
             message: `This tool requires the ${DEFAULT_SCOPE} scope.`,
-            resourceMetadataUrl,
+            resourceMetadataUrl: challengeResourceMetadataUrl,
           });
           return;
         }

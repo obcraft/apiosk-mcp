@@ -369,3 +369,115 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
   );
   assert.equal(restored.token_endpoint_auth_method, "none");
 });
+
+test("protected-resource metadata is served for every transport surface so ChatGPT's /sse discovery resolves", async () => {
+  const express = (await import("express")).default;
+  const support = createHostedOAuthSupport({
+    env: { NODE_ENV: "test" },
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("https://mcp.apiosk.com"),
+    mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const app = express();
+  app.use(support.metadataRouter);
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  try {
+    // Streamable HTTP, legacy SSE handshake, SSE POST channel, and the origin
+    // root all resolve to protected-resource metadata pointing at the issuer.
+    const cases = [
+      ["/.well-known/oauth-protected-resource/mcp", "https://mcp.apiosk.com/mcp"],
+      ["/.well-known/oauth-protected-resource/sse", "https://mcp.apiosk.com/sse"],
+      ["/.well-known/oauth-protected-resource/messages", "https://mcp.apiosk.com/messages"],
+      ["/.well-known/oauth-protected-resource", "https://mcp.apiosk.com/"],
+    ];
+    for (const [path, expectedResource] of cases) {
+      const response = await fetch(new URL(path, base));
+      assert.equal(response.status, 200, `${path} should serve PRM`);
+      const body = await response.json();
+      assert.equal(body.resource, expectedResource, `${path} resource`);
+      assert.deepEqual(body.authorization_servers, ["https://mcp.apiosk.com/"]);
+    }
+
+    // The RFC 8414 authorization-server metadata is discoverable too.
+    const asResponse = await fetch(
+      new URL("/.well-known/oauth-authorization-server", base)
+    );
+    assert.equal(asResponse.status, 200);
+    const asBody = await asResponse.json();
+    assert.equal(asBody.issuer, "https://mcp.apiosk.com/");
+    assert.ok(asBody.authorization_endpoint.endsWith("/authorize"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("access tokens minted for the /sse resource verify against the hosted server", async () => {
+  const support = createHostedOAuthSupport({
+    env: { NODE_ENV: "test" },
+    controlPlaneBaseUrl: "https://dashboard.apiosk.com",
+    issuerUrl: new URL("https://mcp.apiosk.com"),
+    mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-sse-client",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        signed_in: true,
+        email: "demo@example.com",
+        user_id: "user_123",
+        session_token: "jwt_dashboard_session",
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    );
+
+  try {
+    // ChatGPT connected via /sse, so it requests resource=<origin>/sse.
+    const oauthParams = {
+      state: "state_sse",
+      scopes: ["mcp:tools"],
+      codeChallenge: "challenge_sse",
+      redirectUri: "https://chatgpt.com/connector/oauth/callback",
+      resource: new URL("https://mcp.apiosk.com/sse"),
+    };
+    const authorizeRequest = {
+      method: "POST",
+      body: { action: "sign_in", email: "demo@example.com", password: "secret123" },
+    };
+    const authorizeResponse = createMockResponse(authorizeRequest);
+    await support.provider.authorize(client, oauthParams, authorizeResponse);
+    const authorizationCode = new URL(authorizeResponse.redirectedTo).searchParams.get("code");
+
+    const tokens = await support.provider.exchangeAuthorizationCode(
+      client,
+      authorizationCode,
+      undefined,
+      "https://chatgpt.com/connector/oauth/callback",
+      new URL("https://mcp.apiosk.com/sse")
+    );
+
+    const authInfo = await support.provider.verifyAccessToken(tokens.access_token);
+    assert.equal(authInfo.resource.href, "https://mcp.apiosk.com/sse");
+    assert.equal(authInfo.scopes.includes("mcp:tools"), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
