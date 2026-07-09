@@ -51,6 +51,68 @@ function jsStringLiteral(value) {
   return JSON.stringify(String(value)).replaceAll("<", "\\u003c");
 }
 
+// Inline brand marks so the wallet options always show a recognizable logo,
+// even before an injected wallet announces its own EIP-6963 icon (and for the
+// "install" state where no provider exists yet). Encoded as base64 data URIs so
+// they can be handed to the client as plain <img src> strings without any
+// template-literal escaping concerns.
+function svgDataUri(svg) {
+  return `data:image/svg+xml;base64,${Buffer.from(svg.trim()).toString("base64")}`;
+}
+
+// Official MetaMask fox mark.
+const METAMASK_ICON = svgDataUri(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 189" width="212" height="189">
+<g fill="none" fill-rule="evenodd">
+<polygon fill="#CDBDB2" points="60.75 173.25 88.313 180.563 88.313 171 90.563 168.75 106.313 168.75 106.313 187.875 89.438 187.875 68.625 178.875"/>
+<polygon fill="#CDBDB2" points="151.25 173.25 123.75 180.563 123.75 171 121.5 168.75 105.75 168.75 105.75 187.875 122.688 187.875 143.438 178.875"/>
+<polygon fill="#393939" points="90.563 152.438 88.313 171 91.125 168.75 120.938 168.75 123.75 171 121.5 152.438 117 149.625 94.5 150.188"/>
+<polygon fill="#F89C35" points="75.375 27 88.875 58.5 95.063 150.188 117 150.188 123.75 58.5 136.125 27"/>
+<polygon fill="#F89D35" points="16.313 96.188 .563 141.75 39.938 139.5 65.25 139.5 65.25 119.813 64.125 79.313 58.5 83.813"/>
+<polygon fill="#D87C30" points="46.125 101.25 92.25 102.375 87.188 126 65.25 120.375"/>
+<polygon fill="#EA8D3A" points="46.125 101.813 65.25 119.813 65.25 137.813"/>
+<polygon fill="#F89D35" points="65.25 120.375 87.75 126 95.063 150.188 90 153 65.25 138.375"/>
+<polygon fill="#EB8F35" points="65.25 138.375 60.75 173.25 90.563 152.438"/>
+<polygon fill="#EA8E3A" points="92.25 102.375 95.063 150.188 86.625 125.719"/>
+<polygon fill="#D87C30" points="39.375 138.938 65.25 138.375 60.75 173.25"/>
+<polygon fill="#EB8F35" points="12.938 188.438 60.75 173.25 39.375 138.938 .563 141.75"/>
+<polygon fill="#E8821E" points="88.875 58.5 64.688 78.75 46.125 101.25 92.25 102.938"/>
+<polygon fill="#DFCEC3" points="60.75 173.25 90.563 152.438 88.313 170.438 88.313 180.563 68.063 176.625"/>
+<polygon fill="#E88F35" points="12.375 .563 88.875 58.5 75.938 27"/>
+<path fill="#8E5A30" d="M12.375.563L2.25 31.5l5.625 33.75-3.938 2.25 5.625 5.063-4.5 3.938 6.188 5.625-3.938 3.375 8.813 11.25 41.063-12.75c20.063-16.125 29.925-24.375 29.588-24.75-.337-.375-29.925-22.688-88.762-66.938z"/>
+<polygon fill="#F89D35" points="195.188 96.188 210.938 141.75 171.563 139.5 146.25 139.5 146.25 119.813 147.375 79.313 153 83.813"/>
+<polygon fill="#D87C30" points="165.375 101.25 119.25 102.375 124.313 126 146.25 120.375"/>
+<polygon fill="#EA8D3A" points="165.375 101.813 146.25 119.813 146.25 137.813"/>
+<polygon fill="#F89D35" points="146.25 120.375 123.75 126 116.438 150.188 121.5 153 146.25 138.375"/>
+<polygon fill="#EB8F35" points="146.25 138.375 150.75 173.25 121.5 152.438"/>
+<polygon fill="#D87C30" points="172.125 138.938 146.25 138.375 150.75 173.25"/>
+<polygon fill="#EB8F35" points="198.563 188.438 150.75 173.25 172.125 138.938 210.938 141.75"/>
+<polygon fill="#E8821E" points="122.625 58.5 146.813 78.75 165.375 101.25 119.25 102.938"/>
+<polygon fill="#E88F35" points="199.125 .563 122.625 58.5 135.563 27"/>
+<path fill="#8E5A30" d="M199.125.563L209.25 31.5l-5.625 33.75 3.938 2.25-5.625 5.063 4.5 3.938-6.188 5.625 3.938 3.375-8.813 11.25-41.063-12.75c-20.063-16.125-29.925-24.375-29.588-24.75.337-.375 29.925-22.688 88.762-66.938z"/>
+</g></svg>`);
+
+// WalletConnect blue tile + signal wave.
+const WALLETCONNECT_ICON = svgDataUri(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+<rect width="40" height="40" rx="11" fill="#3396FF"/>
+<path fill="#fff" d="M12.4 15.6c4.2-4.1 11-4.1 15.2 0l.5.5c.21.2.21.55 0 .75l-1.73 1.7c-.1.1-.27.1-.38 0l-.7-.68c-2.93-2.87-7.68-2.87-10.6 0l-.75.73c-.1.1-.28.1-.38 0l-1.73-1.7c-.2-.2-.2-.55 0-.75l.75-.55zm18.77 3.5 1.54 1.5c.2.2.2.55 0 .76l-6.94 6.8c-.2.2-.54.2-.75 0l-4.93-4.83a.135.135 0 0 0-.19 0l-4.92 4.83c-.2.2-.55.2-.76 0l-6.94-6.8c-.2-.2-.2-.55 0-.76l1.54-1.5c.2-.2.55-.2.75 0l4.93 4.83c.05.05.14.05.19 0l4.92-4.83c.2-.2.55-.2.76 0l4.93 4.83c.05.05.13.05.19 0l4.92-4.83c.21-.2.55-.2.76 0z"/>
+</svg>`);
+
+// Coinbase Wallet blue mark.
+const COINBASE_ICON = svgDataUri(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+<rect width="40" height="40" rx="11" fill="#0052FF"/>
+<path fill="#fff" d="M20 8a12 12 0 1 0 0 24 12 12 0 0 0 0-24zm-3.4 8.1c0-.83.67-1.5 1.5-1.5h3.8c.83 0 1.5.67 1.5 1.5v7.8c0 .83-.67 1.5-1.5 1.5h-3.8c-.83 0-1.5-.67-1.5-1.5v-7.8z"/>
+</svg>`);
+
+// Generic browser-wallet glyph for injected wallets with no announced icon.
+const GENERIC_WALLET_ICON = svgDataUri(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40">
+<rect width="40" height="40" rx="11" fill="#6b38d4"/>
+<path fill="#fff" d="M11 14.5A2.5 2.5 0 0 1 13.5 12h13a2.5 2.5 0 0 1 2.5 2.5V16h-2v-1.5a.5.5 0 0 0-.5-.5h-13a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5V24h2v1.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 11 25.5v-11zM24 18h6v4h-6a2 2 0 0 1 0-4zm2 1.4a.6.6 0 1 0 0 1.2.6.6 0 0 0 0-1.2z"/>
+</svg>`);
+
 function toBase64Url(value) {
   return Buffer.from(value).toString("base64url");
 }
@@ -269,7 +331,7 @@ function createAuthorizePage({
         --danger-soft: #ffdad6;
         --success: #1f8a5b;
         --success-soft: #e6f4ee;
-        --shadow: 0 12px 28px rgba(26, 35, 53, 0.12), 0 4px 8px rgba(26, 35, 53, 0.05);
+        --shadow: 0 24px 48px -16px rgba(60, 30, 120, 0.22), 0 8px 20px -12px rgba(26, 35, 53, 0.12);
       }
 
       * {
@@ -280,7 +342,11 @@ function createAuthorizePage({
         margin: 0;
         min-height: 100vh;
         font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--background);
+        background:
+          radial-gradient(900px 520px at 88% -12%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 60%),
+          radial-gradient(760px 520px at -8% 112%, color-mix(in srgb, #8b5cf6 13%, transparent), transparent 55%),
+          var(--background);
+        background-attachment: fixed;
         color: var(--foreground);
       }
 
@@ -325,15 +391,104 @@ function createAuthorizePage({
         width: 100%;
         display: grid;
         place-items: center;
-        padding: 24px;
+        padding: 24px clamp(20px, 5vw, 42px) 40px;
+      }
+
+      .layout {
+        width: min(100%, 960px);
+        display: grid;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 36px;
+        align-items: center;
+      }
+
+      .hero {
+        display: none;
+      }
+
+      @media (min-width: 900px) {
+        .layout {
+          grid-template-columns: 1.02fr 0.98fr;
+          gap: 56px;
+          justify-items: stretch;
+        }
+
+        .hero {
+          display: grid;
+          gap: 22px;
+          align-content: center;
+        }
+      }
+
+      .hero-eyebrow {
+        color: var(--primary);
+        font-weight: 700;
+        font-size: 0.85rem;
+        letter-spacing: 0.01em;
+      }
+
+      .hero h2 {
+        margin: 6px 0 0;
+        font-size: clamp(1.9rem, 2.6vw, 2.55rem);
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+      }
+
+      .hero .lead {
+        font-size: 1.02rem;
+        line-height: 1.55;
+        max-width: 42ch;
+      }
+
+      .value-list {
+        display: grid;
+        gap: 16px;
+        margin-top: 4px;
+      }
+
+      .value {
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+      }
+
+      .value-icon {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        background: var(--primary-soft);
+        color: var(--primary);
+        border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
+      }
+
+      .value-icon svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .value-title {
+        font-weight: 600;
+        font-size: 0.96rem;
+      }
+
+      .value-desc {
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.45;
       }
 
       main {
-        width: min(100%, 440px);
+        width: 100%;
+        max-width: 440px;
+        justify-self: center;
         border: 1px solid var(--border);
         background: var(--card);
-        border-radius: 8px;
-        padding: 22px;
+        border-radius: 18px;
+        padding: 28px;
         box-shadow: var(--shadow);
       }
 
@@ -436,15 +591,24 @@ function createAuthorizePage({
         align-items: center;
         justify-content: space-between;
         gap: 12px;
+        padding: 13px 16px;
+        min-height: 58px;
+        border-radius: 12px;
         background: var(--card);
         border: 1px solid var(--border);
         color: var(--foreground);
         text-align: left;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
       }
 
       .wallet-option:hover:not(:disabled) {
-        border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+        border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
         background: var(--primary-soft);
+        box-shadow: 0 6px 16px -10px color-mix(in srgb, var(--primary) 60%, transparent);
+        transform: translateY(-1px);
       }
 
       .wallet-name {
@@ -455,11 +619,12 @@ function createAuthorizePage({
       }
 
       .wallet-icon {
-        width: 18px;
-        height: 18px;
-        border-radius: 4px;
+        width: 24px;
+        height: 24px;
+        border-radius: 6px;
         flex: 0 0 auto;
         object-fit: contain;
+        background: var(--card);
       }
 
       .wallet-name-text {
@@ -467,23 +632,103 @@ function createAuthorizePage({
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        font-size: 0.95rem;
+        font-weight: 500;
       }
 
       .wallet-action {
         flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         color: var(--muted);
         font-size: 0.78rem;
       }
 
-      .actions {
-        display: grid;
-        gap: 8px;
+      .wallet-option.install {
+        border-style: dashed;
+      }
+
+      .wallet-option.busy {
+        opacity: 0.6;
+      }
+
+      .wallet-connect-option .wallet-action {
+        color: var(--primary);
+        font-weight: 600;
+      }
+
+      .spinner {
+        width: 15px;
+        height: 15px;
+        border-radius: 999px;
+        border: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+        border-top-color: var(--primary);
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+      }
+
+      .cancel-row {
+        display: flex;
+        justify-content: center;
+        margin: 0;
+      }
+
+      .cancel-link {
+        appearance: none;
+        background: none;
+        border: none;
+        box-shadow: none;
+        min-height: auto;
+        padding: 4px 8px;
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .cancel-link:hover {
+        color: var(--foreground);
+        text-decoration: underline;
+        text-underline-offset: 3px;
       }
 
       .meta {
         font-size: 0.84rem;
         color: var(--muted);
         padding-top: 2px;
+      }
+
+      .grant {
+        margin-top: 2px;
+        border-top: 1px solid var(--border);
+        padding-top: 14px;
+        font-size: 0.8rem;
+        line-height: 1.7;
+        color: var(--muted);
       }
 
       code {
@@ -564,36 +809,89 @@ function createAuthorizePage({
         </a>
       </header>
       <div class="page">
-        <main class="stack">
+        <div class="layout">
+          <section class="hero" aria-hidden="true">
+            <div>
+              <p class="hero-eyebrow">Apiosk payment infrastructure</p>
+              <h2>Pay for any API, straight from your agent</h2>
+            </div>
+            <p class="lead">Connect your wallet once to let ${escapeHtml(clientName.client_name || "your AI app")} discover, call, and pay for APIs and data through the Apiosk gateway &mdash; settled automatically in USDC.</p>
+            <div class="value-list">
+              <div class="value">
+                <span class="value-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><path d="M7 6h1v4" /><path d="m16.71 13.88.7.71-2.82 2.82" /></svg>
+                </span>
+                <div>
+                  <div class="value-title">Pay per call, automatically</div>
+                  <div class="value-desc">USDC over x402 on Base. No invoices, no API-key juggling.</div>
+                </div>
+              </div>
+              <div class="value">
+                <span class="value-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5" /><path d="M16 12h.01" /></svg>
+                </span>
+                <div>
+                  <div class="value-title">One wallet for everything</div>
+                  <div class="value-desc">Your wallet is both your sign-in and your payment method.</div>
+                </div>
+              </div>
+              <div class="value">
+                <span class="value-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /></svg>
+                </span>
+                <div>
+                  <div class="value-title">One catalog, one contract</div>
+                  <div class="value-desc">Discover APIs and datasets and call them without leaving your chat.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <main class="stack">
           <header class="stack header">
             <div>
               <p class="eyebrow">${escapeHtml(clientName.client_name || "Remote MCP client")}</p>
               <h1>Connect ${escapeHtml(appName)}</h1>
             </div>
-            <p>Sign in with your Apiosk account to unlock paid gateway calls, managed wallets, and credit-backed execution from this MCP app.</p>
+            <p>Connect your wallet to let this app pay for gateway calls on your behalf. Your wallet is your sign-in &mdash; no password needed.</p>
           </header>
           ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
           ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
           <section class="panel" aria-label="Wallet sign in">
-            <div id="wallet-list" class="wallet-list">
-              <button id="wallet-fallback" class="wallet-option" type="button" ${walletEnabled ? "" : "disabled"}>
-                <span class="wallet-name">Connect browser wallet</span>
-                <span class="wallet-action">${walletEnabled ? "Sign" : "Unavailable"}</span>
-              </button>
+            <div id="wallet-list" class="wallet-list" role="list">
               ${
-                walletEnabled && walletConnectProjectId
-                  ? `<button id="walletconnect-button" class="wallet-option" type="button">
-                <span class="wallet-name">WalletConnect (mobile / QR)</span>
-                <span class="wallet-action">Sign</span>
+                walletEnabled
+                  ? `<button class="wallet-option" type="button" disabled>
+                <span class="wallet-name">
+                  <img class="wallet-icon" src="${METAMASK_ICON}" alt="" />
+                  <span class="wallet-name-text">Detecting wallets&hellip;</span>
+                </span>
+                <span class="wallet-action">Please wait</span>
               </button>`
-                  : ""
+                  : `<button class="wallet-option" type="button" disabled>
+                <span class="wallet-name">
+                  <span class="wallet-name-text">Wallet sign-in unavailable</span>
+                </span>
+                <span class="wallet-action">Unavailable</span>
+              </button>`
               }
             </div>
-            <p id="wallet-status" class="meta">${walletEnabled ? "Use MetaMask, Coinbase Wallet, Rabby, or another injected wallet." : "Wallet sign-in is not configured on this MCP server."}</p>
+            ${
+              walletEnabled && walletConnectProjectId
+                ? `<div class="divider">or</div>
+            <button id="walletconnect-button" class="wallet-option wallet-connect-option" type="button">
+              <span class="wallet-name">
+                <img class="wallet-icon" src="${WALLETCONNECT_ICON}" alt="" />
+                <span class="wallet-name-text">WalletConnect</span>
+              </span>
+              <span class="wallet-action">Mobile / QR</span>
+            </button>`
+                : ""
+            }
+            <p id="wallet-status" class="meta">${walletEnabled ? "Connect MetaMask, Coinbase Wallet, or any browser wallet to sign in." : "Wallet sign-in is not configured on this MCP server."}</p>
           </section>
-          <form method="post" action="${escapeHtml(actionPath)}" class="actions">
+          <form method="post" action="${escapeHtml(actionPath)}" class="cancel-row">
             ${hiddenInputs}
-            <button class="secondary" type="submit" name="action" value="cancel" formnovalidate>Cancel</button>
+            <button class="cancel-link" type="submit" name="action" value="cancel" formnovalidate>Cancel</button>
           </form>
           <form id="wallet-form" method="post" action="${escapeHtml(actionPath)}" class="hidden">
             ${hiddenInputs}
@@ -604,11 +902,12 @@ function createAuthorizePage({
             <input type="hidden" name="wallet_signature" />
             <input type="hidden" name="wallet_method" value="connected_wallet" />
           </form>
-          <div class="meta">
+          <div class="grant">
             Requested scope: <code>${escapeHtml(scope || DEFAULT_SCOPE)}</code><br />
             Resource: <code>${escapeHtml(resource || "default")}</code>
           </div>
-        </main>
+          </main>
+        </div>
       </div>
       <footer>
         <span>© Apiosk</span>
@@ -619,18 +918,40 @@ function createAuthorizePage({
     <script>
       (() => {
         const walletEnabled = ${walletEnabled ? "true" : "false"};
+        if (!walletEnabled) return;
+
         const noncePath = ${jsStringLiteral(walletNoncePath)};
         const walletConnectProjectId = ${jsStringLiteral(walletConnectProjectId)};
+        const BRAND_ICONS = {
+          metamask: ${jsStringLiteral(METAMASK_ICON)},
+          coinbase: ${jsStringLiteral(COINBASE_ICON)},
+          generic: ${jsStringLiteral(GENERIC_WALLET_ICON)},
+        };
+
+        // First-class injected wallets, always offered so users recognise them
+        // even before detection; when none is installed we link to install.
+        const KNOWN = [
+          { rdns: "io.metamask", name: "MetaMask", flag: "isMetaMask", icon: BRAND_ICONS.metamask, install: "https://metamask.io/download/" },
+          { rdns: "com.coinbase.wallet", name: "Coinbase Wallet", flag: "isCoinbaseWallet", icon: BRAND_ICONS.coinbase, install: "https://www.coinbase.com/wallet/downloads" },
+        ];
+
         const walletForm = document.getElementById("wallet-form");
         const walletList = document.getElementById("wallet-list");
         const walletStatus = document.getElementById("wallet-status");
         const walletConnectButton = document.getElementById("walletconnect-button");
-        const providers = new Map();
+        const detected = new Map();
         let busy = false;
 
-        function setStatus(message, tone = "muted") {
+        function setStatus(message, tone) {
           walletStatus.textContent = message;
-          walletStatus.style.color = tone === "error" ? "var(--danger)" : tone === "success" ? "var(--success)" : "var(--muted)";
+          walletStatus.style.color =
+            tone === "error" ? "var(--danger)" : tone === "success" ? "var(--success)" : "var(--muted)";
+        }
+
+        function setBusy(next) {
+          busy = next;
+          if (walletConnectButton) walletConnectButton.disabled = next;
+          for (const el of walletList.querySelectorAll("button")) el.disabled = next;
         }
 
         function hexEncode(value) {
@@ -639,79 +960,110 @@ function createAuthorizePage({
             .join("");
         }
 
-        // Base64url so the exact signed bytes survive the form POST. A plain
-        // text field would have its "\n" line breaks rewritten to "\r\n" on
-        // submit, changing the digest and breaking signature recovery.
+        // Base64url keeps the exact signed bytes intact across the form POST; a
+        // plain text control would rewrite line breaks and change the EIP-191
+        // digest, so server-side signature recovery would fail.
         function base64UrlEncode(value) {
           const bytes = new TextEncoder().encode(value);
           let binary = "";
-          for (let i = 0; i < bytes.length; i++) {
-            binary += String.fromCharCode(bytes[i]);
-          }
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
           return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
         }
 
-        function providerLabel(detail) {
-          return detail?.info?.name || "Browser wallet";
+        // Resolve a live provider for a known wallet: EIP-6963 announcement
+        // first, then a legacy window.ethereum.providers[] entry carrying the
+        // wallet flag, then a lone window.ethereum whose flag is set.
+        function resolveKnown(wallet) {
+          const announced = detected.get(wallet.rdns);
+          if (announced) return announced.provider;
+          const eth = window.ethereum;
+          if (!eth) return null;
+          if (Array.isArray(eth.providers)) {
+            const match = eth.providers.find((p) => p && p[wallet.flag]);
+            if (match) return match;
+          }
+          return eth[wallet.flag] ? eth : null;
         }
 
-        function rememberProvider(detail) {
-          if (!detail?.provider) return;
-          const key = detail?.info?.rdns || detail?.info?.uuid || providerLabel(detail);
-          providers.set(key, detail);
-          renderProviders();
+        function connectButton(icon, name, detail) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "wallet-option";
+          button.disabled = busy;
+          const nameWrap = document.createElement("span");
+          nameWrap.className = "wallet-name";
+          const iconImg = document.createElement("img");
+          iconImg.className = "wallet-icon";
+          iconImg.alt = "";
+          iconImg.src = icon || BRAND_ICONS.generic;
+          const nameText = document.createElement("span");
+          nameText.className = "wallet-name-text";
+          nameText.textContent = name;
+          nameWrap.append(iconImg, nameText);
+          const actionEl = document.createElement("span");
+          actionEl.className = "wallet-action";
+          actionEl.textContent = "Connect";
+          button.append(nameWrap, actionEl);
+          button.addEventListener("click", () => signWithProvider(detail));
+          return button;
         }
 
-        function renderProviders() {
-          if (!walletEnabled) return;
+        function installLink(wallet) {
+          const link = document.createElement("a");
+          link.className = "wallet-option install";
+          link.href = wallet.install;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          const nameWrap = document.createElement("span");
+          nameWrap.className = "wallet-name";
+          const iconImg = document.createElement("img");
+          iconImg.className = "wallet-icon";
+          iconImg.alt = "";
+          iconImg.src = wallet.icon;
+          const nameText = document.createElement("span");
+          nameText.className = "wallet-name-text";
+          nameText.textContent = wallet.name;
+          nameWrap.append(iconImg, nameText);
+          const actionEl = document.createElement("span");
+          actionEl.className = "wallet-action";
+          actionEl.textContent = "Install";
+          link.append(nameWrap, actionEl);
+          return link;
+        }
+
+        function render() {
           walletList.innerHTML = "";
-          const entries = [...providers.entries()];
-          if (!entries.length) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "wallet-option";
-            button.innerHTML = '<span class="wallet-name">Connect browser wallet</span><span class="wallet-action">Sign</span>';
-            button.addEventListener("click", () => {
-              const provider = window.ethereum;
-              if (!provider) {
-                setStatus("No browser wallet found. Install MetaMask, Coinbase Wallet, or Rabby and refresh.", "error");
-                return;
-              }
-              signWithProvider({ provider, info: { name: "Browser wallet" } });
-            });
-            walletList.appendChild(button);
-            return;
+          const shown = new Set();
+          const hasNonLegacy = [...detected.keys()].some((k) => k !== "legacy.injected");
+
+          for (const wallet of KNOWN) {
+            shown.add(wallet.rdns);
+            const announced = detected.get(wallet.rdns);
+            const provider = announced ? announced.provider : resolveKnown(wallet);
+            const icon = (announced && announced.info && announced.info.icon) || wallet.icon;
+            if (provider) {
+              walletList.appendChild(connectButton(icon, wallet.name, { provider, info: { name: wallet.name } }));
+            } else {
+              walletList.appendChild(installLink(wallet));
+            }
           }
 
-          for (const [, detail] of entries) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "wallet-option";
-            button.disabled = busy;
-            const icon = detail?.info?.icon;
-            button.innerHTML =
-              '<span class="wallet-name">' +
-              (icon ? '<img class="wallet-icon" alt="" />' : "") +
-              '<span class="wallet-name-text"></span></span><span class="wallet-action">Sign</span>';
-            if (icon) {
-              button.querySelector(".wallet-icon").src = icon;
-            }
-            button.querySelector(".wallet-name-text").textContent = providerLabel(detail);
-            button.addEventListener("click", () => signWithProvider(detail));
-            walletList.appendChild(button);
+          // Any other injected wallet the browser announced (Rabby, Frame, ...).
+          for (const [rdns, detail] of detected) {
+            if (shown.has(rdns)) continue;
+            if (rdns === "legacy.injected" && hasNonLegacy) continue;
+            const icon = (detail.info && detail.info.icon) || BRAND_ICONS.generic;
+            const name = (detail.info && detail.info.name) || "Browser wallet";
+            walletList.appendChild(connectButton(icon, name, detail));
           }
         }
 
         async function requestAccounts(provider) {
           try {
-            await provider.request({
-              method: "wallet_requestPermissions",
-              params: [{ eth_accounts: {} }],
-            });
+            await provider.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
           } catch (error) {
             if (error && error.code === 4001) throw error;
           }
-
           const accounts = await provider.request({ method: "eth_requestAccounts" });
           if (!Array.isArray(accounts) || !accounts.length) {
             throw new Error("No wallet account was returned.");
@@ -733,8 +1085,9 @@ function createAuthorizePage({
         }
 
         async function connectWalletConnect() {
-          const mod = await import("https://esm.sh/@walletconnect/ethereum-provider@2?bundle");
-          const EthereumProvider = mod.EthereumProvider || mod.default?.EthereumProvider || mod.default;
+          const mod = await import("https://esm.sh/@walletconnect/ethereum-provider@2.23.9?bundle");
+          const EthereumProvider = mod.EthereumProvider || (mod.default && mod.default.EthereumProvider) || mod.default;
+          const origin = window.location.origin;
           const provider = await EthereumProvider.init({
             projectId: walletConnectProjectId,
             chains: [8453],
@@ -743,8 +1096,11 @@ function createAuthorizePage({
             metadata: {
               name: "Apiosk",
               description: "Apiosk MCP sign-in",
-              url: window.location.origin,
-              icons: [],
+              url: origin,
+              // Absolute, always-hosted mark for the WalletConnect pairing UI
+              // (the MCP server serves no static assets). A PNG raster renders
+              // more reliably across wallets than the gradient SVG.
+              icons: ["https://apiosk.com/web-app-manifest-512x512.png"],
             },
           });
           await provider.enable();
@@ -752,10 +1108,8 @@ function createAuthorizePage({
         }
 
         async function signWithProvider(detail) {
-          if (!walletEnabled || busy) return;
-          busy = true;
-          if (walletConnectButton) walletConnectButton.disabled = true;
-          renderProviders();
+          if (busy || !detail || !detail.provider) return;
+          setBusy(true);
           setStatus("Opening wallet...");
           try {
             const provider = detail.provider;
@@ -780,40 +1134,49 @@ function createAuthorizePage({
             setStatus("Wallet verified. Continuing...", "success");
             walletForm.submit();
           } catch (error) {
-            setStatus(error instanceof Error ? error.message : "Wallet sign-in failed.", "error");
-            busy = false;
-            if (walletConnectButton) walletConnectButton.disabled = false;
-            renderProviders();
+            const rejected = error && error.code === 4001;
+            setStatus(
+              rejected
+                ? "Signature request was rejected in the wallet."
+                : error instanceof Error ? error.message : "Wallet sign-in failed.",
+              "error"
+            );
+            setBusy(false);
           }
         }
 
-        if (!walletEnabled) return;
-        window.addEventListener("eip6963:announceProvider", (event) => rememberProvider(event.detail));
+        window.addEventListener("eip6963:announceProvider", (event) => {
+          const detail = event.detail;
+          if (!detail || !detail.info || !detail.info.rdns || !detail.provider) return;
+          detected.set(detail.info.rdns, detail);
+          render();
+        });
         window.dispatchEvent(new Event("eip6963:requestProvider"));
+
+        // Legacy fallback for a lone window.ethereum with no EIP-6963 support.
         window.setTimeout(() => {
-          if (!providers.size && window.ethereum) {
-            rememberProvider({ provider: window.ethereum, info: { name: "Browser wallet", rdns: "legacy.injected" } });
+          if (!detected.size && window.ethereum) {
+            detected.set("legacy.injected", {
+              info: { name: "Browser wallet", rdns: "legacy.injected", icon: "" },
+              provider: window.ethereum,
+            });
           }
-          renderProviders();
-        }, 250);
-        renderProviders();
+          render();
+        }, 300);
+        render();
 
         if (walletConnectButton) {
           walletConnectButton.addEventListener("click", async () => {
             if (busy) return;
-            busy = true;
-            walletConnectButton.disabled = true;
-            renderProviders();
+            setBusy(true);
             setStatus("Opening WalletConnect...");
             try {
               const detail = await connectWalletConnect();
-              busy = false;
+              setBusy(false);
               await signWithProvider(detail);
             } catch (error) {
               setStatus(error instanceof Error ? error.message : "WalletConnect sign-in failed.", "error");
-              busy = false;
-              walletConnectButton.disabled = false;
-              renderProviders();
+              setBusy(false);
             }
           });
         }
