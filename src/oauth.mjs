@@ -10,6 +10,7 @@ import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth
 import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/metadata.js";
 
 import { isProviderApiKey, verifyProviderKey } from "./publisher.mjs";
+import { mintHostedConnectToken } from "./hosted-payment.mjs";
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
@@ -1449,13 +1450,24 @@ class ApioskOAuthClientsStore {
 }
 
 class ApioskHostedOAuthProvider {
-  constructor({ env, secret, issuerUrl, mcpServerUrl, appName, resourceName }) {
+  constructor({
+    env,
+    secret,
+    issuerUrl,
+    mcpServerUrl,
+    appName,
+    resourceName,
+    connectTokenMinter,
+  }) {
     this.env = env;
     this.secret = secret;
     this.issuerUrl = issuerUrl;
     this.mcpServerUrl = mcpServerUrl;
     this.appName = appName;
     this.resourceName = resourceName;
+    // Injectable so tests can bypass the Supabase round-trip; defaults to the
+    // real hosted-payment minter.
+    this.connectTokenMinter = connectTokenMinter || mintHostedConnectToken;
     this.clientsStore = new ApioskOAuthClientsStore(secret);
     // Audiences we honour on an access token. A client that connected via
     // /sse (ChatGPT) requests resource=<origin>/sse; one via /mcp requests
@@ -1531,7 +1543,7 @@ class ApioskHostedOAuthProvider {
           signature: req.body.wallet_signature,
           method: req.body.wallet_method,
         });
-        this.finishAuthorization(res, client, params, session);
+        await this.finishAuthorization(res, client, params, session);
       } catch (error) {
         renderPage(error.status && error.status >= 400 ? error.status : 400, {
           errorMessage:
@@ -1548,9 +1560,26 @@ class ApioskHostedOAuthProvider {
     });
   }
 
-  finishAuthorization(res, client, params, session) {
+  async finishAuthorization(res, client, params, session) {
     const sessionToken = trimString(session.session_token);
     const normalizedSessionExpiry = normalizeSessionExpiry(session.expires_at);
+
+    // Bridge the wallet sign-in into a payable connect token: mint one for the
+    // user's managed wallet so the gateway can settle paid calls autonomously
+    // (a browser wallet cannot be settled from server-side). Best-effort — if
+    // the user has no managed wallet, or minting fails, sign-in still completes
+    // and paid calls fall back to the same 402 as before.
+    const mintedConnect = sessionToken
+      ? await this.connectTokenMinter({
+          env: this.env,
+          sessionToken,
+          userId: trimString(session.user_id),
+        })
+      : null;
+    const apioskConnectToken = trimString(mintedConnect?.connectToken) || undefined;
+    const apioskConnectWalletAddress =
+      trimString(mintedConnect?.walletAddress) || undefined;
+
     const authorizationCode = buildIssuedToken(
       this.secret,
       "code",
@@ -1565,6 +1594,8 @@ class ApioskHostedOAuthProvider {
         userId: trimString(session.user_id),
         email: trimString(session.email),
         walletAddress: trimString(session.wallet_address) || undefined,
+        apioskConnectToken,
+        apioskConnectWalletAddress,
       },
       AUTHORIZATION_CODE_TTL_SECONDS,
       normalizedSessionExpiry
@@ -1616,6 +1647,8 @@ class ApioskHostedOAuthProvider {
       userId: payload.userId,
       email: payload.email,
       walletAddress: payload.walletAddress,
+      apioskConnectToken: payload.apioskConnectToken,
+      apioskConnectWalletAddress: payload.apioskConnectWalletAddress,
     };
 
     const accessToken = buildIssuedToken(
@@ -1669,6 +1702,8 @@ class ApioskHostedOAuthProvider {
         userId: payload.userId,
         email: payload.email,
         walletAddress: payload.walletAddress,
+        apioskConnectToken: payload.apioskConnectToken,
+        apioskConnectWalletAddress: payload.apioskConnectWalletAddress,
       },
       ACCESS_TOKEN_TTL_SECONDS,
       maxExpiry
@@ -1726,6 +1761,12 @@ class ApioskHostedOAuthProvider {
         userId: payload.userId,
         email: payload.email,
         walletAddress: payload.walletAddress,
+        // Managed-wallet connect token minted at sign-in. The runtime threads
+        // this to the gateway as X-Apiosk-Connect-Token so paid calls settle
+        // autonomously from the buyer's managed wallet (runtime getClient reads
+        // extra.apiosk_connect_token).
+        apiosk_connect_token: payload.apioskConnectToken,
+        apiosk_connect_wallet_address: payload.apioskConnectWalletAddress,
       },
     };
   }
@@ -1943,6 +1984,7 @@ export function createHostedOAuthSupport({
   mcpServerUrl,
   appName = "Apiosk",
   resourceName = "Apiosk MCP",
+  connectTokenMinter,
 } = {}) {
   const secret = resolveOAuthSecret(env);
   const provider = new ApioskHostedOAuthProvider({
@@ -1952,6 +1994,7 @@ export function createHostedOAuthSupport({
     mcpServerUrl,
     appName,
     resourceName,
+    connectTokenMinter,
   });
 
   const oauthMetadata = createOAuthMetadata({

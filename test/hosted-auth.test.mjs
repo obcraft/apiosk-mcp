@@ -241,6 +241,9 @@ function stubWalletAuthFetch({
 
 test("hosted OAuth support issues tokens and challenges protected MCP tools", async () => {
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env: WALLET_TEST_ENV,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
@@ -371,6 +374,9 @@ test("hosted OAuth support issues tokens and challenges protected MCP tools", as
 test("hosted authorize form POSTs handle cancel and wallet sign-in over a real form encoding", async () => {
   const express = (await import("express")).default;
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env: WALLET_TEST_ENV,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
@@ -494,6 +500,9 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
     APIOSK_MCP_OAUTH_SECRET: "shared-hosted-oauth-secret",
   };
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
@@ -517,6 +526,9 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
   assert.match(registered.client_id, /^apiosk\./);
 
   const freshSupport = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env,
     issuerUrl: new URL("http://localhost:3000"),
     mcpServerUrl: new URL("http://localhost:3000/mcp"),
@@ -537,6 +549,9 @@ test("dynamic registered OAuth clients survive a fresh provider instance", async
 test("protected-resource metadata is served for every transport surface so ChatGPT's /sse discovery resolves", async () => {
   const express = (await import("express")).default;
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env: { NODE_ENV: "test" },
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
@@ -583,6 +598,9 @@ test("protected-resource metadata is served for every transport surface so ChatG
 
 test("access tokens minted for the /sse resource verify against the hosted server", async () => {
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env: WALLET_TEST_ENV,
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
@@ -676,6 +694,9 @@ test("hosted OAuth support issues tokens after wallet sign-in", async () => {
     APIOSK_SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
   };
   const support = createHostedOAuthSupport({
+    // The connect-token bridge has dedicated coverage in hosted-payment.test.mjs;
+    // stub it here so wallet-auth assertions stay isolated from the Supabase mint.
+    connectTokenMinter: async () => null,
     env,
     issuerUrl: new URL("https://mcp.apiosk.com"),
     mcpServerUrl: new URL("https://mcp.apiosk.com/mcp"),
