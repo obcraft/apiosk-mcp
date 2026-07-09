@@ -1,5 +1,6 @@
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   SERVER_INFO,
   createApioskMcpServer,
@@ -181,6 +182,9 @@ function renderMcpWelcomeHtml(mcpUrl) {
     <h2>Connect from Claude Code</h2>
     <code>claude mcp add --transport http apiosk ${mcpUrl}</code>
 
+    <h2>Connect from ChatGPT (legacy SSE)</h2>
+    <code class="endpoint">${mcpUrl.replace(/\/mcp$/, "/sse")}</code>
+
     <div class="links">
       <a href="/health">Health</a>
       <a href="https://dashboard.apiosk.com" target="_blank" rel="noopener">Dashboard</a>
@@ -212,6 +216,7 @@ function sendMcpWelcome(req, res) {
       "Apiosk MCP server endpoint. Connect it from an MCP client to discover, pay for, execute, and publish APIs through the Apiosk gateway.",
     transport: "streamable-http",
     endpoint: mcpUrl,
+    legacy_sse_endpoint: mcpUrl.replace(/\/mcp$/, "/sse"),
     connect: {
       claude_code: `claude mcp add --transport http apiosk ${mcpUrl}`,
     },
@@ -404,10 +409,69 @@ app.delete("/mcp", (req, res) => {
   });
 });
 
+// Legacy HTTP+SSE transport (protocol version 2024-11-05), kept alongside
+// Streamable HTTP for clients that only speak the older transport (e.g.
+// ChatGPT's MCP connector, which opens a GET /sse stream and posts messages
+// to /messages?sessionId=...).
+const sseTransports = new Map();
+
+app.get("/sse", async (req, res) => {
+  const server = createApioskMcpServer({ runtime });
+  const transport = new SSEServerTransport("/messages", res);
+  sseTransports.set(transport.sessionId, transport);
+
+  res.on("close", () => {
+    sseTransports.delete(transport.sessionId);
+    transport.close().catch(() => {});
+    server.close().catch(() => {});
+  });
+
+  try {
+    await server.connect(transport);
+  } catch (error) {
+    console.error("Error establishing /sse stream:", error);
+    sseTransports.delete(transport.sessionId);
+  }
+});
+
+app.post("/messages", mcpAuthMiddleware, async (req, res) => {
+  const sessionId = typeof req.query.sessionId === "string" ? req.query.sessionId : "";
+  const transport = sseTransports.get(sessionId);
+
+  if (!transport) {
+    res.status(400).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32000,
+        message: "Bad Request: No SSE session found for the given sessionId.",
+      },
+    });
+    return;
+  }
+
+  try {
+    await transport.handlePostMessage(req, res, req.body);
+  } catch (error) {
+    console.error("Error handling /messages request:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+});
+
 app.listen(port, "0.0.0.0", async () => {
   console.log(`Apiosk MCP server listening on http://0.0.0.0:${port}`);
   console.log(`Health check: http://0.0.0.0:${port}/health`);
   console.log(`MCP endpoint: http://0.0.0.0:${port}/mcp`);
+  console.log(`Legacy SSE endpoint: http://0.0.0.0:${port}/sse`);
   console.log(`OAuth issuer: ${issuerUrl.href}`);
   console.log(`OAuth protected-resource metadata: ${hostedOAuth.resourceMetadataUrl}`);
   try {
