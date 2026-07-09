@@ -5,6 +5,7 @@ primary_region = "ams"
   APIOSK_MCP_PUBLIC_BASE_URL = "https://mcp.apiosk.com"
   APIOSK_CONTROL_PLANE_BACKEND_URL = "https://dashboard.apiosk.com"
   APIOSK_DASHBOARD_URL = "https://dashboard.apiosk.com"
+  APIOSK_MCP_WALLETCONNECT_PROJECT_ID = "c7673690533ae653e97eab23a95f141d"
 
 [http_service]
   internal_port = 3000
