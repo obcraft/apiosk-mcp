@@ -758,6 +758,142 @@ function createAuthorizePage({
         display: none;
       }
 
+      /* Connect / Create segmented tabs — mirrors the provider portal's
+         wallet-connection toggle so the two sign-in surfaces feel like one. */
+      .mode-tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--muted-surface);
+      }
+
+      .mode-tab {
+        appearance: none;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 600;
+        padding: 9px 12px;
+        min-height: auto;
+        cursor: pointer;
+      }
+
+      .mode-tab.active {
+        background: var(--primary);
+        color: #fff;
+      }
+
+      .mode-tab:not(.active):hover {
+        color: var(--foreground);
+      }
+
+      .create-panel {
+        display: grid;
+        gap: 12px;
+      }
+
+      .create-note {
+        font-size: 0.84rem;
+        color: var(--muted);
+        line-height: 1.55;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+      }
+
+      .create-address {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        word-break: break-all;
+        color: var(--foreground);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--muted-surface);
+      }
+
+      .phrase-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: var(--muted-surface);
+      }
+
+      .phrase-grid.blurred .phrase-word-text {
+        filter: blur(5px);
+      }
+
+      .phrase-word {
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        color: var(--foreground);
+      }
+
+      .phrase-word .phrase-index {
+        color: var(--muted);
+        font-size: 0.7rem;
+        min-width: 16px;
+        text-align: right;
+      }
+
+      .create-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+      }
+
+      .create-actions button {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--foreground);
+        font-size: 0.84rem;
+        padding: 8px 10px;
+        min-height: auto;
+      }
+
+      .create-actions button:hover:not(:disabled) {
+        background: var(--muted-surface);
+      }
+
+      .checkbox-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        font-size: 0.84rem;
+        color: var(--muted);
+        line-height: 1.5;
+        cursor: pointer;
+      }
+
+      .checkbox-row input {
+        width: auto;
+        margin-top: 2px;
+        accent-color: var(--primary);
+      }
+
+      button.primary-wide {
+        background: var(--primary);
+        border: 1px solid transparent;
+        color: #fff;
+        font-weight: 600;
+        width: 100%;
+      }
+
+      button.primary-wide:hover:not(:disabled) {
+        background: var(--primary-strong);
+      }
+
       @media (max-width: 560px) {
         .topbar {
           padding: 16px 20px;
@@ -858,6 +994,15 @@ function createAuthorizePage({
           ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
           ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
           <section class="panel" aria-label="Wallet sign in">
+            ${
+              walletEnabled
+                ? `<div class="mode-tabs" role="tablist" aria-label="Wallet sign-in mode">
+              <button id="mode-connect" class="mode-tab active" type="button" role="tab" aria-selected="true">Connect</button>
+              <button id="mode-create" class="mode-tab" type="button" role="tab" aria-selected="false">Create</button>
+            </div>`
+                : ""
+            }
+            <div id="connect-panel">
             <div id="wallet-list" class="wallet-list" role="list">
               ${
                 walletEnabled
@@ -886,6 +1031,31 @@ function createAuthorizePage({
               </span>
               <span class="wallet-action">Mobile / QR</span>
             </button>`
+                : ""
+            }
+            </div>
+            ${
+              walletEnabled
+                ? `<div id="create-panel" class="create-panel hidden">
+              <p class="create-note">Generate a brand-new self-custody wallet right here in your browser. The recovery phrase never leaves this tab &mdash; Apiosk only ever sees the public address. It becomes your sign-in and your payment wallet.</p>
+              <div id="create-start">
+                <button id="create-generate" class="primary-wide" type="button">Generate new wallet</button>
+              </div>
+              <div id="create-result" class="create-panel hidden">
+                <div id="create-address" class="create-address"></div>
+                <div id="phrase-grid" class="phrase-grid blurred" aria-label="Recovery phrase"></div>
+                <div class="create-actions">
+                  <button id="phrase-reveal" type="button">Reveal</button>
+                  <button id="phrase-copy" type="button">Copy phrase</button>
+                  <button id="phrase-download" type="button">Download backup</button>
+                </div>
+                <label class="checkbox-row">
+                  <input id="phrase-saved" type="checkbox" />
+                  <span>I&rsquo;ve securely saved my recovery phrase. I understand it&rsquo;s the only way to recover this wallet and Apiosk cannot restore it for me.</span>
+                </label>
+                <button id="create-sign-in" class="primary-wide" type="button" disabled>Sign in with this wallet</button>
+              </div>
+            </div>`
                 : ""
             }
             <p id="wallet-status" class="meta">${walletEnabled ? "Connect MetaMask, Coinbase Wallet, or any browser wallet to sign in." : "Wallet sign-in is not configured on this MCP server."}</p>
@@ -953,6 +1123,13 @@ function createAuthorizePage({
           busy = next;
           if (walletConnectButton) walletConnectButton.disabled = next;
           for (const el of walletList.querySelectorAll("button")) el.disabled = next;
+          const createGenerateButton = document.getElementById("create-generate");
+          if (createGenerateButton) createGenerateButton.disabled = next;
+          const createSignInButton = document.getElementById("create-sign-in");
+          if (createSignInButton) {
+            const saved = document.getElementById("phrase-saved");
+            createSignInButton.disabled = next || !saved || !saved.checked;
+          }
         }
 
         function hexEncode(value) {
@@ -1132,6 +1309,7 @@ function createAuthorizePage({
             walletForm.elements.wallet_address.value = address;
             walletForm.elements.wallet_message.value = base64UrlEncode(message);
             walletForm.elements.wallet_signature.value = signature;
+            walletForm.elements.wallet_method.value = "connected_wallet";
             setStatus("Wallet verified. Continuing...", "success");
             walletForm.submit();
           } catch (error) {
@@ -1178,6 +1356,172 @@ function createAuthorizePage({
             } catch (error) {
               setStatus(error instanceof Error ? error.message : "WalletConnect sign-in failed.", "error");
               setBusy(false);
+            }
+          });
+        }
+
+        // ── Create-wallet mode ─────────────────────────────────────────────
+        // Mirrors the provider portal's Connect | Create toggle: a fresh
+        // self-custody wallet is generated in this tab with viem (same library
+        // and derivation the portal uses); the phrase/key never leave the
+        // browser — the server only ever receives the address + signature.
+        const modeConnect = document.getElementById("mode-connect");
+        const modeCreate = document.getElementById("mode-create");
+        const connectPanel = document.getElementById("connect-panel");
+        const createPanel = document.getElementById("create-panel");
+        const createStart = document.getElementById("create-start");
+        const createResult = document.getElementById("create-result");
+        const createGenerate = document.getElementById("create-generate");
+        const createAddress = document.getElementById("create-address");
+        const phraseGrid = document.getElementById("phrase-grid");
+        const phraseReveal = document.getElementById("phrase-reveal");
+        const phraseCopy = document.getElementById("phrase-copy");
+        const phraseDownload = document.getElementById("phrase-download");
+        const phraseSaved = document.getElementById("phrase-saved");
+        const createSignIn = document.getElementById("create-sign-in");
+        let generatedWallet = null;
+
+        function setMode(mode) {
+          if (!modeConnect || !modeCreate) return;
+          const isCreate = mode === "create";
+          modeConnect.classList.toggle("active", !isCreate);
+          modeCreate.classList.toggle("active", isCreate);
+          modeConnect.setAttribute("aria-selected", String(!isCreate));
+          modeCreate.setAttribute("aria-selected", String(isCreate));
+          connectPanel.classList.toggle("hidden", isCreate);
+          createPanel.classList.toggle("hidden", !isCreate);
+          setStatus(
+            isCreate
+              ? "Create a brand-new wallet and sign in with it — no extension needed."
+              : "Connect MetaMask, Coinbase Wallet, or any browser wallet to sign in."
+          );
+        }
+
+        function refreshCreateSignIn() {
+          if (createSignIn) {
+            createSignIn.disabled = busy || !generatedWallet || !phraseSaved.checked;
+          }
+        }
+
+        function renderGeneratedWallet() {
+          createAddress.textContent = generatedWallet.address;
+          phraseGrid.innerHTML = "";
+          generatedWallet.mnemonic.split(" ").forEach((word, index) => {
+            const cell = document.createElement("span");
+            cell.className = "phrase-word";
+            const num = document.createElement("span");
+            num.className = "phrase-index";
+            num.textContent = String(index + 1) + ".";
+            const text = document.createElement("span");
+            text.className = "phrase-word-text";
+            text.textContent = word;
+            cell.append(num, text);
+            phraseGrid.appendChild(cell);
+          });
+          createStart.classList.add("hidden");
+          createResult.classList.remove("hidden");
+        }
+
+        if (modeConnect && modeCreate) {
+          modeConnect.addEventListener("click", () => setMode("connect"));
+          modeCreate.addEventListener("click", () => setMode("create"));
+        }
+
+        if (createGenerate) {
+          createGenerate.addEventListener("click", async () => {
+            if (busy) return;
+            setBusy(true);
+            setStatus("Generating a new wallet in your browser...");
+            try {
+              const accounts = await import("https://esm.sh/viem@2.47.10/accounts?bundle");
+              const mnemonic = accounts.generateMnemonic(accounts.english);
+              const account = accounts.mnemonicToAccount(mnemonic);
+              generatedWallet = { account, mnemonic, address: account.address };
+              renderGeneratedWallet();
+              setStatus("Wallet created. Save the recovery phrase before signing in.", "success");
+            } catch (error) {
+              setStatus(error instanceof Error ? error.message : "Could not generate a wallet.", "error");
+            } finally {
+              setBusy(false);
+              refreshCreateSignIn();
+            }
+          });
+        }
+
+        if (phraseReveal) {
+          phraseReveal.addEventListener("click", () => {
+            const blurred = phraseGrid.classList.toggle("blurred");
+            phraseReveal.textContent = blurred ? "Reveal" : "Hide";
+          });
+        }
+
+        if (phraseCopy) {
+          phraseCopy.addEventListener("click", async () => {
+            if (!generatedWallet) return;
+            try {
+              await navigator.clipboard.writeText(generatedWallet.mnemonic);
+              setStatus("Recovery phrase copied. Store it somewhere safe.", "success");
+            } catch {
+              setStatus("Could not copy — reveal the phrase and copy it manually.", "error");
+            }
+          });
+        }
+
+        if (phraseDownload) {
+          phraseDownload.addEventListener("click", () => {
+            if (!generatedWallet) return;
+            const backup = [
+              "Apiosk wallet backup",
+              "",
+              "Address: " + generatedWallet.address,
+              "Recovery phrase: " + generatedWallet.mnemonic,
+              "Derivation path: m/44'/60'/0'/0/0 (standard Ethereum)",
+              "",
+              "Keep this file offline and private. Anyone with the phrase controls the wallet.",
+            ].join("\\n");
+            const blob = new Blob([backup], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "apiosk-wallet-" + generatedWallet.address.slice(2, 8) + ".txt";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+          });
+        }
+
+        if (phraseSaved) {
+          phraseSaved.addEventListener("change", refreshCreateSignIn);
+        }
+
+        if (createSignIn) {
+          createSignIn.addEventListener("click", async () => {
+            if (busy || !generatedWallet || !phraseSaved.checked) return;
+            setBusy(true);
+            setStatus("Signing you in with the new wallet...");
+            try {
+              const address = generatedWallet.address;
+              const nonce = await fetchNonce();
+              const message = [
+                "Apiosk Provider wallet sign-in",
+                "wallet: " + address.toLowerCase(),
+                "origin: " + window.location.origin,
+                "nonce: " + nonce,
+                "issued_at: " + new Date().toISOString(),
+              ].join("\\n");
+              const signature = await generatedWallet.account.signMessage({ message });
+
+              walletForm.elements.wallet_address.value = address;
+              walletForm.elements.wallet_message.value = base64UrlEncode(message);
+              walletForm.elements.wallet_signature.value = signature;
+              walletForm.elements.wallet_method.value = "created_wallet";
+              setStatus("Wallet verified. Continuing...", "success");
+              walletForm.submit();
+            } catch (error) {
+              setStatus(error instanceof Error ? error.message : "Wallet sign-in failed.", "error");
+              setBusy(false);
+              refreshCreateSignIn();
             }
           });
         }

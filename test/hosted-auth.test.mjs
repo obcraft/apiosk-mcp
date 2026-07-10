@@ -499,6 +499,129 @@ test("hosted authorize form POSTs handle cancel and wallet sign-in over a real f
   }
 });
 
+test("authorize page offers wallet creation and created_wallet sign-ins reach wallet-auth with the right method", async () => {
+  const express = (await import("express")).default;
+  const support = createHostedOAuthSupport({
+    connectTokenMinter: async () => null,
+    env: WALLET_TEST_ENV,
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-create-client",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+
+  const app = express();
+  app.use("/authorize", support.authorizationRouter);
+  const server = await new Promise((resolve) => {
+    const s = app.listen(0, "127.0.0.1", () => resolve(s));
+  });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const originalFetch = globalThis.fetch;
+
+  const query = new URLSearchParams({
+    client_id: client.client_id,
+    redirect_uri: "https://chatgpt.com/connector/oauth/callback",
+    response_type: "code",
+    code_challenge: "challenge_create",
+    code_challenge_method: "S256",
+    scope: "mcp:tools offline_access",
+    state: "state_create",
+    resource: "http://localhost:3000/sse",
+  });
+
+  try {
+    // The rendered page must always carry the Create tab (provider-portal
+    // parity): mode toggle, generate button, phrase confirmation, and the
+    // created_wallet submission path in the inline script.
+    const pageResponse = await originalFetch(`${base}/authorize?${query}`);
+    assert.equal(pageResponse.status, 200);
+    const html = await pageResponse.text();
+    for (const marker of [
+      'id="mode-create"',
+      'id="create-generate"',
+      'id="phrase-saved"',
+      'id="create-sign-in"',
+      "created_wallet",
+      "generateMnemonic",
+    ]) {
+      assert.ok(html.includes(marker), `authorize page should include ${marker}`);
+    }
+
+    // A created-wallet sign-in must forward method=created_wallet to the
+    // wallet-auth function (it stamps auth_method on the new account).
+    const address = "0x3333333333333333333333333333333333333333";
+    const message = walletMessage(address);
+    const encodedMessage = Buffer.from(message, "utf8")
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    let seenMethod = null;
+    globalThis.fetch = async (url, init = {}) => {
+      const href = String(url);
+      if (href === "https://sb.test/functions/v1/wallet-auth/verify") {
+        seenMethod = JSON.parse(init.body).method;
+        return new Response(
+          JSON.stringify({
+            tokenHash: "wallet_token_hash",
+            email: `${address.toLowerCase()}@wallet.apiosk.com`,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (href === "https://sb.test/auth/v1/verify") {
+        return new Response(
+          JSON.stringify({
+            access_token: "jwt_created_dashboard_session",
+            expires_in: 3600,
+            user: { id: "user_created_123", email: `${address.toLowerCase()}@wallet.apiosk.com` },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected fetch: ${href}`);
+    };
+
+    const signInResponse = await originalFetch(new URL("/authorize", base), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: client.client_id,
+        redirect_uri: "https://chatgpt.com/connector/oauth/callback",
+        response_type: "code",
+        code_challenge: "challenge_create",
+        code_challenge_method: "S256",
+        scope: "mcp:tools offline_access",
+        state: "state_create",
+        resource: "http://localhost:3000/sse",
+        action: "wallet_sign_in",
+        wallet_address: address,
+        wallet_message: encodedMessage,
+        wallet_message_encoding: "base64url",
+        wallet_signature: "0xsignature",
+        wallet_method: "created_wallet",
+      }),
+      redirect: "manual",
+    });
+
+    assert.equal(signInResponse.status, 302);
+    const location = new URL(signInResponse.headers.get("location"));
+    assert.ok(location.searchParams.get("code"));
+    assert.equal(seenMethod, "created_wallet");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("dynamic registered OAuth clients survive a fresh provider instance", async () => {
   const env = {
     NODE_ENV: "test",
