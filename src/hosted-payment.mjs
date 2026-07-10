@@ -46,7 +46,7 @@ function isoAfterDays(days) {
 
 // Same key precedence as resolveMcpWalletAuthConfig in oauth.mjs, so the mint
 // reuses whatever Supabase credentials already power wallet sign-in.
-function resolveSupabaseConfig(env = process.env) {
+export function resolveSupabaseConfig(env = process.env) {
   const supabaseUrl = normalizeBaseUrl(
     env.APIOSK_SUPABASE_URL || env.SUPABASE_URL,
     DEFAULT_SUPABASE_URL
@@ -82,7 +82,7 @@ export function generateConnectToken() {
   return { token, tokenHash, tokenPrefix };
 }
 
-async function supabaseRest(
+export async function supabaseRest(
   config,
   path,
   { method = "GET", sessionToken, body, prefer } = {}

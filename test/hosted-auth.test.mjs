@@ -56,6 +56,10 @@ function createFakeGatewayClient() {
 }
 
 test("hosted runtime exposes the full remote surface (discovery + managed + dynamic) and forwards request-scoped dashboard auth", async () => {
+  // Dynamic per-API tools are opt-in (they duplicate paid listings); enable
+  // them for this test so the dynamic surface stays covered.
+  process.env.APIOSK_MCP_DYNAMIC_TOOLS = "true";
+  try {
   let capturedClientOptions = null;
   const runtime = createApioskMcpRuntime({
     env: {},
@@ -87,8 +91,6 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
 
   // Managed buyer tools now available remotely over request-scoped auth.
   for (const name of [
-    "apiosk_buy_credits",
-    "apiosk_get_credits_status",
     "apiosk_list_wallets",
     "apiosk_create_wallet",
     "apiosk_update_wallet",
@@ -146,6 +148,9 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
   assert.equal(healthPayload.gateway.status, "ok");
   assert.ok(healthPayload.mcp.tools.includes("apiosk_payment_guide"));
   assert.ok(healthPayload.mcp.tools.includes("apiosk_list_wallets"));
+  } finally {
+    delete process.env.APIOSK_MCP_DYNAMIC_TOOLS;
+  }
 });
 
 function createMockResponse(req) {

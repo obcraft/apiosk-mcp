@@ -18,6 +18,17 @@ import {
 } from "./local-config.mjs";
 import { createLocalWalletStore } from "./wallet-store.mjs";
 import {
+  hostedCreateWalletToken,
+  hostedCreateWalletUnavailable,
+  hostedDeleteWallet,
+  hostedDeleteWalletToken,
+  hostedListWallets,
+  hostedListWalletTokens,
+  hostedUpdateWallet,
+  hostedUpdateWalletToken,
+  hostedWalletActivity,
+} from "./hosted-wallets.mjs";
+import {
   PUBLISHER_TOOLS,
   handlePublisherTool,
   isPublisherTool,
@@ -2303,11 +2314,37 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
+  // Hosted (OAuth / wallet sign-in) sessions manage wallets straight against
+  // Supabase REST with the caller's own JWT — the legacy dashboard backend
+  // these tools used to proxy to no longer exists (dashboard.apiosk.com is now
+  // the provider-portal SPA, whose catch-all answers /api/* with index.html).
+  // The requestDashboard proxy path is kept only for stdio setups that point
+  // APIOSK_CONTROL_PLANE_URL at their own control plane.
+  function hostedWalletContext(authInfo = null) {
+    const sessionToken = resolveRequestDashboardUserToken(authInfo);
+    if (!sessionToken) return null;
+    return {
+      env,
+      sessionToken,
+      userId: trimString(authInfo?.extra?.userId),
+    };
+  }
+
   async function handleWalletList(authInfo = null) {
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(await hostedListWallets(hosted));
+    }
     return content(await requestDashboard("/api/agent-wallets", {}, {}, authInfo));
   }
 
   async function handleWalletCreate(argumentsObject = {}, authInfo = null) {
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      // Key derivation + encryption lived in the retired dashboard backend, so
+      // hosted sessions get an honest explanation instead of proxied HTML.
+      return errorContent(hostedCreateWalletUnavailable());
+    }
     return content(
       await requestDashboard(
         "/api/agent-wallets",
@@ -2324,6 +2361,22 @@ export function createApioskMcpRuntime(options = {}) {
   async function handleWalletUpdate(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
+    }
+
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedUpdateWallet({
+          ...hosted,
+          walletId: argumentsObject.wallet_id,
+          label: argumentsObject.label,
+          status: argumentsObject.status,
+          dailyLimitUsdc: argumentsObject.daily_limit_usdc,
+          perTxLimitUsdc: argumentsObject.per_tx_limit_usdc,
+          color: argumentsObject.color,
+          icon: argumentsObject.icon,
+        })
+      );
     }
 
     const { wallet_id, ...updates } = argumentsObject;
@@ -2345,6 +2398,13 @@ export function createApioskMcpRuntime(options = {}) {
       return errorContent("Missing required field: wallet_id");
     }
 
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedDeleteWallet({ ...hosted, walletId: argumentsObject.wallet_id })
+      );
+    }
+
     return content(
       await requestDashboard(
         `/api/agent-wallets/${argumentsObject.wallet_id}`,
@@ -2360,6 +2420,17 @@ export function createApioskMcpRuntime(options = {}) {
   async function handleWalletActivity(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
+    }
+
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedWalletActivity({
+          ...hosted,
+          walletId: argumentsObject.wallet_id,
+          limit: argumentsObject.limit,
+        })
+      );
     }
 
     const params = new URLSearchParams();
@@ -2382,6 +2453,20 @@ export function createApioskMcpRuntime(options = {}) {
       return errorContent("Missing required field: wallet_id");
     }
 
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      const created = await hostedCreateWalletToken({
+        ...hosted,
+        walletId: argumentsObject.wallet_id,
+        name: argumentsObject.token_name,
+        revokeExisting: argumentsObject.revoke_existing === true,
+      });
+      return content({
+        ...created,
+        connect_string: `apiosk:connect:${created.connect_token}`,
+      });
+    }
+
     const { wallet_id, ...body } = argumentsObject;
     return content(
       await requestDashboard(
@@ -2401,6 +2486,13 @@ export function createApioskMcpRuntime(options = {}) {
       return errorContent("Missing required field: wallet_id");
     }
 
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedListWalletTokens({ ...hosted, walletId: argumentsObject.wallet_id })
+      );
+    }
+
     return content(
       await requestDashboard(
         `/api/agent-wallets/${argumentsObject.wallet_id}/api-keys`,
@@ -2414,6 +2506,19 @@ export function createApioskMcpRuntime(options = {}) {
   async function handleWalletApiKeyCreate(argumentsObject = {}, authInfo = null) {
     if (!argumentsObject.wallet_id) {
       return errorContent("Missing required field: wallet_id");
+    }
+
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedCreateWalletToken({
+          ...hosted,
+          walletId: argumentsObject.wallet_id,
+          name: argumentsObject.name,
+          expirationDays: argumentsObject.expiration_days,
+          revokeExisting: argumentsObject.revoke_existing === true,
+        })
+      );
     }
 
     const { wallet_id, ...body } = argumentsObject;
@@ -2438,6 +2543,20 @@ export function createApioskMcpRuntime(options = {}) {
       return errorContent("Missing required field: key_id");
     }
 
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedUpdateWalletToken({
+          ...hosted,
+          walletId: argumentsObject.wallet_id,
+          keyId: argumentsObject.key_id,
+          name: argumentsObject.name,
+          expirationDays: argumentsObject.expiration_days,
+          revoke: argumentsObject.revoke,
+        })
+      );
+    }
+
     const { wallet_id, key_id, ...body } = argumentsObject;
     return content(
       await requestDashboard(
@@ -2458,6 +2577,17 @@ export function createApioskMcpRuntime(options = {}) {
     }
     if (!argumentsObject.key_id) {
       return errorContent("Missing required field: key_id");
+    }
+
+    const hosted = hostedWalletContext(authInfo);
+    if (hosted) {
+      return content(
+        await hostedDeleteWalletToken({
+          ...hosted,
+          walletId: argumentsObject.wallet_id,
+          keyId: argumentsObject.key_id,
+        })
+      );
     }
 
     return content(
@@ -3047,6 +3177,37 @@ export function createApioskMcpRuntime(options = {}) {
     });
   }
 
+  // A 402 means the buyer's configured rails could not cover the call. Tell
+  // the caller what THEIR next step is, based on how this request
+  // authenticated, instead of always giving local-stdio advice.
+  function buildPaymentRequiredHint(authInfo = null) {
+    const extra = authInfo?.extra || {};
+    const connectWallet = trimString(
+      extra.apiosk_connect_wallet_address || extra.apioskConnectWalletAddress
+    );
+
+    if (trimString(extra.apiosk_connect_token)) {
+      const walletNote = connectWallet ? ` (${connectWallet})` : "";
+      return (
+        `Your managed Apiosk wallet${walletNote} could not cover this call — it is out of USDC, ` +
+        "over its spending limit, or missing settlement approval. Send USDC on Base mainnet " +
+        "(chain 8453) to the wallet address and retry; payment then settles automatically. " +
+        "Use apiosk_list_wallets to see your wallets and funding instructions."
+      );
+    }
+
+    if (hasRequestScopedDashboardAccess(authInfo)) {
+      return (
+        "You are signed in, but no payable managed wallet is linked to this session. " +
+        "Use apiosk_list_wallets to check your wallets: if one exists, fund it with USDC on Base mainnet " +
+        "and re-authorize the Apiosk app so a fresh payment token is minted; if none exists, set one up " +
+        "in the Apiosk buyer portal first."
+      );
+    }
+
+    return "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.";
+  }
+
   async function callTool(name, argumentsObject = {}, authInfo = null) {
     try {
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
@@ -3101,8 +3262,7 @@ export function createApioskMcpRuntime(options = {}) {
       if (error instanceof ApioskPaymentRequiredError) {
         return errorContent({
           error: error.message,
-          hint:
-            "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.",
+          hint: buildPaymentRequiredHint(authInfo),
           payment_required: error.paymentRequired,
         });
       }

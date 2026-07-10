@@ -7,7 +7,7 @@ import { createApioskMcpRuntime } from "./runtime.mjs";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.4.1",
+  version: "1.4.2",
   title: "Apiosk: pay-per-call APIs for AI agents",
 };
 

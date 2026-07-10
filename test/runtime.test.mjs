@@ -257,7 +257,10 @@ test("get started saves a connect string and reuses it for client construction",
   await rm(homeDir, { recursive: true, force: true });
 });
 
-test("dashboard sign-in saves a local session and credits tools return the Adyen checkout URL", async () => {
+// The remote credits tools (apiosk_buy_credits / apiosk_get_credits_status)
+// were removed with the legacy dashboard backend, so this covers only the
+// local sign-in + saved-session flow they used to piggyback on.
+test("dashboard sign-in saves a local session for managed-wallet tools", async () => {
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-credits-${Date.now()}`);
   const requests = [];
   const runtime = createRuntime(homeDir, {}, {
@@ -272,36 +275,6 @@ test("dashboard sign-in saves a local session and credits tools return the Adyen
             email: "demo@example.com",
             session_token: "jwt_demo_token",
             expires_at: 1_800_000_000,
-          };
-        }
-
-        if (route === "/api/credits/topup") {
-          return {
-            payment_intent_id: "intent_123",
-            adyen_payment_link_id: "plink_123",
-            checkout_url: "https://checkout.adyen.test/pay/123",
-            credits_to_add: 1000,
-            amount_eur: 10,
-            status: "active",
-          };
-        }
-
-        if (route === "/api/credits/reconcile") {
-          return {
-            attempted: 1,
-            reconciled: 1,
-            already_processed: 0,
-            credits: 1000,
-            pending_intents: [],
-            results: [
-              {
-                payment_intent_id: "intent_123",
-                provider_payment_id: "plink_123",
-                credited: true,
-                already_processed: false,
-                status: "paid",
-              },
-            ],
           };
         }
 
@@ -322,21 +295,9 @@ test("dashboard sign-in saves a local session and credits tools return the Adyen
   assert.equal(savedConfig.dashboard_session_token, "jwt_demo_token");
   assert.equal(savedConfig.dashboard_session_email, "demo@example.com");
 
-  const topup = await runtime.callTool("apiosk_buy_credits", { amount_eur: 10 });
-  const topupPayload = JSON.parse(topup.content[0].text);
-  assert.equal(topupPayload.payment_intent_id, "intent_123");
-  assert.equal(topupPayload.payment_url, "https://checkout.adyen.test/pay/123");
-
-  const status = await runtime.callTool("apiosk_get_credits_status", {
-    payment_intent_id: "intent_123",
-  });
-  const statusPayload = JSON.parse(status.content[0].text);
-  assert.equal(statusPayload.credits, 1000);
-  assert.equal(statusPayload.reconciled, 1);
-
   assert.deepEqual(
     requests.map((entry) => entry.route),
-    ["/api/auth/mcp-sign-in", "/api/credits/topup", "/api/credits/reconcile"]
+    ["/api/auth/mcp-sign-in"]
   );
 
   await rm(homeDir, { recursive: true, force: true });
@@ -399,7 +360,7 @@ test("search surfaces a payment hint and provider pointer so agents learn how to
   const payload = JSON.parse(result.content[0].text);
 
   assert.ok(payload.payment, "search response should carry a payment hint");
-  assert.deepEqual(payload.payment.settlement_rails, ["usdc_x402", "sepa_incasso", "credits"]);
+  assert.deepEqual(payload.payment.settlement_rails, ["usdc_x402", "credits"]);
   assert.ok(payload.payment.how_to_pay, "payment hint should explain how to pay");
   assert.match(payload.for_providers, /apiosk_payment_guide|apiosk_publish_api/);
   assert.match(payload.next_steps, /apiosk_payment_guide/);
@@ -490,6 +451,9 @@ test("hosted remote surface exposes discovery + payment guidance tools", async (
 });
 
 test("dynamic order tools return a human confirmation summary with structured content", async () => {
+  // Dynamic per-API tools are opt-in (see buildDynamicTools); enable them so
+  // the summary formatting stays covered.
+  process.env.APIOSK_MCP_DYNAMIC_TOOLS = "true";
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-order-${Date.now()}`);
   const runtime = createApioskMcpRuntime({
     env: { APIOSK_HOME: homeDir },
@@ -559,14 +523,17 @@ test("dynamic order tools return a human confirmation summary with structured co
     clientFactory: null,
   });
 
-  const result = await runtime.callTool("bella-pizza", {
-    type: "Tonno",
-    size: "Small",
-  });
+  try {
+    const result = await runtime.callTool("bella-pizza", {
+      type: "Tonno",
+      size: "Small",
+    });
 
-  assert.match(result.content[0].text, /order confirmed/i);
-  assert.match(result.content[0].text, /Small Tonno/);
-  assert.equal(result.structuredContent.result.order_id, "12345");
-
-  await rm(homeDir, { recursive: true, force: true });
+    assert.match(result.content[0].text, /order confirmed/i);
+    assert.match(result.content[0].text, /Small Tonno/);
+    assert.equal(result.structuredContent.result.order_id, "12345");
+  } finally {
+    delete process.env.APIOSK_MCP_DYNAMIC_TOOLS;
+    await rm(homeDir, { recursive: true, force: true });
+  }
 });
