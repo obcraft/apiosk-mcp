@@ -550,6 +550,7 @@ test("authorize page offers wallet creation and created_wallet sign-ins reach wa
       'id="create-sign-in"',
       "created_wallet",
       "generateMnemonic",
+      "/assets/wallet-accounts.mjs",
     ]) {
       assert.ok(html.includes(marker), `authorize page should include ${marker}`);
     }

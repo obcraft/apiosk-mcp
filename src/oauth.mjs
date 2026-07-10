@@ -797,6 +797,13 @@ function createAuthorizePage({
         gap: 12px;
       }
 
+      /* .create-panel's display:grid would otherwise win over .hidden (same
+         specificity, declared later), leaving the Create pane visible on the
+         Connect tab. */
+      .create-panel.hidden {
+        display: none;
+      }
+
       .create-note {
         font-size: 0.84rem;
         color: var(--muted);
@@ -1433,7 +1440,10 @@ function createAuthorizePage({
             setBusy(true);
             setStatus("Generating a new wallet in your browser...");
             try {
-              const accounts = await import("https://esm.sh/viem@2.47.10/accounts?bundle");
+              // Same-origin bundle (see server.mjs /assets/wallet-accounts.mjs)
+              // — embedded browsers can block cross-origin dynamic imports, so
+              // the wallet library must never come from a CDN.
+              const accounts = await import("/assets/wallet-accounts.mjs");
               const mnemonic = accounts.generateMnemonic(accounts.english);
               const account = accounts.mnemonicToAccount(mnemonic);
               generatedWallet = { account, mnemonic, address: account.address };

@@ -265,6 +265,31 @@ app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
   return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
 });
 
+// Self-hosted browser bundle for the /authorize Create-wallet flow (viem
+// generateMnemonic/mnemonicToAccount). Served same-origin because some
+// embedded browsers refuse cross-origin dynamic module imports, which would
+// silently break wallet creation if we pulled this from a CDN. Regenerate
+// with scripts/build-wallet-lib.mjs after a viem upgrade.
+let walletAccountsBundle = null;
+app.get("/assets/wallet-accounts.mjs", async (req, res) => {
+  try {
+    if (!walletAccountsBundle) {
+      const { readFile } = await import("node:fs/promises");
+      const bundleUrl = new URL("./src/assets/wallet-accounts.mjs", import.meta.url);
+      walletAccountsBundle = await readFile(bundleUrl);
+    }
+    res.setHeader("content-type", "text/javascript; charset=utf-8");
+    res.setHeader("cache-control", "public, max-age=3600");
+    res.send(walletAccountsBundle);
+  } catch (error) {
+    res.status(404).json({
+      error: "not_found",
+      message: "Wallet library bundle is not available on this deployment.",
+      status: 404,
+    });
+  }
+});
+
 app.post("/api/auth/mcp-wallet-nonce", async (req, res) => {
   try {
     const nonce = await createMcpWalletAuthNonce({ env: process.env });
