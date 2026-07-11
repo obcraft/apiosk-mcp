@@ -314,8 +314,9 @@ function createAuthorizePage({
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#f8f9fb" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f8f9fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)" />
     <title>Connect ${escapeHtml(appName)}</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iZyIgeDE9IjE1OCIgeTE9IjEyMCIgeDI9Ijg2NiIgeTI9IjkwNiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzhiNWNmNiIvPjxzdG9wIG9mZnNldD0iLjUyIiBzdG9wLWNvbG9yPSIjNmIzOGQ0Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNTUxNmJlIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PGcgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2cpIiBzdHJva2Utd2lkdGg9IjQzIj48cGF0aCBkPSJNNTExLjUgMTkwLjV2MzIxIi8+PHBhdGggZD0iTTIzMSAzMzVsMjgwLjUgMTc2LjUiLz48cGF0aCBkPSJNNzkyLjUgMzM1TDUxMS41IDUxMS41Ii8+PHBhdGggZD0iTTIzMSA2NzVsMjgwLjUtMTYzLjUiLz48cGF0aCBkPSJNNzkyLjUgNjc1TDUxMS41IDUxMS41Ii8+PHBhdGggZD0iTTUxMS41IDgyNS41di0zMTQiLz48L2c+PGcgZmlsbD0idXJsKCNnKSI+PGNpcmNsZSBjeD0iNTExLjUiIGN5PSIxOTAuNSIgcj0iODAuNSIvPjxjaXJjbGUgY3g9IjIzMSIgY3k9IjMzNSIgcj0iODAiLz48Y2lyY2xlIGN4PSI3OTIuNSIgY3k9IjMzNSIgcj0iODAiLz48Y2lyY2xlIGN4PSI1MTEuNSIgY3k9IjUxMS41IiByPSIxMzUiLz48Y2lyY2xlIGN4PSIyMzEiIGN5PSI2NzUiIHI9IjgwIi8+PGNpcmNsZSBjeD0iNzkyLjUiIGN5PSI2NzUiIHI9IjgwIi8+PGNpcmNsZSBjeD0iNTExLjUiIGN5PSI4MjUuNSIgcj0iODAuNSIvPjwvZz48L3N2Zz4K" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -323,7 +324,7 @@ function createAuthorizePage({
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: light dark;
         --background: #f8f9fb;
         --foreground: #191c1e;
         --card: #ffffff;
@@ -332,12 +333,37 @@ function createAuthorizePage({
         --muted-surface: #f2f4f6;
         --primary: #6b38d4;
         --primary-strong: #5516be;
+        /* Accent for text/icons. Split from --primary because --primary doubles
+           as a filled-button background under white label text: dark mode needs
+           the button deep and the accent light, and one token can't be both. */
+        --primary-accent: #6b38d4;
         --primary-soft: #f3effd;
         --danger: #ba1a1a;
         --danger-soft: #ffdad6;
         --success: #1f8a5b;
         --success-soft: #e6f4ee;
         --shadow: 0 24px 48px -16px rgba(60, 30, 120, 0.22), 0 8px 20px -12px rgba(26, 35, 53, 0.12);
+      }
+
+      /* Follows the OS/browser preference — no toggle, no persisted choice. */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #0e1013;
+          --foreground: #e8e8ec;
+          --card: #16181d;
+          --border: #2a2d35;
+          --muted: #a1a1ae;
+          --muted-surface: #1e2128;
+          --primary: #6d3fd9;
+          --primary-strong: #8b5cf6;
+          --primary-accent: #b9a4fb;
+          --primary-soft: #201b33;
+          --danger: #ffb4ab;
+          --danger-soft: #3b1512;
+          --success: #6fd8a6;
+          --success-soft: #10281f;
+          --shadow: 0 24px 48px -16px rgba(0, 0, 0, 0.62), 0 8px 20px -12px rgba(0, 0, 0, 0.5);
+        }
       }
 
       * {
@@ -428,7 +454,7 @@ function createAuthorizePage({
       }
 
       .hero-eyebrow {
-        color: var(--primary);
+        color: var(--primary-accent);
         font-weight: 700;
         font-size: 0.85rem;
         letter-spacing: 0.01em;
@@ -467,7 +493,7 @@ function createAuthorizePage({
         display: grid;
         place-items: center;
         background: var(--primary-soft);
-        color: var(--primary);
+        color: var(--primary-accent);
         border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
       }
 
@@ -522,7 +548,7 @@ function createAuthorizePage({
 
       .eyebrow {
         margin-bottom: 6px;
-        color: var(--primary);
+        color: var(--primary-accent);
         font-size: 0.83rem;
         font-weight: 700;
       }
@@ -1283,6 +1309,9 @@ function createAuthorizePage({
             chains: [8453],
             optionalChains: [8453],
             showQrModal: true,
+            // The pairing modal is WalletConnect's own DOM, so our CSS cannot
+            // reach it; hand it the same system preference the page follows.
+            themeMode: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
             metadata: {
               name: "Apiosk",
               description: "Apiosk MCP sign-in",
@@ -1583,19 +1612,25 @@ function createPaymentAuthorizationPage({
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#f8f9fb" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0e1013" media="(prefers-color-scheme: dark)" />
   <title>Authorize payments · ${escapeHtml(appName)}</title>
   <style>
-    :root{font-family:Inter,ui-sans-serif,system-ui;color:#191c1e;background:#f8f9fb;color-scheme:light}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 520px at 88% -12%,#e7dcff,transparent 60%),#f8f9fb}
-    header{padding:22px clamp(20px,5vw,44px);font-weight:750;font-size:20px;color:#6b38d4}.page{min-height:calc(100vh - 70px);display:grid;place-items:center;padding:20px}
-    main{width:min(620px,100%);background:#fff;border:1px solid #e5e3ec;border-radius:18px;padding:30px;box-shadow:0 24px 48px -20px rgba(60,30,120,.25)}
-    .eyebrow{margin:0 0 8px;color:#6b38d4;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}h1{margin:0 0 10px;font-size:30px}p{color:#5d5a68;line-height:1.55}
-    .steps{display:flex;gap:7px;margin:20px 0}.step{height:6px;flex:1;border-radius:99px;background:#6b38d4}.step.done{background:#1f8a5b}
-    .wallets{display:grid;gap:9px;margin:18px 0}.wallet{display:flex;align-items:center;gap:12px;border:1px solid #e5e3ec;border-radius:11px;padding:13px;cursor:pointer}.wallet:has(input:checked){border-color:#6b38d4;background:#f3effd}.wallet small{display:block;color:#5d5a68;font-family:monospace;margin-top:3px;word-break:break-all}.wallet input{accent-color:#6b38d4}
-    .limits{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field input{width:100%;padding:11px;border:1px solid #d7d3df;border-radius:9px;font:inherit}
-    .consent{display:flex;gap:10px;align-items:flex-start;margin:20px 0;color:#4e4b58;font-size:14px;line-height:1.45}.consent input{margin-top:3px;accent-color:#6b38d4}
-    button{width:100%;border:0;border-radius:10px;padding:13px;font:inherit;font-weight:700;background:#6b38d4;color:#fff;cursor:pointer}.error{background:#ffdad6;color:#8c1d18;padding:11px;border-radius:9px}
-    .note{font-size:12px}.cancel{display:block;text-align:center;margin-top:14px;color:#5d5a68;text-decoration:none}@media(max-width:520px){main{padding:21px}.limits{grid-template-columns:1fr}}
+    /* Token names/values mirror the sign-in shell above so both steps of the
+       flow theme identically off the OS preference. */
+    :root{font-family:Inter,ui-sans-serif,system-ui;color-scheme:light dark;--background:#f8f9fb;--foreground:#191c1e;--card:#fff;--border:#e5e3ec;--field-border:#d7d3df;--muted:#5d5a68;--consent:#4e4b58;--primary:#6b38d4;--primary-accent:#6b38d4;--primary-soft:#f3effd;--glow:#e7dcff;--danger:#8c1d18;--danger-soft:#ffdad6;--success:#1f8a5b;--shadow:0 24px 48px -20px rgba(60,30,120,.25);color:var(--foreground);background:var(--background)}
+    @media (prefers-color-scheme:dark){:root{--background:#0e1013;--foreground:#e8e8ec;--card:#16181d;--border:#2a2d35;--field-border:#3a3e49;--muted:#a1a1ae;--consent:#b6b6c2;--primary:#6d3fd9;--primary-accent:#b9a4fb;--primary-soft:#201b33;--glow:#241a3d;--danger:#ffb4ab;--danger-soft:#3b1512;--success:#6fd8a6;--shadow:0 24px 48px -20px rgba(0,0,0,.62)}}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 520px at 88% -12%,var(--glow),transparent 60%),var(--background)}
+    header{padding:22px clamp(20px,5vw,44px);font-weight:750;font-size:20px;color:var(--primary-accent)}.page{min-height:calc(100vh - 70px);display:grid;place-items:center;padding:20px}
+    main{width:min(620px,100%);background:var(--card);border:1px solid var(--border);border-radius:18px;padding:30px;box-shadow:var(--shadow)}
+    .eyebrow{margin:0 0 8px;color:var(--primary-accent);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}h1{margin:0 0 10px;font-size:30px}p{color:var(--muted);line-height:1.55}
+    .steps{display:flex;gap:7px;margin:20px 0}.step{height:6px;flex:1;border-radius:99px;background:var(--primary)}.step.done{background:var(--success)}
+    .wallets{display:grid;gap:9px;margin:18px 0}.wallet{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:11px;padding:13px;cursor:pointer}.wallet:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}.wallet small{display:block;color:var(--muted);font-family:monospace;margin-top:3px;word-break:break-all}.wallet input{accent-color:var(--primary)}
+    .limits{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field input{width:100%;padding:11px;border:1px solid var(--field-border);border-radius:9px;font:inherit;background:var(--card);color:var(--foreground)}
+    .consent{display:flex;gap:10px;align-items:flex-start;margin:20px 0;color:var(--consent);font-size:14px;line-height:1.45}.consent input{margin-top:3px;accent-color:var(--primary)}
+    button{width:100%;border:0;border-radius:10px;padding:13px;font:inherit;font-weight:700;background:var(--primary);color:#fff;cursor:pointer}.error{background:var(--danger-soft);color:var(--danger);padding:11px;border-radius:9px}
+    .note{font-size:12px}.cancel{display:block;text-align:center;margin-top:14px;color:var(--muted);text-decoration:none}@media(max-width:520px){main{padding:21px}.limits{grid-template-columns:1fr}}
   </style></head><body><header>Apiosk</header><div class="page"><main>
     <p class="eyebrow">${escapeHtml(clientName.client_name || "AI application")}</p><h1>Authorize automatic API payments</h1>
     <p>Your identity is verified. Choose the managed wallet and hard spending limits for this connection.</p>
