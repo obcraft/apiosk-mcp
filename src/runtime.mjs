@@ -3271,8 +3271,13 @@ export function createApioskMcpRuntime(options = {}) {
       return await handleDynamicExecute(tool, argumentsObject, authInfo);
     } catch (error) {
       if (error instanceof ApioskPaymentRequiredError) {
-        return errorContent({
-          error: error.message,
+        // A valid 402 is a business state, not an MCP protocol failure. Returning
+        // isError made ChatGPT/Claude collapse it into JSON-RPC -32603 and hid
+        // the actionable funding guidance from the model.
+        return content({
+          status: "payment_required",
+          error_code: "payment.wallet_unfunded_or_unavailable",
+          message: error.message,
           hint: buildPaymentRequiredHint(authInfo),
           payment_required: error.paymentRequired,
         });

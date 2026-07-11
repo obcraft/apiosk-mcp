@@ -233,6 +233,9 @@ function sendMcpWelcome(req, res) {
 // Public Fly deployment must accept the Fly hostname instead of localhost-only
 // host validation defaults.
 const app = createMcpExpressApp({ host: "0.0.0.0" });
+// Fly terminates TLS and adds one trusted proxy hop. Without this,
+// express-rate-limit rejects X-Forwarded-For and can surface as MCP -32603.
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT || 3000);
 const { issuerUrl, mcpServerUrl } = resolveHostedMcpUrls({
   env: process.env,

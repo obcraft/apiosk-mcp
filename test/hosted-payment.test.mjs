@@ -303,3 +303,135 @@ test("sign-in still completes when the user has no payable managed wallet", asyn
     restoreFetch();
   }
 });
+
+test("production OAuth requires explicit wallet limits before returning to ChatGPT", async () => {
+  const mintedToken = "aw_live_abcdef012345_ExplicitConsentTokenSecret01";
+  const address = "0x3333333333333333333333333333333333333333";
+  let mintArgs = null;
+  const support = createHostedOAuthSupport({
+    env: WALLET_TEST_ENV,
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/sse"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+    requirePaymentAuthorization: true,
+    payableWalletLister: async () => [
+      {
+        id: "wallet_payable_1",
+        label: "ChatGPT wallet",
+        address: "0x00000000000000000000000000000000000000cc",
+        dailyLimitUsdc: 10,
+        perTxLimitUsdc: 1,
+      },
+    ],
+    connectTokenMinter: async (args) => {
+      mintArgs = args;
+      return {
+        connectToken: mintedToken,
+        walletAddress: "0x00000000000000000000000000000000000000cc",
+        walletId: "wallet_payable_1",
+      };
+    },
+  });
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-explicit-payment-client",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+  const params = {
+    state: "state_explicit",
+    scopes: ["mcp:tools"],
+    codeChallenge: "challenge_explicit",
+    redirectUri: "https://chatgpt.com/connector/oauth/callback",
+    resource: new URL("http://localhost:3000/sse"),
+  };
+  const restoreFetch = stubWalletAuthFetch({ address });
+
+  try {
+    const identityResponse = createMockResponse({
+      method: "POST",
+      body: {
+        action: "wallet_sign_in",
+        wallet_address: address,
+        wallet_message: walletMessage(address),
+        wallet_signature: "0xsignature",
+      },
+    });
+    await support.provider.authorize(client, params, identityResponse);
+    assert.equal(identityResponse.statusCode, 200);
+    assert.equal(identityResponse.redirectedTo, null, "identity alone must not redirect");
+    assert.match(identityResponse.body, /Authorize automatic API payments/);
+    const pending = identityResponse.body.match(/name="pending_authorization" value="([^"]+)"/)?.[1];
+    assert.ok(pending);
+
+    const consentResponse = createMockResponse({
+      method: "POST",
+      body: {
+        action: "authorize_payment",
+        pending_authorization: pending,
+        managed_wallet_id: "wallet_payable_1",
+        per_tx_limit_usdc: "0.75",
+        daily_limit_usdc: "12",
+        payment_consent: "yes",
+      },
+    });
+    await support.provider.authorize(client, params, consentResponse);
+    assert.equal(consentResponse.statusCode, 302);
+    assert.match(consentResponse.redirectedTo, /^https:\/\/chatgpt\.com\/connector\/oauth\/callback/);
+    assert.equal(mintArgs.walletId, "wallet_payable_1");
+    assert.equal(mintArgs.perTxLimitUsdc, "0.75");
+    assert.equal(mintArgs.dailyLimitUsdc, "12");
+    assert.equal(mintArgs.strict, true);
+  } finally {
+    restoreFetch();
+  }
+});
+
+test("production OAuth blocks the callback when no payable wallet exists", async () => {
+  const address = "0x4444444444444444444444444444444444444444";
+  const support = createHostedOAuthSupport({
+    env: WALLET_TEST_ENV,
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/sse"),
+    requirePaymentAuthorization: true,
+    payableWalletLister: async () => [],
+    connectTokenMinter: async () => {
+      throw new Error("must not mint");
+    },
+  });
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "chatgpt-no-payable-wallet",
+    client_name: "ChatGPT",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+  const restoreFetch = stubWalletAuthFetch({ address });
+  try {
+    const response = createMockResponse({
+      method: "POST",
+      body: {
+        action: "wallet_sign_in",
+        wallet_address: address,
+        wallet_message: walletMessage(address),
+        wallet_signature: "0xsignature",
+      },
+    });
+    await support.provider.authorize(
+      client,
+      {
+        state: "state_no_wallet",
+        scopes: ["mcp:tools"],
+        codeChallenge: "challenge_no_wallet",
+        redirectUri: "https://chatgpt.com/connector/oauth/callback",
+        resource: new URL("http://localhost:3000/sse"),
+      },
+      response
+    );
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.redirectedTo, null);
+    assert.match(response.body, /no active managed payment wallet/i);
+  } finally {
+    restoreFetch();
+  }
+});

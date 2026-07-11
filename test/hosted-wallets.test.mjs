@@ -189,6 +189,9 @@ test("402 hint names the managed wallet for connect-token sessions and guides wa
     }
   );
   const withTokenPayload = JSON.parse(withToken.content[0].text);
+  assert.notEqual(withToken.isError, true);
+  assert.equal(withTokenPayload.status, "payment_required");
+  assert.equal(withTokenPayload.error_code, "payment.wallet_unfunded_or_unavailable");
   assert.match(
     withTokenPayload.hint,
     /0xabcd000000000000000000000000000000000001/
@@ -201,6 +204,7 @@ test("402 hint names the managed wallet for connect-token sessions and guides wa
     SESSION_AUTH
   );
   const withoutWalletPayload = JSON.parse(withoutWallet.content[0].text);
+  assert.notEqual(withoutWallet.isError, true);
   assert.match(withoutWalletPayload.hint, /no payable managed wallet/i);
   assert.match(withoutWalletPayload.hint, /apiosk_list_wallets/);
 });

@@ -38,6 +38,12 @@ function asNumber(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function statusError(message, status = 500) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
 function isoAfterDays(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
@@ -131,6 +137,38 @@ export async function supabaseRest(
   return payload;
 }
 
+export async function listHostedPayableWallets({
+  env = process.env,
+  sessionToken,
+} = {}) {
+  const token = trimString(sessionToken);
+  const config = resolveSupabaseConfig(env);
+  if (!token || !config.configured) return [];
+
+  const rows = await supabaseRest(
+    config,
+    "agent_wallets?select=id,label,wallet_address,status,daily_limit_usdc,per_tx_limit_usdc,encrypted_private_key,created_at&status=eq.active&order=created_at.asc",
+    { sessionToken: token }
+  );
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .filter(
+      (wallet) =>
+        wallet &&
+        trimString(wallet.id) &&
+        trimString(wallet.wallet_address) &&
+        trimString(wallet.encrypted_private_key)
+    )
+    .map((wallet) => ({
+      id: wallet.id,
+      label: trimString(wallet.label) || "Managed wallet",
+      address: String(wallet.wallet_address).toLowerCase(),
+      dailyLimitUsdc: asNumber(wallet.daily_limit_usdc),
+      perTxLimitUsdc: asNumber(wallet.per_tx_limit_usdc),
+    }));
+}
+
 /**
  * Resolve the signed-in user's first payable managed wallet (active + has a
  * custodied private key) and mint an `aw_live_…` connect token authorizing it.
@@ -144,6 +182,10 @@ export async function mintHostedConnectToken({
   env = process.env,
   sessionToken,
   userId,
+  walletId,
+  dailyLimitUsdc,
+  perTxLimitUsdc,
+  strict = false,
 } = {}) {
   try {
     const token = trimString(sessionToken);
@@ -157,30 +199,41 @@ export async function mintHostedConnectToken({
       return null;
     }
 
-    const wallets = await supabaseRest(
-      config,
-      "agent_wallets?select=id,wallet_address,status,daily_limit_usdc,per_tx_limit_usdc,encrypted_private_key,created_at&status=eq.active&order=created_at.asc",
-      { sessionToken: token }
-    );
-    if (!Array.isArray(wallets)) {
-      return null;
-    }
-
-    // Watch-only wallets (no custodied key) cannot authorize payments — same
-    // guard the buyer portal enforces in createConnection.
-    const payable = wallets.find(
-      (wallet) =>
-        wallet &&
-        trimString(wallet.wallet_address) &&
-        trimString(wallet.encrypted_private_key)
-    );
+    const payableWallets = await listHostedPayableWallets({ env, sessionToken: token });
+    const requestedWalletId = trimString(walletId);
+    const payable = requestedWalletId
+      ? payableWallets.find((wallet) => wallet.id === requestedWalletId)
+      : payableWallets[0];
     if (!payable) {
+      if (strict) {
+        throw statusError(
+          "No active payable Apiosk wallet was found. Create or activate a managed wallet before connecting this app.",
+          400
+        );
+      }
       return null;
     }
 
-    const address = String(payable.wallet_address).toLowerCase();
-    const dailyLimit = asNumber(payable.daily_limit_usdc);
-    const perTxLimit = asNumber(payable.per_tx_limit_usdc);
+    const requestedDaily = dailyLimitUsdc === undefined ? payable.dailyLimitUsdc : Number(dailyLimitUsdc);
+    const requestedPerTx = perTxLimitUsdc === undefined ? payable.perTxLimitUsdc : Number(perTxLimitUsdc);
+    if (!Number.isFinite(requestedDaily) || requestedDaily <= 0) {
+      throw statusError("Daily spending limit must be greater than 0 USDC.", 400);
+    }
+    if (!Number.isFinite(requestedPerTx) || requestedPerTx <= 0) {
+      throw statusError("Per-request spending limit must be greater than 0 USDC.", 400);
+    }
+    if (requestedPerTx > requestedDaily) {
+      throw statusError("Per-request spending limit cannot exceed the daily limit.", 400);
+    }
+    // Keep accidental approvals bounded. These are authorization guardrails,
+    // not account balances; higher limits can still be configured in the portal.
+    if (requestedDaily > 1000 || requestedPerTx > 100) {
+      throw statusError("MCP limits may not exceed 1,000 USDC/day or 100 USDC/request.", 400);
+    }
+
+    const address = payable.address;
+    const dailyLimit = requestedDaily;
+    const perTxLimit = requestedPerTx;
     const { token: connectToken, tokenHash, tokenPrefix } = generateConnectToken();
     const expiresAt = isoAfterDays(CONNECT_TOKEN_TTL_DAYS);
     const permissions = {
@@ -226,7 +279,13 @@ export async function mintHostedConnectToken({
       await supabaseRest(config, "agent_wallet_connect_token_wallets", {
         method: "POST",
         sessionToken: token,
-        body: [{ token_id: tokenId, wallet_id: payable.id, user_id: uid }],
+        body: [{
+          token_id: tokenId,
+          wallet_id: payable.id,
+          user_id: uid,
+          daily_limit_usdc: dailyLimit,
+          per_tx_limit_usdc: perTxLimit,
+        }],
       });
     } catch (joinError) {
       // Roll back the dangling token so a failed link never leaves an
@@ -260,6 +319,7 @@ export async function mintHostedConnectToken({
         error instanceof Error ? error.message : String(error)
       }`
     );
+    if (strict) throw error;
     return null;
   }
 }

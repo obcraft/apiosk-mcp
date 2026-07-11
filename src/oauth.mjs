@@ -10,7 +10,10 @@ import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth
 import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/metadata.js";
 
 import { isProviderApiKey, verifyProviderKey } from "./publisher.mjs";
-import { mintHostedConnectToken } from "./hosted-payment.mjs";
+import {
+  listHostedPayableWallets,
+  mintHostedConnectToken,
+} from "./hosted-payment.mjs";
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
@@ -1541,6 +1544,70 @@ function createAuthorizePage({
 </html>`;
 }
 
+function createPaymentAuthorizationPage({
+  actionPath,
+  appName,
+  clientName,
+  oauthParams,
+  pendingAuthorization,
+  wallets,
+  errorMessage = "",
+}) {
+  const scope = Array.isArray(oauthParams.scopes) ? oauthParams.scopes.join(" ") : "";
+  const resource = oauthParams.resource ? oauthParams.resource.href : "";
+  const hidden = [
+    ["client_id", clientName.client_id],
+    ["redirect_uri", oauthParams.redirectUri],
+    ["response_type", "code"],
+    ["code_challenge", oauthParams.codeChallenge],
+    ["code_challenge_method", "S256"],
+    ["scope", scope],
+    ["state", oauthParams.state || ""],
+    ["resource", resource],
+    ["pending_authorization", pendingAuthorization],
+  ]
+    .map(([name, value]) => `<input type="hidden" name="${escapeHtml(name)}" value="${escapeHtml(value)}" />`)
+    .join("\n");
+  const options = wallets
+    .map(
+      (wallet, index) => `<label class="wallet ${index === 0 ? "selected" : ""}">
+        <input type="radio" name="managed_wallet_id" value="${escapeHtml(wallet.id)}" ${index === 0 ? "checked" : ""} required />
+        <span><strong>${escapeHtml(wallet.label)}</strong><small>${escapeHtml(wallet.address)}</small></span>
+      </label>`
+    )
+    .join("\n");
+  const first = wallets[0];
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Authorize payments · ${escapeHtml(appName)}</title>
+  <style>
+    :root{font-family:Inter,ui-sans-serif,system-ui;color:#191c1e;background:#f8f9fb;color-scheme:light}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(900px 520px at 88% -12%,#e7dcff,transparent 60%),#f8f9fb}
+    header{padding:22px clamp(20px,5vw,44px);font-weight:750;font-size:20px;color:#6b38d4}.page{min-height:calc(100vh - 70px);display:grid;place-items:center;padding:20px}
+    main{width:min(620px,100%);background:#fff;border:1px solid #e5e3ec;border-radius:18px;padding:30px;box-shadow:0 24px 48px -20px rgba(60,30,120,.25)}
+    .eyebrow{margin:0 0 8px;color:#6b38d4;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}h1{margin:0 0 10px;font-size:30px}p{color:#5d5a68;line-height:1.55}
+    .steps{display:flex;gap:7px;margin:20px 0}.step{height:6px;flex:1;border-radius:99px;background:#6b38d4}.step.done{background:#1f8a5b}
+    .wallets{display:grid;gap:9px;margin:18px 0}.wallet{display:flex;align-items:center;gap:12px;border:1px solid #e5e3ec;border-radius:11px;padding:13px;cursor:pointer}.wallet:has(input:checked){border-color:#6b38d4;background:#f3effd}.wallet small{display:block;color:#5d5a68;font-family:monospace;margin-top:3px;word-break:break-all}.wallet input{accent-color:#6b38d4}
+    .limits{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field label{display:block;font-size:13px;font-weight:650;margin-bottom:6px}.field input{width:100%;padding:11px;border:1px solid #d7d3df;border-radius:9px;font:inherit}
+    .consent{display:flex;gap:10px;align-items:flex-start;margin:20px 0;color:#4e4b58;font-size:14px;line-height:1.45}.consent input{margin-top:3px;accent-color:#6b38d4}
+    button{width:100%;border:0;border-radius:10px;padding:13px;font:inherit;font-weight:700;background:#6b38d4;color:#fff;cursor:pointer}.error{background:#ffdad6;color:#8c1d18;padding:11px;border-radius:9px}
+    .note{font-size:12px}.cancel{display:block;text-align:center;margin-top:14px;color:#5d5a68;text-decoration:none}@media(max-width:520px){main{padding:21px}.limits{grid-template-columns:1fr}}
+  </style></head><body><header>Apiosk</header><div class="page"><main>
+    <p class="eyebrow">${escapeHtml(clientName.client_name || "AI application")}</p><h1>Authorize automatic API payments</h1>
+    <p>Your identity is verified. Choose the managed wallet and hard spending limits for this connection.</p>
+    <div class="steps" aria-label="Authorization progress"><span class="step done"></span><span class="step done"></span><span class="step"></span></div>
+    ${errorMessage ? `<div class="error">${escapeHtml(errorMessage)}</div>` : ""}
+    <form method="post" action="${escapeHtml(actionPath)}">${hidden}<input type="hidden" name="action" value="authorize_payment" />
+      <div class="wallets">${options}</div>
+      <div class="limits"><div class="field"><label for="per_tx">Maximum per request (USDC)</label><input id="per_tx" name="per_tx_limit_usdc" type="number" min="0.000001" max="100" step="0.000001" value="${escapeHtml(first?.perTxLimitUsdc || 1)}" required /></div>
+      <div class="field"><label for="daily">Maximum per day (USDC)</label><input id="daily" name="daily_limit_usdc" type="number" min="0.000001" max="1000" step="0.000001" value="${escapeHtml(first?.dailyLimitUsdc || 10)}" required /></div></div>
+      <label class="consent"><input type="checkbox" name="payment_consent" value="yes" required /><span>I authorize ${escapeHtml(clientName.client_name || "this app")} to make pay-per-call x402 payments from this wallet within these limits. I can revoke the connection at any time.</span></label>
+      <button type="submit">Authorize and return to ${escapeHtml(clientName.client_name || "app")}</button>
+    </form><p class="note">Only this MCP connection receives the scoped token. Direct x402 payments and other Apiosk connections are unchanged.</p>
+  </main></div></body></html>`;
+}
+
 function resolveMcpWalletAuthConfig(env = process.env) {
   const supabaseUrl = normalizeBaseUrl(
     env.APIOSK_SUPABASE_URL || env.SUPABASE_URL,
@@ -1812,6 +1879,8 @@ class ApioskHostedOAuthProvider {
     appName,
     resourceName,
     connectTokenMinter,
+    payableWalletLister,
+    requirePaymentAuthorization,
   }) {
     this.env = env;
     this.secret = secret;
@@ -1822,6 +1891,12 @@ class ApioskHostedOAuthProvider {
     // Injectable so tests can bypass the Supabase round-trip; defaults to the
     // real hosted-payment minter.
     this.connectTokenMinter = connectTokenMinter || mintHostedConnectToken;
+    this.payableWalletLister = payableWalletLister || listHostedPayableWallets;
+    // Production always uses the explicit two-step consent screen. Existing
+    // test/custom minters keep their legacy single-step behavior unless they
+    // explicitly opt in, so this remains an additive integration surface.
+    this.requirePaymentAuthorization =
+      requirePaymentAuthorization ?? !connectTokenMinter;
     this.clientsStore = new ApioskOAuthClientsStore(secret);
     // Audiences we honour on an access token. A client that connected via
     // /sse (ChatGPT) requests resource=<origin>/sse; one via /mcp requests
@@ -1856,6 +1931,19 @@ class ApioskHostedOAuthProvider {
             oauthParams: params,
             walletEnabled: isMcpWalletAuthConfigured(this.env),
             walletConnectProjectId: resolveWalletConnectProjectId(this.env),
+            ...options,
+          })
+        );
+    const renderPaymentPage = (status, options) =>
+      res
+        .status(status)
+        .setHeader("content-type", "text/html; charset=utf-8")
+        .send(
+          createPaymentAuthorizationPage({
+            actionPath: new URL("/authorize", this.issuerUrl).pathname,
+            appName: this.appName,
+            clientName: client,
+            oauthParams: params,
             ...options,
           })
         );
@@ -1897,7 +1985,33 @@ class ApioskHostedOAuthProvider {
           signature: req.body.wallet_signature,
           method: req.body.wallet_method,
         });
-        await this.finishAuthorization(res, client, params, session);
+        if (!this.requirePaymentAuthorization) {
+          await this.finishAuthorization(res, client, params, session);
+          return;
+        }
+        const wallets = await this.payableWalletLister({
+          env: this.env,
+          sessionToken: trimString(session.session_token),
+        });
+        if (!wallets.length) {
+          renderPage(400, {
+            errorMessage:
+              "Your identity is verified, but this account has no active managed payment wallet. Create and fund a managed Apiosk wallet, then connect again. A browser wallet alone cannot authorize unattended payments.",
+          });
+          return;
+        }
+        const pendingAuthorization = buildIssuedToken(
+          this.secret,
+          "payment_authorization",
+          {
+            clientId: client.client_id,
+            redirectUri: params.redirectUri,
+            session,
+          },
+          AUTHORIZATION_CODE_TTL_SECONDS,
+          normalizeSessionExpiry(session.expires_at)
+        ).token;
+        renderPaymentPage(200, { pendingAuthorization, wallets });
       } catch (error) {
         renderPage(error.status && error.status >= 400 ? error.status : 400, {
           errorMessage:
@@ -1909,12 +2023,61 @@ class ApioskHostedOAuthProvider {
       return;
     }
 
+    if (submittedAction === "authorize_payment") {
+      let pendingAuthorization = trimString(req.body.pending_authorization);
+      let wallets = [];
+      try {
+        const pending = parseSignedToken(this.secret, pendingAuthorization);
+        if (
+          pending.typ !== "payment_authorization" ||
+          pending.clientId !== client.client_id ||
+          pending.redirectUri !== params.redirectUri ||
+          !pending.session
+        ) {
+          throw statusError("Payment authorization is invalid or expired. Start again.", 400);
+        }
+        if (trimString(req.body.payment_consent) !== "yes") {
+          throw statusError("Confirm the payment authorization to continue.", 400);
+        }
+        wallets = await this.payableWalletLister({
+          env: this.env,
+          sessionToken: trimString(pending.session.session_token),
+        });
+        const mintedConnect = await this.connectTokenMinter({
+          env: this.env,
+          sessionToken: trimString(pending.session.session_token),
+          userId: trimString(pending.session.user_id),
+          walletId: trimString(req.body.managed_wallet_id),
+          dailyLimitUsdc: req.body.daily_limit_usdc,
+          perTxLimitUsdc: req.body.per_tx_limit_usdc,
+          strict: true,
+        });
+        if (!mintedConnect?.connectToken) {
+          throw statusError("Could not create the scoped Apiosk payment token. Try again.", 502);
+        }
+        await this.finishAuthorization(res, client, params, pending.session, mintedConnect);
+      } catch (error) {
+        if (!wallets.length) {
+          renderPage(error.status && error.status >= 400 ? error.status : 400, {
+            errorMessage: error instanceof Error ? error.message : "Payment authorization failed.",
+          });
+        } else {
+          renderPaymentPage(error.status && error.status >= 400 ? error.status : 400, {
+            pendingAuthorization,
+            wallets,
+            errorMessage: error instanceof Error ? error.message : "Payment authorization failed.",
+          });
+        }
+      }
+      return;
+    }
+
     renderPage(400, {
       errorMessage: "Sign in with a wallet to continue.",
     });
   }
 
-  async finishAuthorization(res, client, params, session) {
+  async finishAuthorization(res, client, params, session, authorizedConnect = null) {
     const sessionToken = trimString(session.session_token);
     const normalizedSessionExpiry = normalizeSessionExpiry(session.expires_at);
 
@@ -1923,13 +2086,13 @@ class ApioskHostedOAuthProvider {
     // (a browser wallet cannot be settled from server-side). Best-effort — if
     // the user has no managed wallet, or minting fails, sign-in still completes
     // and paid calls fall back to the same 402 as before.
-    const mintedConnect = sessionToken
+    const mintedConnect = authorizedConnect || (sessionToken
       ? await this.connectTokenMinter({
           env: this.env,
           sessionToken,
           userId: trimString(session.user_id),
         })
-      : null;
+      : null);
     const apioskConnectToken = trimString(mintedConnect?.connectToken) || undefined;
     const apioskConnectWalletAddress =
       trimString(mintedConnect?.walletAddress) || undefined;
@@ -2339,6 +2502,8 @@ export function createHostedOAuthSupport({
   appName = "Apiosk",
   resourceName = "Apiosk MCP",
   connectTokenMinter,
+  payableWalletLister,
+  requirePaymentAuthorization,
 } = {}) {
   const secret = resolveOAuthSecret(env);
   const provider = new ApioskHostedOAuthProvider({
@@ -2349,6 +2514,8 @@ export function createHostedOAuthSupport({
     appName,
     resourceName,
     connectTokenMinter,
+    payableWalletLister,
+    requirePaymentAuthorization,
   });
 
   const oauthMetadata = createOAuthMetadata({
