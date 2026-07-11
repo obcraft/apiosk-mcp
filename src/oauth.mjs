@@ -959,7 +959,7 @@ function createAuthorizePage({
               <p class="hero-eyebrow">Apiosk payment infrastructure</p>
               <h2>Pay for any API, straight from your agent</h2>
             </div>
-            <p class="lead">Connect your wallet once to let ${escapeHtml(clientName.client_name || "your AI app")} discover, call, and pay for APIs and data through the Apiosk gateway &mdash; settled automatically in USDC.</p>
+            <p class="lead">Sign in once to let ${escapeHtml(clientName.client_name || "your AI app")} discover and call APIs through Apiosk. Paid calls use your managed Apiosk wallet or credits when configured.</p>
             <div class="value-list">
               <div class="value">
                 <span class="value-icon">
@@ -975,8 +975,8 @@ function createAuthorizePage({
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5" /><path d="M16 12h.01" /></svg>
                 </span>
                 <div>
-                  <div class="value-title">One wallet for everything</div>
-                  <div class="value-desc">Your wallet is both your sign-in and your payment method.</div>
+                  <div class="value-title">One secure connection</div>
+                  <div class="value-desc">Your wallet proves identity; managed wallet or credits authorize automatic payments.</div>
                 </div>
               </div>
               <div class="value">
@@ -996,7 +996,7 @@ function createAuthorizePage({
               <p class="eyebrow">${escapeHtml(clientName.client_name || "Remote MCP client")}</p>
               <h1>Connect ${escapeHtml(appName)}</h1>
             </div>
-            <p>Connect your wallet to let this app pay for gateway calls on your behalf. Your wallet is your sign-in &mdash; no password needed.</p>
+            <p>Connect a wallet to sign in without a password. Automatic paid calls require a funded managed Apiosk wallet or credits on your account.</p>
           </header>
           ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
           ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
@@ -1044,7 +1044,7 @@ function createAuthorizePage({
             ${
               walletEnabled
                 ? `<div id="create-panel" class="create-panel hidden">
-              <p class="create-note">Generate a brand-new self-custody wallet right here in your browser. The recovery phrase never leaves this tab &mdash; Apiosk only ever sees the public address. It becomes your sign-in and your payment wallet.</p>
+              <p class="create-note">Generate a new self-custody sign-in wallet in your browser. The recovery phrase never leaves this tab and Apiosk only sees the public address. This wallet proves your identity; automatic MCP payments require a managed Apiosk wallet or credits.</p>
               <div id="create-start">
                 <button id="create-generate" class="primary-wide" type="button">Generate new wallet</button>
               </div>

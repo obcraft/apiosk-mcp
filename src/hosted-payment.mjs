@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 const DEFAULT_SUPABASE_URL = "https://jgjoiyqdyypouskftzeq.supabase.co";
 // Matches the buyer portal's DEFAULT_EXPIRY_DAYS for created connections.
 const CONNECT_TOKEN_TTL_DAYS = 90;
-const CONNECT_TOKEN_LABEL = "ChatGPT (MCP sign-in)";
+const CONNECT_TOKEN_LABEL = "Apiosk MCP connection";
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";

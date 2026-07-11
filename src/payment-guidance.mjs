@@ -3,7 +3,7 @@
 // This module turns the Apiosk settlement model into agent-readable guidance
 // that is surfaced at discovery time (search/explore/get_api) and through the
 // dedicated apiosk_payment_guide tool. It covers BOTH sides of the gateway:
-//   - buyers: how an agent pays for a paid API call (USDC x402 or prepaid credits),
+//   - buyers: how an agent pays for a paid API call (USDC over x402),
 //     tailored to what auth the runtime currently has.
 //   - providers (sellers): how to publish an API so other agents can pay for it.
 //
@@ -23,21 +23,12 @@ export const SETTLEMENT_RAILS = [
     best_for: "Autonomous agents that hold a funded Base USDC wallet.",
     setup: "Fund a wallet with Base mainnet USDC, then settlement happens automatically per call.",
   },
-  {
-    id: "credits",
-    label: "Prepaid credits",
-    summary:
-      "A human tops up a credits balance once and the agent spends it down per call.",
-    best_for: "Letting a human fund usage once and then handing the agent autonomy.",
-    setup: "Top up credits via the Apiosk buyer portal; the agent spends them down automatically.",
-  },
 ];
 
 // The order the gateway tries to cover a paid call. A 402 is only returned
 // when none of the buyer's enabled rails can settle.
 export const RAIL_FALLBACK_ORDER = [
   "1. USDC / x402 wallet when the agent can produce a payment proof.",
-  "2. Prepaid credits balance.",
 ];
 
 function resolvePrice(api) {
@@ -83,7 +74,7 @@ function describeReadiness(capability = {}, { localWalletsEnabled = false, mode 
         status: "ready_to_pay",
         active_method: "Apiosk connect token",
         detail:
-          "A managed connect token is active. The gateway settles each call over the buyer's enabled rails (USDC managed wallet or credits) server-side, no signing needed here.",
+          "A managed connect token is active. The gateway settles each call from the authorized USDC managed wallet server-side, no signing needed here.",
       };
     case "wallet_address":
       return {
@@ -91,7 +82,7 @@ function describeReadiness(capability = {}, { localWalletsEnabled = false, mode 
         status: "setup_required",
         active_method: "wallet address only",
         detail:
-          "A wallet address is known but no signing key or connect token is configured, so this surface cannot settle x402 calls itself. The gateway may still settle over credits if a balance exists for this buyer.",
+          "A wallet address is known but no signing key or connect token is configured, so this surface cannot settle x402 calls itself.",
       };
     default:
       return {
@@ -118,23 +109,23 @@ function buildHowToPaySteps({ readiness, localWalletsEnabled, mode, slug }) {
     return [
       execHint,
       "Settlement is automatic, the gateway charges the active method and returns the result.",
-      "If a call still returns payment_required, fund the wallet (apiosk_show_wallet_funding) or enable another rail, then retry.",
+      "If a call still returns payment_required, fund the wallet with USDC on Base and retry.",
     ];
   }
 
   if (localWalletsEnabled) {
     return [
       "Run apiosk_get_started to create or select a local wallet (or import a dashboard connect string).",
-      "Fund the wallet with Base mainnet USDC using apiosk_show_wallet_funding, or top up credits for managed settlement.",
+      "Fund the wallet with Base mainnet USDC using apiosk_show_wallet_funding.",
       execHint,
     ];
   }
 
   if (mode === "hosted") {
     return [
-      "Authorize the Apiosk app when your MCP client prompts, so calls settle against your managed wallet/rails.",
+      "Authorize the Apiosk app when your MCP client prompts, so calls settle against your managed wallet.",
       execHint,
-      "If a call returns payment_required, top up credits via the buyer portal or fund your managed wallet, then retry.",
+      "If a call returns payment_required, fund your managed wallet with USDC on Base, then retry.",
     ];
   }
 
@@ -192,7 +183,7 @@ export function buildPaymentGuidance({
     settlement_rails: SETTLEMENT_RAILS,
     rail_fallback_order: RAIL_FALLBACK_ORDER,
     on_payment_required:
-      "A paid call can return a structured payment_required error when no enabled rail can cover it. Fund the wallet or top up credits, then retry the same call.",
+      "A paid call can return a structured payment_required error when the wallet cannot cover it. Fund the wallet with USDC on Base, then retry the same call.",
     base_chain: { chain_id: BASE_CHAIN_ID, usdc_contract: BASE_USDC_CONTRACT, network: "base" },
     learn_more: "Call apiosk_help with topic='rails' for the full settlement model.",
   };

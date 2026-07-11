@@ -5,6 +5,7 @@ import path from "node:path";
 import { readFile, rm } from "node:fs/promises";
 
 import { createApioskMcpRuntime } from "../src/runtime.mjs";
+import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "../src/result-canvas.mjs";
 
 function createFakeClient() {
   return {
@@ -360,12 +361,26 @@ test("search surfaces a payment hint and provider pointer so agents learn how to
   const payload = JSON.parse(result.content[0].text);
 
   assert.ok(payload.payment, "search response should carry a payment hint");
-  assert.deepEqual(payload.payment.settlement_rails, ["usdc_x402", "credits"]);
+  assert.deepEqual(payload.payment.settlement_rails, ["usdc_x402"]);
   assert.ok(payload.payment.how_to_pay, "payment hint should explain how to pay");
   assert.match(payload.for_providers, /apiosk_payment_guide|apiosk_publish_api/);
   assert.match(payload.next_steps, /apiosk_payment_guide/);
 
   await rm(homeDir, { recursive: true, force: true });
+});
+
+test("paid execution advertises a credential-free result canvas", async () => {
+  const runtime = createApioskMcpRuntime({
+    client: createFakeClient(),
+    env: {},
+    enableLocalWallets: false,
+  });
+  const tools = await runtime.listTools();
+  const execute = tools.find((tool) => tool.name === "apiosk_execute");
+  assert.equal(execute?._meta?.["openai/outputTemplate"], APIO_RESULT_CANVAS_URI);
+  assert.equal(execute?._meta?.ui?.resourceUri, APIO_RESULT_CANVAS_URI);
+  assert.match(APIO_RESULT_CANVAS_HTML, /window\.openai/);
+  assert.doesNotMatch(APIO_RESULT_CANVAS_HTML, /connect.token|private.key|authorization/i);
 });
 
 test("get_api attaches a listing-scoped buyer payment guide with price", async () => {

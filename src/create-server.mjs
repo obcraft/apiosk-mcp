@@ -2,8 +2,11 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
+import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas.mjs";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
@@ -12,7 +15,7 @@ export const SERVER_INFO = {
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.
-export const SERVER_INSTRUCTIONS = `Apiosk is a pay-per-call API marketplace for AI agents. Every listed API is callable through the Apiosk gateway (https://gateway.apiosk.com) and priced per request in USDC via the x402 payment protocol (402 Payment Required -> pay -> retry). SEPA credits are available as an alternative settlement rail.
+export const SERVER_INSTRUCTIONS = `Apiosk is a pay-per-call API marketplace for AI agents. Every listed API is callable through the Apiosk gateway (https://gateway.apiosk.com) and priced per request in USDC via the x402 payment protocol (402 Payment Required -> pay -> retry).
 
 Two roles, two workflows:
 
@@ -45,8 +48,17 @@ export function createApioskMcpServer(options = {}) {
   const runtime = resolveRuntime(options);
   const server = new Server(
     SERVER_INFO,
-    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS }
+    { capabilities: { tools: {}, resources: {} }, instructions: SERVER_INSTRUCTIONS }
   );
+
+  server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    resources: [{ uri: APIO_RESULT_CANVAS_URI, name: "Apiosk paid result canvas", mimeType: "text/html+skybridge" }],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    if (request.params.uri !== APIO_RESULT_CANVAS_URI) throw new Error("Unknown Apiosk resource");
+    return { contents: [{ uri: APIO_RESULT_CANVAS_URI, mimeType: "text/html+skybridge", text: APIO_RESULT_CANVAS_HTML }] };
+  });
 
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => ({
     tools: await runtime.listTools(extra.authInfo),

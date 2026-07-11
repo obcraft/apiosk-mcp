@@ -1,0 +1,16 @@
+export const APIO_RESULT_CANVAS_URI = "ui://apiosk/result-canvas.html";
+
+// Generic, credential-free result renderer. Paid data is fetched server-side by
+// apiosk_execute; only structuredContent reaches this sandboxed UI.
+export const APIO_RESULT_CANVAS_HTML = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}body{margin:0;padding:16px;background:transparent;color:CanvasText}.shell{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:16px;padding:16px;background:color-mix(in srgb,Canvas 94%,transparent)}h2{font-size:16px;margin:0 0 4px}.muted{opacity:.65;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:14px}.metric{padding:12px;border-radius:12px;background:color-mix(in srgb,CanvasText 6%,transparent)}.metric b{display:block;font-size:20px;margin-top:5px}.metric span{font-size:11px;opacity:.65;overflow-wrap:anywhere}canvas{width:100%;height:180px;margin-top:14px}pre{white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,SFMono-Regular,monospace;max-height:260px;overflow:auto;margin:14px 0 0}.hidden{display:none}</style></head>
+<body><main class="shell"><h2 id="title">Apiosk result</h2><div class="muted">Paid data fetched securely through Apiosk</div><div id="metrics" class="grid"></div><canvas id="chart" class="hidden" height="180"></canvas><pre id="json"></pre></main>
+<script>
+const metrics=document.getElementById('metrics'),chart=document.getElementById('chart'),json=document.getElementById('json');
+function unwrap(v){if(!v||typeof v!=='object')return v;return v.result&&typeof v.result==='object'?v.result:v.data&&typeof v.data==='object'?v.data:v}
+function flatten(v,p='',out=[]){if(!v||typeof v!=='object'||out.length>18)return out;for(const [k,x] of Object.entries(v)){const key=p?p+'.'+k:k;if(typeof x==='number'&&Number.isFinite(x))out.push([key,x]);else if(x&&typeof x==='object'&&!Array.isArray(x))flatten(x,key,out)}return out}
+function render(value){const data=unwrap(value);if(data==null)return;const nums=flatten(data);metrics.replaceChildren(...nums.slice(0,8).map(([k,v])=>{const d=document.createElement('div');d.className='metric';const s=document.createElement('span');s.textContent=k;const b=document.createElement('b');b.textContent=new Intl.NumberFormat(undefined,{maximumFractionDigits:2}).format(v);d.append(s,b);return d}));json.textContent=JSON.stringify(data,null,2);if(nums.length>1){chart.classList.remove('hidden');const dpr=devicePixelRatio||1,w=chart.clientWidth||600,h=180;chart.width=w*dpr;chart.height=h*dpr;const c=chart.getContext('2d');c.scale(dpr,dpr);const vals=nums.slice(0,10),max=Math.max(...vals.map(x=>Math.abs(x[1])),1),bw=w/vals.length*.62,gap=w/vals.length;c.fillStyle=getComputedStyle(document.body).color;c.globalAlpha=.72;vals.forEach((x,i)=>{const bh=Math.max(2,Math.abs(x[1])/max*(h-34));c.fillRect(i*gap+gap*.19,h-bh-18,bw,bh)});c.globalAlpha=1}else chart.classList.add('hidden')}
+function current(){return window.openai?.toolOutput??window.openai?.structuredContent??null}render(current());window.addEventListener('openai:set_globals',e=>render(e.detail?.globals?.toolOutput??e.detail?.toolOutput));
+</script></body></html>`;

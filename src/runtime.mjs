@@ -518,7 +518,7 @@ const PUBLISH_TOOLS = [
 
 const HELP_TOOL = {
   name: "apiosk_help",
-  description: "Explain what Apiosk MCP is, how to connect it, how auth and x402 payments work, the settlement rails (USDC and credits), and the recommended workflow for discovery, wallets, and publishing.",
+  description: "Explain what Apiosk MCP is, how to connect it, how auth and USDC/x402 payments work, and the recommended workflow for discovery, wallets, and publishing.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -530,7 +530,7 @@ const HELP_TOOL = {
       topic: {
         type: "string",
         enum: ["overview", "setup", "auth", "workflow", "payments", "rails", "wallets", "publish", "configure"],
-        description: "Optional help topic. Defaults to overview. Use 'rails' to learn how settlement works across USDC and credits.",
+        description: "Optional help topic. Defaults to overview. Use 'rails' to learn how USDC/x402 settlement works.",
       },
     },
   },
@@ -655,6 +655,12 @@ const EXECUTE_TOOL = {
     openWorldHint: true,
     destructiveHint: true,
   },
+  _meta: {
+    "openai/outputTemplate": "ui://apiosk/result-canvas.html",
+    "openai/toolInvocation/invoking": "Fetching and paying for data…",
+    "openai/toolInvocation/invoked": "Paid data received",
+    ui: { resourceUri: "ui://apiosk/result-canvas.html" },
+  },
   inputSchema: {
     type: "object",
     required: ["slug"],
@@ -704,7 +710,7 @@ const HEALTH_TOOL = {
 const PAYMENT_GUIDE_TOOL = {
   name: "apiosk_payment_guide",
   description:
-    "Explain how to pay through the Apiosk gateway. Returns a buyer guide (how an agent settles a paid API call over USDC/x402 or credits, tailored to the current auth) and a provider guide (how to publish an API and get paid). Pass slug to scope buyer guidance to one listing, or role to pick a side.",
+    "Explain how to pay through the Apiosk gateway. Returns a buyer guide (how an agent settles a paid API call over USDC/x402, tailored to the current auth) and a provider guide (how to publish an API and get paid). Pass slug to scope buyer guidance to one listing, or role to pick a side.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -753,7 +759,6 @@ const HOSTED_DISCOVERY_TOOLS = [
 // apiosk_show_wallet_funding is intentionally excluded, it resolves a local /
 // env wallet, which does not exist on the hosted surface.
 const HOSTED_MANAGED_TOOLS = [
-  ...REMOTE_CREDITS_TOOLS,
   ...DASHBOARD_WALLET_TOOLS.filter((tool) => tool.name !== "apiosk_show_wallet_funding"),
 ];
 
@@ -897,6 +902,12 @@ function buildDynamicTools(catalog, reservedTools) {
         additionalProperties: true,
       },
       annotations: api.listing_metadata?.mcp_tool?.annotations,
+      _meta: {
+        "openai/outputTemplate": "ui://apiosk/result-canvas.html",
+        "openai/toolInvocation/invoking": `Fetching ${api.name || api.slug}…`,
+        "openai/toolInvocation/invoked": `${api.name || api.slug} received`,
+        ui: { resourceUri: "ui://apiosk/result-canvas.html" },
+      },
     });
 
     toolIndex.set(toolName, {
