@@ -1301,7 +1301,11 @@ function createAuthorizePage({
         }
 
         async function connectWalletConnect() {
-          const mod = await import("https://esm.sh/@walletconnect/ethereum-provider@2.23.9?bundle");
+          // Same-origin bundle (see server.mjs /assets/walletconnect-provider.mjs):
+          // embedded browsers like the ChatGPT iOS app block cross-origin dynamic
+          // module imports, so a CDN import fails there with
+          // "Importing a module script failed."
+          const mod = await import("/assets/walletconnect-provider.mjs");
           const EthereumProvider = mod.EthereumProvider || (mod.default && mod.default.EthereumProvider) || mod.default;
           const origin = window.location.origin;
           const provider = await EthereumProvider.init({

@@ -551,9 +551,14 @@ test("authorize page offers wallet creation and created_wallet sign-ins reach wa
       "created_wallet",
       "generateMnemonic",
       "/assets/wallet-accounts.mjs",
+      "/assets/walletconnect-provider.mjs",
     ]) {
       assert.ok(html.includes(marker), `authorize page should include ${marker}`);
     }
+    // Sign-in must never depend on a third-party CDN at click time: embedded
+    // browsers (e.g. the ChatGPT iOS app) block cross-origin dynamic module
+    // imports with "Importing a module script failed."
+    assert.ok(!html.includes("esm.sh"), "authorize page must not import from esm.sh");
 
     // A created-wallet sign-in must forward method=created_wallet to the
     // wallet-auth function (it stamps auth_method on the new account).
