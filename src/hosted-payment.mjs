@@ -24,6 +24,8 @@ const DEFAULT_SUPABASE_URL = "https://jgjoiyqdyypouskftzeq.supabase.co";
 // Matches the buyer portal's DEFAULT_EXPIRY_DAYS for created connections.
 const CONNECT_TOKEN_TTL_DAYS = 90;
 const CONNECT_TOKEN_LABEL = "Apiosk MCP connection";
+const BASE_CHAIN_ID = 8453;
+const BASE_USDC_ADDRESS = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -153,20 +155,118 @@ export async function listHostedPayableWallets({
   if (!Array.isArray(rows)) return [];
 
   return rows
-    .filter(
-      (wallet) =>
-        wallet &&
-        trimString(wallet.id) &&
-        trimString(wallet.wallet_address) &&
-        trimString(wallet.encrypted_private_key)
-    )
+    .filter((wallet) => wallet && trimString(wallet.id) && trimString(wallet.wallet_address))
     .map((wallet) => ({
       id: wallet.id,
       label: trimString(wallet.label) || "Managed wallet",
       address: String(wallet.wallet_address).toLowerCase(),
       dailyLimitUsdc: asNumber(wallet.daily_limit_usdc),
       perTxLimitUsdc: asNumber(wallet.per_tx_limit_usdc),
+      custodial: Boolean(trimString(wallet.encrypted_private_key)),
     }));
+}
+
+export async function prepareHostedPaymentWallets({
+  env = process.env,
+  sessionToken,
+  userId,
+  connectedAddress,
+} = {}) {
+  const token = trimString(sessionToken);
+  const uid = trimString(userId);
+  const address = trimString(connectedAddress).toLowerCase();
+  const config = resolveSupabaseConfig(env);
+  if (!token || !uid || !config.configured || !/^0x[a-f0-9]{40}$/.test(address)) return [];
+
+  let wallets = await listHostedPayableWallets({ env, sessionToken: token });
+  if (!wallets.some((wallet) => wallet.address === address)) {
+    const inserted = await supabaseRest(config, "agent_wallets", {
+      method: "POST",
+      sessionToken: token,
+      prefer: "return=representation",
+      body: {
+        user_id: uid,
+        label: "Connected wallet",
+        wallet_address: address,
+        chain: "base",
+        chain_id: BASE_CHAIN_ID,
+        status: "active",
+        daily_limit_usdc: 10,
+        per_tx_limit_usdc: 1,
+      },
+    });
+    if (!Array.isArray(inserted) || !inserted.length) {
+      throw statusError("Could not register the connected wallet for payments.", 502);
+    }
+    wallets = await listHostedPayableWallets({ env, sessionToken: token });
+  }
+
+  return wallets
+    .filter((wallet) => wallet.custodial || wallet.address === address)
+    .map((wallet) => ({
+      ...wallet,
+      connected: wallet.address === address,
+      requiresApproval: !wallet.custodial,
+    }));
+}
+
+function resolveSettlementConfig(env = process.env) {
+  return {
+    contractAddress: trimString(env.SETTLEMENT_CONTRACT_ADDRESS).toLowerCase(),
+    rpcUrl: trimString(env.SETTLEMENT_RPC_URL) || "https://mainnet.base.org",
+    usdcAddress: BASE_USDC_ADDRESS,
+    chainId: BASE_CHAIN_ID,
+  };
+}
+
+export function hostedSettlementPublicConfig(env = process.env) {
+  const config = resolveSettlementConfig(env);
+  return /^0x[a-f0-9]{40}$/.test(config.contractAddress)
+    ? { contractAddress: config.contractAddress, usdcAddress: config.usdcAddress, chainId: config.chainId }
+    : null;
+}
+
+async function rpc(rpcUrl, method, params) {
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) throw statusError("Could not verify the on-chain USDC approval.", 502);
+  return body.result;
+}
+
+async function verifyUsdcApproval({ env, txHash, payer, minimumUsdc }) {
+  const config = resolveSettlementConfig(env);
+  const hash = trimString(txHash).toLowerCase();
+  if (!/^0x[a-f0-9]{64}$/.test(hash) || !/^0x[a-f0-9]{40}$/.test(config.contractAddress)) {
+    throw statusError("A confirmed Base USDC approval is required for this wallet.", 400);
+  }
+  const [receipt, transaction] = await Promise.all([
+    rpc(config.rpcUrl, "eth_getTransactionReceipt", [hash]),
+    rpc(config.rpcUrl, "eth_getTransactionByHash", [hash]),
+  ]);
+  if (!receipt || receipt.status !== "0x1" || !transaction) {
+    throw statusError("The USDC approval transaction is not confirmed successfully.", 400);
+  }
+  const from = trimString(transaction.from).toLowerCase();
+  const to = trimString(transaction.to).toLowerCase();
+  const input = trimString(transaction.input).toLowerCase();
+  const spenderWord = config.contractAddress.slice(2).padStart(64, "0");
+  if (
+    from !== String(payer).toLowerCase() ||
+    to !== config.usdcAddress ||
+    !input.startsWith(`0x095ea7b3${spenderWord}`) ||
+    input.length < 138
+  ) {
+    throw statusError("The transaction does not authorize the Apiosk settlement contract for this wallet.", 400);
+  }
+  const approvedAtomic = BigInt(`0x${input.slice(74, 138)}`);
+  const requiredAtomic = BigInt(Math.ceil(Number(minimumUsdc) * 1_000_000));
+  if (approvedAtomic < requiredAtomic) {
+    throw statusError("The USDC approval is lower than the selected daily spending limit.", 400);
+  }
 }
 
 /**
@@ -185,6 +285,7 @@ export async function mintHostedConnectToken({
   walletId,
   dailyLimitUsdc,
   perTxLimitUsdc,
+  approvalTxHash,
   strict = false,
 } = {}) {
   try {
@@ -203,7 +304,7 @@ export async function mintHostedConnectToken({
     const requestedWalletId = trimString(walletId);
     const payable = requestedWalletId
       ? payableWallets.find((wallet) => wallet.id === requestedWalletId)
-      : payableWallets[0];
+      : payableWallets.find((wallet) => wallet.custodial);
     if (!payable) {
       if (strict) {
         throw statusError(
@@ -234,6 +335,15 @@ export async function mintHostedConnectToken({
     const address = payable.address;
     const dailyLimit = requestedDaily;
     const perTxLimit = requestedPerTx;
+    if (!payable.custodial) {
+      if (!strict) return null;
+      await verifyUsdcApproval({
+        env,
+        txHash: approvalTxHash,
+        payer: address,
+        minimumUsdc: dailyLimit,
+      });
+    }
     const { token: connectToken, tokenHash, tokenPrefix } = generateConnectToken();
     const expiresAt = isoAfterDays(CONNECT_TOKEN_TTL_DAYS);
     const permissions = {

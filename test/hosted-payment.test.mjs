@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { generateConnectToken } from "../src/hosted-payment.mjs";
+import {
+  generateConnectToken,
+  mintHostedConnectToken,
+  prepareHostedPaymentWallets,
+} from "../src/hosted-payment.mjs";
 import { createHostedOAuthSupport } from "../src/oauth.mjs";
 import { createApioskMcpRuntime } from "../src/runtime.mjs";
 
@@ -433,5 +437,89 @@ test("production OAuth blocks the callback when no payable wallet exists", async
     assert.match(response.body, /no active managed payment wallet/i);
   } finally {
     restoreFetch();
+  }
+});
+
+test("a signed browser wallet is registered and receives a scoped token after confirmed USDC approval", async () => {
+  const payer = "0x5555555555555555555555555555555555555555";
+  const settlement = "0x512c770ef7b651298cbfa2ab865a81c12f0c703d";
+  const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+  const txHash = `0x${"ab".repeat(32)}`;
+  const walletRow = {
+    id: "wallet_connected_1",
+    label: "Connected wallet",
+    wallet_address: payer,
+    status: "active",
+    daily_limit_usdc: 10,
+    per_tx_limit_usdc: 1,
+    encrypted_private_key: null,
+    created_at: "2026-07-12T00:00:00Z",
+  };
+  const calls = [];
+  let walletReads = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    const method = options.method || "GET";
+    calls.push({ href, method, body: options.body ? JSON.parse(options.body) : null });
+    if (href.includes("/rest/v1/agent_wallets?select=")) {
+      walletReads += 1;
+      return new Response(JSON.stringify(walletReads === 1 ? [] : [walletRow]), { status: 200 });
+    }
+    if (href.endsWith("/rest/v1/agent_wallets") && method === "POST") {
+      return new Response(JSON.stringify([walletRow]), { status: 201 });
+    }
+    if (href === "https://base-rpc.test") {
+      const request = JSON.parse(options.body);
+      if (request.method === "eth_getTransactionReceipt") {
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { status: "0x1" } }));
+      }
+      if (request.method === "eth_getTransactionByHash") {
+        const amount = 12_000_000n.toString(16).padStart(64, "0");
+        const input = `0x095ea7b3${settlement.slice(2).padStart(64, "0")}${amount}`;
+        return new Response(JSON.stringify({ jsonrpc: "2.0", id: 1, result: { from: payer, to: usdc, input } }));
+      }
+    }
+    if (href.endsWith("/rest/v1/agent_wallet_connect_tokens") && method === "POST") {
+      return new Response(JSON.stringify([{ id: "token_connected_1" }]), { status: 201 });
+    }
+    if (href.endsWith("/rest/v1/agent_wallet_connect_token_wallets") && method === "POST") {
+      return new Response("", { status: 201 });
+    }
+    throw new Error(`Unexpected fetch: ${method} ${href}`);
+  };
+
+  try {
+    const env = {
+      ...WALLET_TEST_ENV,
+      SETTLEMENT_CONTRACT_ADDRESS: settlement,
+      SETTLEMENT_RPC_URL: "https://base-rpc.test",
+    };
+    const wallets = await prepareHostedPaymentWallets({
+      env,
+      sessionToken: "jwt_dashboard_session",
+      userId: "user_123",
+      connectedAddress: payer,
+    });
+    assert.equal(wallets.length, 1);
+    assert.equal(wallets[0].connected, true);
+    assert.equal(wallets[0].requiresApproval, true);
+
+    const minted = await mintHostedConnectToken({
+      env,
+      sessionToken: "jwt_dashboard_session",
+      userId: "user_123",
+      walletId: "wallet_connected_1",
+      dailyLimitUsdc: 12,
+      perTxLimitUsdc: 0.5,
+      approvalTxHash: txHash,
+      strict: true,
+    });
+    assert.match(minted.connectToken, /^aw_live_/);
+    const join = calls.find((call) => call.href.endsWith("agent_wallet_connect_token_wallets"));
+    assert.equal(join.body[0].daily_limit_usdc, 12);
+    assert.equal(join.body[0].per_tx_limit_usdc, 0.5);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

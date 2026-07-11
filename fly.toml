@@ -6,6 +6,8 @@ primary_region = "ams"
   APIOSK_CONTROL_PLANE_BACKEND_URL = "https://dashboard.apiosk.com"
   APIOSK_DASHBOARD_URL = "https://dashboard.apiosk.com"
   APIOSK_MCP_WALLETCONNECT_PROJECT_ID = "c7673690533ae653e97eab23a95f141d"
+  SETTLEMENT_CHAIN_ID = "8453"
+  SETTLEMENT_CONTRACT_ADDRESS = "0x512c770ef7b651298cbfa2ab865a81c12f0c703d"
 
 [http_service]
   internal_port = 3000

@@ -11,8 +11,10 @@ import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/
 
 import { isProviderApiKey, verifyProviderKey } from "./publisher.mjs";
 import {
+  hostedSettlementPublicConfig,
   listHostedPayableWallets,
   mintHostedConnectToken,
+  prepareHostedPaymentWallets,
 } from "./hosted-payment.mjs";
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
@@ -962,7 +964,7 @@ function createAuthorizePage({
               <p class="hero-eyebrow">Apiosk payment infrastructure</p>
               <h2>Pay for any API, straight from your agent</h2>
             </div>
-            <p class="lead">Sign in once to let ${escapeHtml(clientName.client_name || "your AI app")} discover and call APIs through Apiosk. Paid calls use your managed Apiosk wallet or credits when configured.</p>
+            <p class="lead">Sign in once to let ${escapeHtml(clientName.client_name || "your AI app")} discover and call APIs through Apiosk. Paid calls use USDC from the wallet you explicitly authorize.</p>
             <div class="value-list">
               <div class="value">
                 <span class="value-icon">
@@ -979,7 +981,7 @@ function createAuthorizePage({
                 </span>
                 <div>
                   <div class="value-title">One secure connection</div>
-                  <div class="value-desc">Your wallet proves identity; managed wallet or credits authorize automatic payments.</div>
+                  <div class="value-desc">Your identity signature signs you in; a separate, limited USDC approval authorizes automatic payments.</div>
                 </div>
               </div>
               <div class="value">
@@ -999,7 +1001,7 @@ function createAuthorizePage({
               <p class="eyebrow">${escapeHtml(clientName.client_name || "Remote MCP client")}</p>
               <h1>Connect ${escapeHtml(appName)}</h1>
             </div>
-            <p>Connect a wallet to sign in without a password. Automatic paid calls require a funded managed Apiosk wallet or credits on your account.</p>
+            <p>Connect a wallet to sign in without a password. You can then authorize limited USDC payments from that same wallet on Base.</p>
           </header>
           ${errorMessage ? `<div class="message error">${escapeHtml(errorMessage)}</div>` : ""}
           ${infoMessage ? `<div class="message info">${escapeHtml(infoMessage)}</div>` : ""}
@@ -1047,7 +1049,7 @@ function createAuthorizePage({
             ${
               walletEnabled
                 ? `<div id="create-panel" class="create-panel hidden">
-              <p class="create-note">Generate a new self-custody sign-in wallet in your browser. The recovery phrase never leaves this tab and Apiosk only sees the public address. This wallet proves your identity; automatic MCP payments require a managed Apiosk wallet or credits.</p>
+              <p class="create-note">Generate a new self-custody sign-in wallet in your browser. The recovery phrase never leaves this tab. Fund it with ETH for gas and USDC on Base before authorizing payments.</p>
               <div id="create-start">
                 <button id="create-generate" class="primary-wide" type="button">Generate new wallet</button>
               </div>
@@ -1068,7 +1070,7 @@ function createAuthorizePage({
             </div>`
                 : ""
             }
-            <p id="wallet-status" class="meta">${walletEnabled ? "Connect MetaMask, Coinbase Wallet, or any browser wallet to sign in." : "Wallet sign-in is not configured on this MCP server."}</p>
+            <p id="wallet-status" class="meta">${walletEnabled ? "Connect MetaMask, Coinbase Wallet, or another browser wallet. The next step separately authorizes limited USDC payments." : "Wallet sign-in is not configured on this MCP server."}</p>
           </section>
           <form method="post" action="${escapeHtml(actionPath)}" class="cancel-row">
             ${hiddenInputs}
@@ -1551,6 +1553,7 @@ function createPaymentAuthorizationPage({
   oauthParams,
   pendingAuthorization,
   wallets,
+  settlement,
   errorMessage = "",
 }) {
   const scope = Array.isArray(oauthParams.scopes) ? oauthParams.scopes.join(" ") : "";
@@ -1571,8 +1574,8 @@ function createPaymentAuthorizationPage({
   const options = wallets
     .map(
       (wallet, index) => `<label class="wallet ${index === 0 ? "selected" : ""}">
-        <input type="radio" name="managed_wallet_id" value="${escapeHtml(wallet.id)}" ${index === 0 ? "checked" : ""} required />
-        <span><strong>${escapeHtml(wallet.label)}</strong><small>${escapeHtml(wallet.address)}</small></span>
+        <input type="radio" name="managed_wallet_id" value="${escapeHtml(wallet.id)}" data-address="${escapeHtml(wallet.address)}" data-requires-approval="${wallet.requiresApproval ? "true" : "false"}" ${index === 0 ? "checked" : ""} required />
+        <span><strong>${escapeHtml(wallet.label)}${wallet.connected ? " (connected)" : ""}</strong><small>${escapeHtml(wallet.address)} · ${wallet.requiresApproval ? "USDC approval required" : "Apiosk managed"}</small></span>
       </label>`
     )
     .join("\n");
@@ -1598,14 +1601,46 @@ function createPaymentAuthorizationPage({
     <p>Your identity is verified. Choose the managed wallet and hard spending limits for this connection.</p>
     <div class="steps" aria-label="Authorization progress"><span class="step done"></span><span class="step done"></span><span class="step"></span></div>
     ${errorMessage ? `<div class="error">${escapeHtml(errorMessage)}</div>` : ""}
-    <form method="post" action="${escapeHtml(actionPath)}">${hidden}<input type="hidden" name="action" value="authorize_payment" />
+    <form id="payment-form" method="post" action="${escapeHtml(actionPath)}">${hidden}<input type="hidden" name="action" value="authorize_payment" /><input type="hidden" name="approval_tx_hash" />
       <div class="wallets">${options}</div>
       <div class="limits"><div class="field"><label for="per_tx">Maximum per request (USDC)</label><input id="per_tx" name="per_tx_limit_usdc" type="number" min="0.000001" max="100" step="0.000001" value="${escapeHtml(first?.perTxLimitUsdc || 1)}" required /></div>
       <div class="field"><label for="daily">Maximum per day (USDC)</label><input id="daily" name="daily_limit_usdc" type="number" min="0.000001" max="1000" step="0.000001" value="${escapeHtml(first?.dailyLimitUsdc || 10)}" required /></div></div>
       <label class="consent"><input type="checkbox" name="payment_consent" value="yes" required /><span>I authorize ${escapeHtml(clientName.client_name || "this app")} to make pay-per-call x402 payments from this wallet within these limits. I can revoke the connection at any time.</span></label>
-      <button type="submit">Authorize and return to ${escapeHtml(clientName.client_name || "app")}</button>
+      <button id="authorize-button" type="submit">Authorize and return to ${escapeHtml(clientName.client_name || "app")}</button>
     </form><p class="note">Only this MCP connection receives the scoped token. Direct x402 payments and other Apiosk connections are unchanged.</p>
-  </main></div></body></html>`;
+  </main></div><script>(()=>{
+    const settlement=${JSON.stringify(settlement || null).replaceAll("<", "\\u003c")};
+    const form=document.getElementById("payment-form");
+    const button=document.getElementById("authorize-button");
+    const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+    const pad64=(hex)=>hex.replace(/^0x/,"").padStart(64,"0");
+    form.addEventListener("submit",async(event)=>{
+      const selected=form.querySelector('input[name="managed_wallet_id"]:checked');
+      if(!selected||selected.dataset.requiresApproval!=="true") return;
+      event.preventDefault();
+      if(!settlement||!window.ethereum){alert("Open this page in a browser with your connected wallet.");return;}
+      button.disabled=true;button.textContent="Authorizing USDC on Base…";
+      try{
+        await window.ethereum.request({method:"wallet_switchEthereumChain",params:[{chainId:"0x2105"}]});
+        const accounts=await window.ethereum.request({method:"eth_requestAccounts"});
+        const payer=String(accounts[0]||"").toLowerCase();
+        if(payer!==selected.dataset.address.toLowerCase()) throw new Error("Select the same wallet used to sign in.");
+        const daily=Number(form.elements.daily_limit_usdc.value);
+        if(!Number.isFinite(daily)||daily<=0) throw new Error("Enter a valid daily limit.");
+        const amount=BigInt(Math.ceil(daily*1e6));
+        const data="0x095ea7b3"+pad64(settlement.contractAddress)+amount.toString(16).padStart(64,"0");
+        const tx=await window.ethereum.request({method:"eth_sendTransaction",params:[{from:payer,to:settlement.usdcAddress,data}]});
+        button.textContent="Waiting for confirmation…";
+        for(let i=0;i<90;i++){
+          const receipt=await window.ethereum.request({method:"eth_getTransactionReceipt",params:[tx]});
+          if(receipt){if(receipt.status!=="0x1") throw new Error("USDC approval failed on-chain.");break;}
+          if(i===89) throw new Error("Approval confirmation timed out.");
+          await sleep(2000);
+        }
+        form.elements.approval_tx_hash.value=tx;button.textContent="Finishing connection…";form.submit();
+      }catch(error){alert(error instanceof Error?error.message:"USDC authorization failed.");button.disabled=false;button.textContent="Authorize and return";}
+    });
+  })();</script></body></html>`;
 }
 
 function resolveMcpWalletAuthConfig(env = process.env) {
@@ -1891,7 +1926,7 @@ class ApioskHostedOAuthProvider {
     // Injectable so tests can bypass the Supabase round-trip; defaults to the
     // real hosted-payment minter.
     this.connectTokenMinter = connectTokenMinter || mintHostedConnectToken;
-    this.payableWalletLister = payableWalletLister || listHostedPayableWallets;
+    this.payableWalletLister = payableWalletLister || prepareHostedPaymentWallets;
     // Production always uses the explicit two-step consent screen. Existing
     // test/custom minters keep their legacy single-step behavior unless they
     // explicitly opt in, so this remains an additive integration surface.
@@ -1992,6 +2027,8 @@ class ApioskHostedOAuthProvider {
         const wallets = await this.payableWalletLister({
           env: this.env,
           sessionToken: trimString(session.session_token),
+          userId: trimString(session.user_id),
+          connectedAddress: trimString(session.wallet_address),
         });
         if (!wallets.length) {
           renderPage(400, {
@@ -2011,7 +2048,11 @@ class ApioskHostedOAuthProvider {
           AUTHORIZATION_CODE_TTL_SECONDS,
           normalizeSessionExpiry(session.expires_at)
         ).token;
-        renderPaymentPage(200, { pendingAuthorization, wallets });
+        const settlement = hostedSettlementPublicConfig(this.env);
+        if (!settlement && wallets.some((wallet) => wallet.requiresApproval)) {
+          throw statusError("Connected-wallet payments are not configured on this server.", 503);
+        }
+        renderPaymentPage(200, { pendingAuthorization, wallets, settlement });
       } catch (error) {
         renderPage(error.status && error.status >= 400 ? error.status : 400, {
           errorMessage:
@@ -2042,6 +2083,8 @@ class ApioskHostedOAuthProvider {
         wallets = await this.payableWalletLister({
           env: this.env,
           sessionToken: trimString(pending.session.session_token),
+          userId: trimString(pending.session.user_id),
+          connectedAddress: trimString(pending.session.wallet_address),
         });
         const mintedConnect = await this.connectTokenMinter({
           env: this.env,
@@ -2050,6 +2093,7 @@ class ApioskHostedOAuthProvider {
           walletId: trimString(req.body.managed_wallet_id),
           dailyLimitUsdc: req.body.daily_limit_usdc,
           perTxLimitUsdc: req.body.per_tx_limit_usdc,
+          approvalTxHash: req.body.approval_tx_hash,
           strict: true,
         });
         if (!mintedConnect?.connectToken) {
@@ -2065,6 +2109,7 @@ class ApioskHostedOAuthProvider {
           renderPaymentPage(error.status && error.status >= 400 ? error.status : 400, {
             pendingAuthorization,
             wallets,
+            settlement: hostedSettlementPublicConfig(this.env),
             errorMessage: error instanceof Error ? error.message : "Payment authorization failed.",
           });
         }
