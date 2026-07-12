@@ -10,8 +10,8 @@ import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.4.3",
-  title: "Apiosk: pay-per-call APIs for AI agents",
+  version: "1.4.4",
+  title: "Apiosk Connect",
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.

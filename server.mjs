@@ -1,4 +1,5 @@
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
@@ -121,7 +122,7 @@ function renderMcpWelcomeHtml(mcpUrl) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>Apiosk MCP</title>
+<title>Apiosk Connect</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -162,7 +163,7 @@ function renderMcpWelcomeHtml(mcpUrl) {
 <main>
   <div class="card">
     <span class="badge">Model Context Protocol</span>
-    <h1>Welcome to Apiosk MCP</h1>
+    <h1>Welcome to Apiosk Connect</h1>
     <p class="lead">
       This is the Apiosk MCP server endpoint &mdash; it lets AI agents discover, pay for,
       execute, and publish APIs through the Apiosk gateway. It is a machine endpoint, not a
@@ -195,7 +196,7 @@ function renderMcpWelcomeHtml(mcpUrl) {
       <a href="https://dashboard.apiosk.com" target="_blank" rel="noopener">Dashboard</a>
       <a href="https://github.com/obcraft/apiosk-mcp" target="_blank" rel="noopener">Docs &amp; source</a>
     </div>
-    <footer>Apiosk MCP &middot; ${SERVER_INFO.name} v${SERVER_INFO.version}</footer>
+    <footer>Apiosk Connect &middot; ${SERVER_INFO.name} v${SERVER_INFO.version}</footer>
   </div>
 </main>
 </body>
@@ -215,10 +216,10 @@ function sendMcpWelcome(req, res) {
   }
 
   res.status(200).json({
-    name: "Apiosk MCP",
+    name: "Apiosk Connect",
     server: SERVER_INFO,
     description:
-      "Apiosk MCP server endpoint. Connect it from an MCP client to discover, pay for, execute, and publish APIs through the Apiosk gateway.",
+      "Apiosk Connect lets MCP clients discover, pay for, execute, and publish APIs through the Apiosk gateway.",
     transport: "streamable-http",
     endpoint: mcpUrl,
     legacy_sse_endpoint: mcpUrl.replace(/\/mcp$/, "/sse"),
@@ -250,7 +251,7 @@ const hostedOAuth = createHostedOAuthSupport({
   issuerUrl,
   mcpServerUrl,
   appName: "Apiosk",
-  resourceName: "Apiosk MCP",
+  resourceName: "Apiosk Connect",
 });
 const mcpAuthMiddleware = hostedOAuth.createMcpAuthMiddleware(runtime);
 
@@ -266,6 +267,10 @@ if (hostedOAuth.oauthMetadata.registration_endpoint) {
 
 app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
   return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
+});
+
+app.get("/logo-optimized-light.png", (req, res) => {
+  res.type("png").sendFile(fileURLToPath(new URL("./logo-optimized-light.png", import.meta.url)));
 });
 
 // Self-hosted browser bundle for the /authorize Create-wallet flow (viem

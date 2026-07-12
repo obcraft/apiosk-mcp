@@ -383,6 +383,48 @@ test("paid execution advertises a credential-free result canvas", async () => {
   assert.doesNotMatch(APIO_RESULT_CANVAS_HTML, /connect.token|private.key|authorization/i);
 });
 
+test("apiosk_execute resolves old weather slugs to the live weather listing", async () => {
+  const calls = [];
+  const runtime = createApioskMcpRuntime({
+    env: {},
+    enableLocalWallets: false,
+    client: {
+      async listApis() {
+        return {
+          apis: [
+            {
+              slug: "open-meteo",
+              name: "Open-Meteo",
+              description: "Free global weather forecasts.",
+              category: "weather",
+              active: true,
+              verified: true,
+              price_usd: 0.05,
+              listing_metadata: { tags: ["weather", "forecast"] },
+            },
+          ],
+          meta: { total: 1 },
+        };
+      },
+      async execute(slug, input) {
+        calls.push({ slug, input });
+        return { status: "success", slug, input };
+      },
+    },
+  });
+
+  const result = await runtime.callTool("apiosk_execute", {
+    slug: "weather",
+    input: { latitude: 52.37, longitude: 4.9 },
+  });
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.equal(calls[0].slug, "open-meteo");
+  assert.equal(payload.requested_slug, "weather");
+  assert.equal(payload.resolved_slug, "open-meteo");
+  assert.equal(payload.result.status, "success");
+});
+
 test("get_api attaches a listing-scoped buyer payment guide with price", async () => {
   const homeDir = path.join(os.tmpdir(), `apiosk-mcp-getapi-pay-${Date.now()}`);
   const runtime = createApioskMcpRuntime({

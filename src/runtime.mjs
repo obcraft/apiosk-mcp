@@ -38,6 +38,94 @@ const DEFAULT_LIMIT = 25;
 const CACHE_TTL_MS = 60_000;
 const DEFAULT_GATEWAY_BASE_URL = "https://gateway.apiosk.com";
 
+// Permissive default output schema advertised for every tool that does not
+// declare its own. MCP clients (ChatGPT, Claude, …) flag tools with no
+// outputSchema as "output schema recommended"; declaring one clears that hint.
+// Apiosk tool results are always returned as a JSON object in structuredContent
+// (see content()), so an open object schema both documents that contract and
+// validates every success payload without risking false rejections on the
+// varied per-tool result shapes. Individual tools can still ship a tighter
+// schema (e.g. dynamic listings via listing_metadata.mcp_tool.outputSchema),
+// which is preserved as-is.
+const DEFAULT_TOOL_OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: true,
+  description:
+    "Structured JSON result of the tool call. Mirrors the human-readable text content; the exact fields depend on the tool (an `error` field is present when the call fails).",
+};
+
+// Behaviour hints (MCP tool annotations). Clients like ChatGPT default an
+// un-annotated tool to the most cautious badges — "destructive" and
+// "open world" — so every write tool that ships no annotations reads as
+// dangerous. These presets make the badges accurate: wallet/account/keystore
+// management is a closed domain (the user's own Apiosk account), publishing
+// wires up an external upstream (open world), and deletes are destructive.
+const READ_ONLY_ANNOTATIONS = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const CREATE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+const UPDATE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const DELETE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+const SETUP_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const PUBLISH_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+const PUBLISH_UPDATE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+const PUBLISH_DELETE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true };
+// Dynamic per-listing tools call arbitrary paid third-party APIs and spend
+// USDC, so an unspecified listing gets the same hints as apiosk_execute.
+const DYNAMIC_EXECUTE_ANNOTATIONS = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
+
+// Static tools whose literals don't already declare `annotations`. Discovery
+// and publisher (sk_live_) tools annotate themselves inline and are absent here.
+const TOOL_ANNOTATIONS = {
+  // Managed (dashboard) wallet + account tools — closed Apiosk-account domain.
+  apiosk_list_wallets: READ_ONLY_ANNOTATIONS,
+  apiosk_get_wallet_activity: READ_ONLY_ANNOTATIONS,
+  apiosk_list_wallet_api_keys: READ_ONLY_ANNOTATIONS,
+  apiosk_show_wallet_funding: READ_ONLY_ANNOTATIONS,
+  apiosk_create_wallet: CREATE_ANNOTATIONS,
+  apiosk_create_wallet_connect_string: CREATE_ANNOTATIONS,
+  apiosk_create_wallet_api_key: CREATE_ANNOTATIONS,
+  apiosk_create_account: CREATE_ANNOTATIONS,
+  apiosk_update_wallet: UPDATE_ANNOTATIONS,
+  apiosk_update_wallet_api_key: UPDATE_ANNOTATIONS,
+  apiosk_sign_in: UPDATE_ANNOTATIONS,
+  apiosk_delete_wallet: DELETE_ANNOTATIONS,
+  apiosk_delete_wallet_api_key: DELETE_ANNOTATIONS,
+  // Local (stdio) wallet keystore tools.
+  apiosk_wallet_list: READ_ONLY_ANNOTATIONS,
+  apiosk_wallet_reveal_secret: READ_ONLY_ANNOTATIONS,
+  apiosk_configure: READ_ONLY_ANNOTATIONS,
+  apiosk_wallet_create: CREATE_ANNOTATIONS,
+  apiosk_wallet_select: UPDATE_ANNOTATIONS,
+  apiosk_wallet_update: UPDATE_ANNOTATIONS,
+  apiosk_wallet_save_secret: UPDATE_ANNOTATIONS,
+  apiosk_wallet_delete: DELETE_ANNOTATIONS,
+  apiosk_get_started: SETUP_ANNOTATIONS,
+  // Wallet-signed publishing — registers an external upstream (open world).
+  apiosk_list_my_apis: READ_ONLY_ANNOTATIONS,
+  apiosk_publish_api: PUBLISH_ANNOTATIONS,
+  apiosk_update_api: PUBLISH_UPDATE_ANNOTATIONS,
+  apiosk_delete_api: PUBLISH_DELETE_ANNOTATIONS,
+};
+
+// Applied at the single list-emission boundary (runtime.listTools): fills in a
+// default output schema and behaviour annotations for any tool that doesn't
+// already declare its own, so clients stop flagging "output schema recommended"
+// and render accurate read-only/destructive/open-world badges.
+function normalizeToolForClient(tool) {
+  if (!tool || typeof tool !== "object") return tool;
+  let next = tool;
+  if (!next.outputSchema) {
+    next = { ...next, outputSchema: DEFAULT_TOOL_OUTPUT_SCHEMA };
+  }
+  if (!next.annotations && TOOL_ANNOTATIONS[next.name]) {
+    next = { ...next, annotations: TOOL_ANNOTATIONS[next.name] };
+  }
+  return next;
+}
+
+function normalizeToolsForClient(tools) {
+  return Array.isArray(tools) ? tools.map(normalizeToolForClient) : tools;
+}
+
 const DASHBOARD_WALLET_TOOLS = [
   {
     name: "apiosk_list_wallets",
@@ -850,6 +938,18 @@ function buildCatalogEntry(api, toolName) {
   };
 }
 
+function normalizeCatalogToken(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function isWeatherLikeSlug(slug) {
+  return /weather|meteo|forecast/.test(normalizeCatalogToken(slug));
+}
+
 function buildDynamicTools(catalog, reservedTools) {
   const tools = [];
   const toolIndex = new Map();
@@ -901,7 +1001,10 @@ function buildDynamicTools(catalog, reservedTools) {
         type: "object",
         additionalProperties: true,
       },
-      annotations: api.listing_metadata?.mcp_tool?.annotations,
+      outputSchema:
+        api.listing_metadata?.mcp_tool?.outputSchema || DEFAULT_TOOL_OUTPUT_SCHEMA,
+      annotations:
+        api.listing_metadata?.mcp_tool?.annotations || DYNAMIC_EXECUTE_ANNOTATIONS,
       _meta: {
         "openai/outputTemplate": "ui://apiosk/result-canvas.html",
         "openai/toolInvocation/invoking": `Fetching ${api.name || api.slug}…`,
@@ -1619,6 +1722,51 @@ export function createApioskMcpRuntime(options = {}) {
     return cache.catalog;
   }
 
+  async function resolveExecutableApiSlug(slug, authInfo = null) {
+    const requested = normalizeCatalogToken(slug);
+    if (!requested) return slug;
+
+    const catalog = await getCatalog(false, authInfo);
+    const exact = catalog.find((api) => normalizeCatalogToken(api.slug) === requested);
+    if (exact) return exact.slug;
+
+    const aliases = new Map([
+      ["weather", "open-meteo"],
+      ["weather-api", "open-meteo"],
+      ["hugen-weather", "open-meteo"],
+      ["open-meteo-weather", "open-meteo"],
+    ]);
+    const alias = aliases.get(requested);
+    if (alias && catalog.some((api) => normalizeCatalogToken(api.slug) === alias)) {
+      return alias;
+    }
+
+    if (isWeatherLikeSlug(requested)) {
+      const weather = catalog.find((api) => {
+        const haystack = [
+          api.slug,
+          api.name,
+          api.description,
+          api.category,
+          api.raw_category,
+          ...(Array.isArray(api.listing_metadata?.tags) ? api.listing_metadata.tags : []),
+        ]
+          .map(normalizeCatalogToken)
+          .join(" ");
+
+        return (
+          api.active !== false &&
+          api.verified !== false &&
+          /weather|meteo|forecast/.test(haystack)
+        );
+      });
+
+      if (weather?.slug) return weather.slug;
+    }
+
+    return slug;
+  }
+
   async function getTools(force = false, authInfo = null) {
     if (!force && cache.dynamicTools && Date.now() < cache.expiresAt) {
       return [...getStaticTools(authInfo), ...cache.dynamicTools];
@@ -2124,7 +2272,8 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     const client = await getClient(authInfo);
-    const result = await client.execute(argumentsObject.slug, argumentsObject.input, {
+    const resolvedSlug = await resolveExecutableApiSlug(argumentsObject.slug, authInfo);
+    const result = await client.execute(resolvedSlug, argumentsObject.input, {
       operation: argumentsObject.operation,
       query: argumentsObject.query,
       pathParams: argumentsObject.path_params,
@@ -2133,7 +2282,15 @@ export function createApioskMcpRuntime(options = {}) {
       },
     });
 
-    return content(result);
+    return content(
+      resolvedSlug === argumentsObject.slug
+        ? result
+        : {
+            requested_slug: argumentsObject.slug,
+            resolved_slug: resolvedSlug,
+            result,
+          }
+    );
   }
 
   async function handleDynamicExecute(tool, argumentsObject = {}, authInfo = null) {
@@ -3290,7 +3447,8 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   return {
-    listTools: (authInfo = null) => getTools(false, authInfo),
+    listTools: async (authInfo = null) =>
+      normalizeToolsForClient(await getTools(false, authInfo)),
     isToolProtected,
     callTool,
   };

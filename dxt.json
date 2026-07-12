@@ -1,11 +1,11 @@
 {
   "name": "apiosk-mcp",
-  "version": "1.4.3",
-  "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
+  "version": "1.4.4",
+  "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
   "author": "Apiosk",
   "license": "MIT",
   "homepage": "https://apiosk.com",
-  "icon": "https://apiosk.com/logo.svg",
+  "icon": "https://mcp.apiosk.com/logo-optimized-light.png",
   "keywords": ["payments", "finance", "x402", "commerce", "crypto"],
   "repository": "https://github.com/obcraft/apiosk-mcp",
   "mcp": {

@@ -1,7 +1,7 @@
 {
   "name": "@apiosk/mcp",
-  "version": "1.4.3",
-  "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
+  "version": "1.4.4",
+  "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "exports": {
@@ -54,6 +54,7 @@
   },
   "files": [
     "index.mjs",
+    "logo-optimized-light.png",
     "server.mjs",
     "well-known.mjs",
     "server.json",

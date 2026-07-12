@@ -1,11 +1,16 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.obcraft/apiosk-mcp",
-  "title": "Apiosk",
-  "description": "AI-native payments: discover, pay for, execute, and publish monetized APIs through MCP.",
-  "version": "1.4.3",
+  "title": "Apiosk Connect",
+  "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
+  "version": "1.4.4",
   "websiteUrl": "https://apiosk.com",
   "icons": [
+    {
+      "src": "https://mcp.apiosk.com/logo-optimized-light.png",
+      "mimeType": "image/png",
+      "sizes": ["2048x2048"]
+    },
     {
       "src": "https://apiosk.com/logo.svg",
       "mimeType": "image/svg+xml",
