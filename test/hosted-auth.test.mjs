@@ -75,33 +75,38 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
 
   const toolNames = (await runtime.listTools()).map((tool) => tool.name);
 
-  // Discovery + payment guidance (public, pre-auth).
+  // Lean BUYER surface (default): the agentic flow + one wallet view, no noise.
   for (const name of [
     "apiosk_help",
     "apiosk_payment_guide",
     "apiosk_search",
-    "apiosk_explore",
+    "apiosk_discover",
+    "apiosk_inspect_x402",
     "apiosk_get_api",
-    "apiosk_metadata",
     "apiosk_execute",
-    "apiosk_health",
+    "apiosk_fetch_paid",
+    "apiosk_list_wallets",
   ]) {
-    assert.ok(toolNames.includes(name), `hosted surface should expose ${name}`);
+    assert.ok(toolNames.includes(name), `hosted buyer surface should expose ${name}`);
   }
 
-  // Managed buyer tools now available remotely over request-scoped auth.
+  // Noise removed from the default buyer surface (still dispatchable by name,
+  // still restorable via APIOSK_MCP_FULL_TOOLS): advanced wallet CRUD,
+  // explore/metadata/health duplicates, and provider publishing.
   for (const name of [
-    "apiosk_list_wallets",
+    "apiosk_explore",
+    "apiosk_metadata",
+    "apiosk_health",
     "apiosk_create_wallet",
     "apiosk_update_wallet",
     "apiosk_delete_wallet",
-    "apiosk_create_wallet_connect_string",
     "apiosk_create_wallet_api_key",
+    "publish_x402_route",
   ]) {
-    assert.ok(toolNames.includes(name), `hosted surface should expose managed tool ${name}`);
+    assert.ok(!toolNames.includes(name), `buyer surface should hide ${name}`);
   }
 
-  // Dynamic per-API tools are now generated for hosted clients too.
+  // Dynamic per-API tools still append when explicitly enabled.
   assert.ok(toolNames.includes("demo-api"), "hosted surface should expose dynamic per-API tools");
 
   // Local-only tools stay off the hosted surface (no client-side signing key).
@@ -109,9 +114,18 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
     assert.ok(!toolNames.includes(name), `hosted surface should not expose local-only tool ${name}`);
   }
 
-  // Protection model: discovery/guidance public, paid execute + managed tools protected.
+  // PROVIDER surface (sk_live_ key): a publishing toolkit, no buyer wallet CRUD.
+  const providerNames = (
+    await runtime.listTools({ extra: { apiosk_provider_key: "sk_live_test" } })
+  ).map((tool) => tool.name);
+  assert.ok(providerNames.includes("publish_x402_route"), "provider surface exposes publishing");
+  assert.ok(providerNames.includes("apiosk_search"), "provider surface keeps discovery");
+  assert.ok(!providerNames.includes("apiosk_create_wallet"), "provider surface hides buyer wallet CRUD");
+
+  // Protection model unchanged: discovery/guidance public; paid + managed protected.
   assert.equal(await runtime.isToolProtected("apiosk_payment_guide"), false);
   assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
+  assert.equal(await runtime.isToolProtected("apiosk_fetch_paid"), true);
   assert.equal(await runtime.isToolProtected("apiosk_list_wallets"), true);
   assert.equal(await runtime.isToolProtected("demo-api"), true); // paid dynamic tool
 
@@ -924,5 +938,24 @@ test("hosted OAuth support issues tokens after wallet sign-in", async () => {
     assert.equal(authInfo.resource.href, "https://mcp.apiosk.com/sse");
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("hosted surface: APIOSK_MCP_FULL_TOOLS restores the full 28-tool set", async () => {
+  const runtime = createApioskMcpRuntime({
+    env: { APIOSK_MCP_FULL_TOOLS: "true" },
+    enableLocalWallets: false,
+    hostedAuthEnabled: true,
+    client: createFakeGatewayClient(),
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+  });
+  const names = (await runtime.listTools()).map((t) => t.name);
+  // The escape hatch brings back everything hidden from the lean buyer surface.
+  for (const name of ["apiosk_explore", "apiosk_metadata", "apiosk_health", "apiosk_create_wallet", "publish_x402_route"]) {
+    assert.ok(names.includes(name), `full surface should expose ${name}`);
+  }
+  // The lean agentic tools are still there too.
+  for (const name of ["apiosk_discover", "apiosk_inspect_x402", "apiosk_fetch_paid"]) {
+    assert.ok(names.includes(name), `full surface should still expose ${name}`);
   }
 });

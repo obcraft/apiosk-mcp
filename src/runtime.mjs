@@ -33,6 +33,9 @@ import {
   handlePublisherTool,
   isPublisherTool,
 } from "./publisher.mjs";
+import { DISCOVER_TOOL, runDiscover } from "./discovery.mjs";
+import { INSPECT_TOOL, runInspect } from "./x402-inspect.mjs";
+import { FETCH_PAID_TOOL, runFetchPaid } from "./external-fetch.mjs";
 
 const DEFAULT_LIMIT = 25;
 const CACHE_TTL_MS = 60_000;
@@ -663,7 +666,7 @@ const EXPLORE_TOOL = {
 
 const SEARCH_TOOL = {
   name: "apiosk_search",
-  description: "Search and browse the Apiosk catalog. Use this first when you need to find APIs by capability, price, or category.",
+  description: "Search and browse the Apiosk catalog by capability, price, or category. For browsing/filtering the catalog. When the goal is to fulfil a user request with real paid data ('get me the live X'), prefer apiosk_discover, which decomposes the need and ranks the best endpoints across sources.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -825,15 +828,21 @@ const DISCOVERY_TOOLS = [
   PAYMENT_GUIDE_TOOL,
   EXPLORE_TOOL,
   SEARCH_TOOL,
+  DISCOVER_TOOL,
+  INSPECT_TOOL,
   GET_API_TOOL,
   EXECUTE_TOOL,
 ];
 // Discovery + payment guidance available to every remote buyer, even before
-// they authorize (these tools are public / read-only).
+// they authorize (these tools are public / read-only). apiosk_discover and
+// apiosk_inspect_x402 are read-only too — they find candidate x402 endpoints and
+// read their 402 terms without spending, so buyers can plan a purchase pre-auth.
 const HOSTED_DISCOVERY_TOOLS = [
   HELP_TOOL,
   PAYMENT_GUIDE_TOOL,
   SEARCH_TOOL,
+  DISCOVER_TOOL,
+  INSPECT_TOOL,
   EXPLORE_TOOL,
   GET_API_TOOL,
   METADATA_TOOL,
@@ -856,9 +865,46 @@ const HOSTED_MANAGED_TOOLS = [
 // because it requires a client-side signing key the hosted server never
 // holds; the x402 publisher tools work hosted because they authenticate with
 // a provider token (sk_live_…) instead of a wallet.
+// External-payment buyer tool: pay an x402 endpoint the gateway does NOT host,
+// from the connected managed wallet, via the gateway payer proxy. Protected
+// (spends USDC) and available in every mode that can present a connect token.
+const EXTERNAL_PAY_TOOLS = [FETCH_PAID_TOOL];
+
 const HOSTED_REMOTE_TOOLS = [
   ...HOSTED_DISCOVERY_TOOLS,
   ...HOSTED_MANAGED_TOOLS,
+  ...EXTERNAL_PAY_TOOLS,
+  ...PUBLISHER_TOOLS,
+];
+
+// Lean BUYER surface for the hosted connector. A buyer opening the connector in
+// ChatGPT/Claude should see the agentic flow + one wallet view — not 28 tools.
+// Ordered flow-first. The advanced wallet CRUD (create/update/delete wallet +
+// api-keys), explore/metadata/health, and provider publishing are dropped from
+// the default list. Nothing is lost: every hidden tool is still dispatchable by
+// name (callTool + isToolProtected are unchanged) and the full set is one env
+// flag away (APIOSK_MCP_FULL_TOOLS=true). apiosk_list_wallets stays so buyers can
+// see their wallet address, spend limits, and funding.
+const HOSTED_BUYER_TOOLS = [
+  HELP_TOOL,
+  DISCOVER_TOOL,
+  INSPECT_TOOL,
+  EXECUTE_TOOL,
+  FETCH_PAID_TOOL,
+  GET_API_TOOL,
+  SEARCH_TOOL,
+  PAYMENT_GUIDE_TOOL,
+  DASHBOARD_WALLET_TOOLS.find((tool) => tool.name === "apiosk_list_wallets"),
+].filter(Boolean);
+
+// PROVIDER surface (caller authenticated with a sk_live_ provider key): a focused
+// publishing toolkit. The managed-wallet CRUD needs a dashboard JWT a provider
+// key does not carry, so those tools would fail anyway — they're excluded here.
+const HOSTED_PROVIDER_TOOLS = [
+  HELP_TOOL,
+  PAYMENT_GUIDE_TOOL,
+  SEARCH_TOOL,
+  GET_API_TOOL,
   ...PUBLISHER_TOOLS,
 ];
 
@@ -877,6 +923,7 @@ const PUBLIC_STATIC_TOOL_NAMES = new Set(
 );
 const REMOTE_PROTECTED_STATIC_TOOL_NAMES = new Set([
   "apiosk_execute",
+  ...EXTERNAL_PAY_TOOLS.map((tool) => tool.name),
   ...REMOTE_CREDITS_TOOLS.map((tool) => tool.name),
   ...DASHBOARD_WALLET_TOOLS.map((tool) => tool.name),
   ...PUBLISHER_TOOLS.map((tool) => tool.name),
@@ -1689,7 +1736,16 @@ export function createApioskMcpRuntime(options = {}) {
 
   function getStaticTools(authInfo = null) {
     if (hostedAuthEnabled) {
-      return [...HOSTED_REMOTE_TOOLS];
+      // Escape hatch: expose the full 28-tool surface when explicitly opted in.
+      if (env.APIOSK_MCP_FULL_TOOLS === "true") {
+        return [...HOSTED_REMOTE_TOOLS];
+      }
+      // Providers authenticate with a sk_live_ key → focused publishing surface.
+      if (trimString(authInfo?.extra?.apiosk_provider_key)) {
+        return [...HOSTED_PROVIDER_TOOLS];
+      }
+      // Buyers (OAuth / connect token / pre-auth) → the lean agentic surface.
+      return [...HOSTED_BUYER_TOOLS];
     }
 
     const tools = [...DISCOVERY_TOOLS];
@@ -1703,6 +1759,10 @@ export function createApioskMcpRuntime(options = {}) {
     // Provider-token x402 publishing works in every mode: hosted callers pass
     // Authorization: Bearer sk_live_…, stdio callers set APIOSK_PROVIDER_TOKEN.
     tools.push(...PUBLISHER_TOOLS);
+
+    // External x402 pay works with any connect token (env APIOSK_CONNECT_TOKEN in
+    // stdio, or a request-scoped token on the hosted surface).
+    tools.push(...EXTERNAL_PAY_TOOLS);
 
     return tools;
   }
@@ -2263,6 +2323,45 @@ export function createApioskMcpRuntime(options = {}) {
       },
       gateway,
       gateway_base_url: resolveGatewayBaseUrl(env, savedConfig),
+    });
+  }
+
+  // Agentic discovery: aggregate + rank candidate x402 endpoints across sources
+  // (Phase 1: the Apiosk catalog, which already includes federated externals).
+  // Reuses the request-scoped client so catalog reads honour the same gateway
+  // base URL and connect-token threading as every other tool.
+  async function handleDiscover(argumentsObject = {}, authInfo = null) {
+    const client = await getClient(authInfo);
+    const savedConfig = await getSavedConfig().catch(() => null);
+    return runDiscover(argumentsObject, {
+      listApis: (params) => client.listApis(params),
+      gatewayBaseUrl: resolveGatewayBaseUrl(env, savedConfig),
+    });
+  }
+
+  // Read an arbitrary URL's x402 402 terms without paying. Read-only probe; no
+  // wallet/connect token is used, so it needs no auth.
+  async function handleInspect(argumentsObject = {}, authInfo = null) {
+    const savedConfig = await getSavedConfig().catch(() => null);
+    let gatewayHost = "";
+    try {
+      gatewayHost = new URL(resolveGatewayBaseUrl(env, savedConfig)).hostname;
+    } catch {
+      gatewayHost = "";
+    }
+    return runInspect(argumentsObject, { gatewayHost });
+  }
+
+  // Pay an external (non-Apiosk-hosted) x402 endpoint through the gateway payer
+  // proxy, using the same connect token the runtime threads to the gateway for
+  // catalog settlement. The gateway enforces spend caps and does the signing.
+  async function handleFetchPaid(argumentsObject = {}, authInfo = null) {
+    const savedConfig = await getSavedConfig().catch(() => null);
+    const requestConnectToken = trimString(authInfo?.extra?.apiosk_connect_token);
+    const envConnectToken = trimString(env.APIOSK_CONNECT_TOKEN || savedConfig?.connect_token);
+    return runFetchPaid(argumentsObject, {
+      connectToken: requestConnectToken || envConnectToken,
+      gatewayBaseUrl: resolveGatewayBaseUrl(env, savedConfig),
     });
   }
 
@@ -3382,6 +3481,9 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_payment_guide") return await handlePaymentGuide(argumentsObject, authInfo);
       if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
       if (name === "apiosk_search") return await handleSearch(argumentsObject, authInfo);
+      if (name === "apiosk_discover") return await handleDiscover(argumentsObject, authInfo);
+      if (name === "apiosk_inspect_x402") return await handleInspect(argumentsObject, authInfo);
+      if (name === "apiosk_fetch_paid") return await handleFetchPaid(argumentsObject, authInfo);
       if (name === "apiosk_get_api" || name === "apiosk_metadata") {
         return await handleGetApi(argumentsObject, authInfo);
       }
