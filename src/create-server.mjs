@@ -10,7 +10,7 @@ import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.5.1",
+  version: "1.5.2",
   title: "Apiosk Connect",
 };
 
@@ -28,7 +28,7 @@ Auth options: x402 wallet (APIOSK_PRIVATE_KEY), an aw_ connect token from the bu
 AGENTIC DATA FLOW (turn a user request into real paid data, no dummy data, one connection):
 When the user asks for real/live/paid data ("build a canvas of the realtime USD rate", "get the company registry record for X"), follow this loop instead of hand-picking APIs:
 1. DECOMPOSE the request yourself into distinct data-capability segments (e.g. "USD/EUR exchange rate", "historical rate series"). No server call — you do this reasoning.
-2. DISCOVER: call apiosk_discover({ query, segments }) once. It aggregates and ranks candidate x402 endpoints (Apiosk catalog + federated external listings) into one schema. Prefer the highest trust_tier that satisfies the need and fits the budget.
+2. DISCOVER: call apiosk_discover({ query, segments }) once. By default it searches ALL live sources — the Apiosk catalog (incl. federated externals) AND the live Coinbase x402 Bazaar — and ranks candidate x402 endpoints into one schema (add probe_hosts to also read a specific host's /.well-known/x402). You do NOT need to pass sources to reach external endpoints. Call apiosk_help topic='discovery' to see every source. Prefer the highest trust_tier that satisfies the need and fits the budget.
 3. Per chosen result, read its "executable_via":
    - "apiosk_execute" (external=false): call apiosk_execute with the result's listing_slug. The gateway settles the exact price from the connected wallet automatically. This is the preferred, safest path.
    - "apiosk_fetch_paid" (external=true): first call apiosk_inspect_x402 on the result url to read the live 402 price, TELL THE USER the exact amount, and only after they confirm call apiosk_fetch_paid with confirmed_price_usdc set to that amount. (If no apiosk_fetch_paid tool is listed, external direct-pay is not enabled here — use an Apiosk catalog result instead.)

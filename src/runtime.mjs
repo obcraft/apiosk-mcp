@@ -620,8 +620,8 @@ const HELP_TOOL = {
     properties: {
       topic: {
         type: "string",
-        enum: ["overview", "setup", "auth", "workflow", "payments", "rails", "wallets", "publish", "configure"],
-        description: "Optional help topic. Defaults to overview. Use 'rails' to learn how USDC/x402 settlement works.",
+        enum: ["overview", "setup", "auth", "workflow", "discovery", "payments", "rails", "wallets", "publish", "configure"],
+        description: "Optional help topic. Defaults to overview. Use 'discovery' to learn which live sources apiosk_discover searches (Apiosk catalog + Coinbase Bazaar + well-known); use 'rails' for how USDC/x402 settlement works.",
       },
     },
   },
@@ -1386,6 +1386,22 @@ function buildHelpPayload(topic = "overview", options = {}) {
           ? "Create or select a local wallet before making paid calls or publishing APIs"
           : "Use APIOSK_PRIVATE_KEY if you need autonomous payment on the public server mode",
       ],
+    },
+    discovery: {
+      topic: "discovery",
+      summary:
+        "apiosk_discover finds the best paid x402 API for a capability by searching ALL of these live sources in ONE call — not just the Apiosk catalog. Call it whenever the user wants real/live/paid data.",
+      sources_searched: [
+        "apiosk — the Apiosk catalog: first-party listings PLUS federated externals (imported from providers' /.well-known/x402, the APILayer and ApyHub ecosystems, direct provider integrations, and selected MCP skills). Paid via apiosk_execute.",
+        "bazaar — the Coinbase x402 Bazaar, searched LIVE on every discover call (on by default). This is how external x402 endpoints that are NOT in the Apiosk catalog are found. Paid via apiosk_fetch_paid.",
+        "wellknown — probes the /.well-known/x402 of a specific host you name in probe_hosts (no speculative crawling). Paid via apiosk_fetch_paid.",
+      ],
+      not_yet_wired:
+        "x402scan and x402list are recognized source names but not yet connected; requesting them returns a soft warning, not an error.",
+      important_note:
+        "These are DISCOVERY sources (where the agent LOOKS for endpoints) — different from a catalog listing's `source` field (where one existing entry was originally imported from). To find external endpoints, just call apiosk_discover: the Bazaar is queried by default, so you do NOT need to pass sources.",
+      how_to:
+        "apiosk_discover({ query, segments }) → one ranked list across all sources; each result is tagged with `source`, `trust_tier`, and `executable_via`.",
     },
     payments: {
       topic: "payments",
