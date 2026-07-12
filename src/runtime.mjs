@@ -1390,18 +1390,28 @@ function buildHelpPayload(topic = "overview", options = {}) {
     discovery: {
       topic: "discovery",
       summary:
-        "apiosk_discover finds the best paid x402 API for a capability by searching ALL of these live sources in ONE call — not just the Apiosk catalog. Call it whenever the user wants real/live/paid data.",
-      sources_searched: [
-        "apiosk — the Apiosk catalog: first-party listings PLUS federated externals (imported from providers' /.well-known/x402, the APILayer and ApyHub ecosystems, direct provider integrations, and selected MCP skills). Paid via apiosk_execute.",
-        "bazaar — the Coinbase x402 Bazaar, searched LIVE on every discover call (on by default). This is how external x402 endpoints that are NOT in the Apiosk catalog are found. Paid via apiosk_fetch_paid.",
-        "wellknown — probes the /.well-known/x402 of a specific host you name in probe_hosts (no speculative crawling). Paid via apiosk_fetch_paid.",
+        "apiosk_discover searches the whole x402 ecosystem in ONE call and returns ranked endpoints. This is the full list of sources it can explore. Call it whenever the user wants real/live/paid data.",
+      searched_by_default: [
+        "apiosk — the Apiosk catalog: first-party listings PLUS federated externals (imported from providers' /.well-known/x402, the APILayer & ApyHub ecosystems, direct provider integrations, and selected MCP skills). Paid via apiosk_execute.",
+        "bazaar — the Coinbase x402 Bazaar (~25k resources), searched LIVE every call. The central shared index most marketplaces + MCPs publish into. Paid via apiosk_fetch_paid.",
       ],
-      not_yet_wired:
-        "x402scan and x402list are recognized source names but not yet connected; requesting them returns a soft warning, not an error.",
+      opt_in_pass_sources_or_all: [
+        "x402-list — x402-list.com public directory (free REST).",
+        "x402-direct — x402.direct search engine with trust scores (free REST).",
+        "agentic-market — Coinbase Agentic.Market directory (free REST).",
+        "wellknown — probe a specific host's /.well-known/x402 (needs probe_hosts).",
+        "Use sources:['all'] to fan out to apiosk + bazaar + x402-list + x402-direct + agentic-market at once.",
+      ],
+      indexed_or_reference_only: [
+        "thirdweb Payments & PayAI facilitator — large indexes that MIRROR the Bazaar (deduped, not separately queried).",
+        "x402engine, anchor-x402, Apify (39k Actors, prepaid token) — reachable/payable; catalogued in gateway/config/x402-sources.json.",
+        "x402scan — verified but PAID per query ($0.01), reachable via apiosk_fetch_paid on demand.",
+        "x402list.fun (paid MCP), awesome-x402 (markdown), and facilitators Nevermined / @swader / x402.rs — reference, not directly searchable.",
+      ],
       important_note:
-        "These are DISCOVERY sources (where the agent LOOKS for endpoints) — different from a catalog listing's `source` field (where one existing entry was originally imported from). To find external endpoints, just call apiosk_discover: the Bazaar is queried by default, so you do NOT need to pass sources.",
+        "These are DISCOVERY sources (where the agent LOOKS for endpoints) — NOT the same as a catalog listing's `source` field (where one existing entry was imported from). The Bazaar is queried by default, so external endpoints surface without passing sources; pass sources:['all'] to also sweep the other public directories.",
       how_to:
-        "apiosk_discover({ query, segments }) → one ranked list across all sources; each result is tagged with `source`, `trust_tier`, and `executable_via`.",
+        "apiosk_discover({ query, segments, sources }) → one ranked list; each result tagged with `source`, `trust_tier`, and `executable_via`.",
     },
     payments: {
       topic: "payments",

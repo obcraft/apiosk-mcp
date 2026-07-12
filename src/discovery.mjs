@@ -31,16 +31,29 @@ const TRUST_TIER_WEIGHTS = {
   apiosk_verified: 100,
   apiosk_federated: 80,
   bazaar: 60,
+  thirdweb: 55,
+  payai: 55,
   x402scan: 45,
+  x402direct: 42,
+  agentic: 42,
   x402list: 35,
   wellknown_probe: 20,
 };
 
-// Sources implemented in this build. "x402scan"/"x402list" are documented but
-// their public APIs aren't pinned yet, so requesting one degrades to a warning
-// instead of guessing an endpoint. Kept as a Set so an unknown source is a soft
-// warning, never a hard failure.
-const IMPLEMENTED_SOURCES = new Set(["apiosk", "bazaar", "wellknown"]);
+// Live discovery sources this build can actually query. Verified endpoints (see
+// gateway/config/x402-sources.json). x402scan is verified but PAID per query, so
+// it stays opt-in-only and off `all`. Unknown source names degrade to a warning.
+const IMPLEMENTED_SOURCES = new Set([
+  "apiosk",
+  "bazaar",
+  "x402-list",
+  "x402-direct",
+  "agentic-market",
+  "wellknown",
+]);
+// `sources: ["all"]` fans out to every free, keyword-searchable index (not
+// wellknown — that needs probe_hosts; not the paid x402scan).
+const ALL_WIREABLE_SOURCES = ["apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market"];
 // Default: query every live source (Apiosk catalog + the live Coinbase Bazaar),
 // so the agent finds external x402 endpoints without having to remember to ask
 // for them. `wellknown` is not defaulted — it needs explicit `probe_hosts`.
@@ -420,6 +433,125 @@ async function fetchBazaarCandidates(query, { fetchImpl, now, maxResults }) {
   }
 }
 
+// Parse a USD price that may be a number, "$0.01", or "10000" (already USD).
+function parseUsdPrice(value) {
+  if (value === null || value === undefined) return null;
+  const n = Number(String(value).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Build a unified external item from a directory row (no accepts[] — the model
+// calls apiosk_inspect_x402 on `url` for the live 402 terms before paying).
+function makeExternalItem({ source, tier, url, name, description, priceUsdc, network, category, payTo }) {
+  const u = trimString(url);
+  if (!u) return null;
+  return {
+    id: `${source}:${u}`,
+    source,
+    trust_tier: tier,
+    external: true,
+    executable_via: "apiosk_fetch_paid",
+    url: u,
+    method: "GET",
+    name: sanitizeText(name || u, 120),
+    description: sanitizeText(description || ""),
+    category: category ? sanitizeText(category, 60) : null,
+    tags: [],
+    price_usdc: Number.isFinite(priceUsdc) ? priceUsdc : null,
+    asset: "USDC",
+    network: normalizeNetworkName(network) || "base",
+    pay_to: payTo ? sanitizeText(payTo, 80) : null,
+    docs_url: null,
+    listing_quality: "production",
+  };
+}
+
+// Verified free-REST directory sources (gateway/config/x402-sources.json). Each
+// is a keyless GET returning a service directory; we normalize into the unified
+// item shape. These carry no payTo/accepts, so results point the model to the
+// url for an apiosk_inspect_x402 before paying.
+const DIRECTORY_SOURCES = {
+  "x402-list": {
+    tier: "x402list",
+    urlFor: (q) => `https://x402-list.com/api/v1/services?per_page=25${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+    rows: (doc) => (Array.isArray(doc?.data) ? doc.data : []),
+    normalize: (r) =>
+      makeExternalItem({
+        source: "x402-list",
+        tier: "x402list",
+        url: r?.base_url,
+        name: r?.name,
+        description: r?.description,
+        priceUsdc: parseUsdPrice(r?.min_price_usd),
+        network: Array.isArray(r?.networks_caip2) ? r.networks_caip2[0] : r?.networks?.[0],
+        category: r?.category,
+      }),
+  },
+  "x402-direct": {
+    tier: "x402direct",
+    urlFor: () => `https://x402.direct/api/services?limit=25&sort=score`,
+    rows: (doc) => (Array.isArray(doc?.services) ? doc.services : []),
+    normalize: (r) =>
+      makeExternalItem({
+        source: "x402-direct",
+        tier: "x402direct",
+        url: r?.resourceUrl,
+        name: r?.provider || r?.description,
+        description: r?.description,
+        priceUsdc: parseUsdPrice(r?.priceUsd),
+        network: r?.network,
+        category: r?.category,
+      }),
+  },
+  "agentic-market": {
+    tier: "agentic",
+    urlFor: (q) =>
+      q
+        ? `https://api.agentic.market/v1/services/search?q=${encodeURIComponent(q)}`
+        : `https://api.agentic.market/v1/services`,
+    rows: (doc) => (Array.isArray(doc?.services) ? doc.services : []),
+    normalize: (r) => {
+      const ep = Array.isArray(r?.endpoints) ? r.endpoints[0] : null;
+      const price = r?.priceSummary?.avgCostPerTransaction ?? ep?.pricing?.amount;
+      return makeExternalItem({
+        source: "agentic-market",
+        tier: "agentic",
+        url: ep?.url,
+        name: r?.name,
+        description: r?.description,
+        priceUsdc: parseUsdPrice(price),
+        network: ep?.pricing?.network,
+        category: r?.category,
+      });
+    },
+  },
+};
+
+// Query one free-REST directory source (resilient: circuit breaker + cache +
+// timeout, exactly like the Bazaar fetcher).
+async function fetchDirectorySource(sourceId, query, { fetchImpl, now }) {
+  const cfg = DIRECTORY_SOURCES[sourceId];
+  if (!cfg) return { items: [], warnings: [] };
+  if (circuitOpen(sourceId, now)) {
+    return { items: [], warnings: [`${sourceId} temporarily skipped (circuit open).`] };
+  }
+  const cacheKey = `${sourceId}:${query}`;
+  const hit = searchCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) return { items: hit.items, warnings: [] };
+
+  try {
+    const doc = await fetchJsonWithTimeout(cfg.urlFor(query), { fetchImpl, timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS });
+    const items = cfg.rows(doc).map((row) => cfg.normalize(row)).filter(Boolean);
+    recordSourceSuccess(sourceId);
+    if (searchCache.size >= CACHE_MAX_ENTRIES) searchCache.clear();
+    searchCache.set(cacheKey, { items, expiresAt: now + EXTERNAL_CACHE_TTL_MS });
+    return { items, warnings: [] };
+  } catch (error) {
+    recordSourceFailure(sourceId, now);
+    return { items: [], warnings: [`${sourceId} search failed: ${trimString(error?.message || error)}`] };
+  }
+}
+
 // Generic /.well-known probing — ONLY for hosts the caller explicitly names, so
 // we never speculatively crawl. Tries /.well-known/x402 then the .json alias.
 async function probeWellKnownHost(host, { fetchImpl, now }) {
@@ -473,9 +605,13 @@ export async function runDiscover(args = {}, ctx = {}) {
     : DEFAULT_MAX_RESULTS;
   const maxPrice = Number.isFinite(args.max_price_usdc) ? Number(args.max_price_usdc) : null;
 
-  const requestedSources = Array.isArray(args.sources) && args.sources.length
+  let requestedSources = Array.isArray(args.sources) && args.sources.length
     ? args.sources.map(trimString).filter(Boolean)
     : DEFAULT_SOURCES;
+  // `all` fans out to every free, keyword-searchable index.
+  if (requestedSources.includes("all")) {
+    requestedSources = Array.from(new Set([...ALL_WIREABLE_SOURCES, ...requestedSources.filter((s) => s !== "all")]));
+  }
   const sourcesQueried = requestedSources.filter((s) => IMPLEMENTED_SOURCES.has(s));
   const sourcesUnavailable = requestedSources.filter((s) => !IMPLEMENTED_SOURCES.has(s));
   // Always include the Apiosk catalog — it's the trusted default and the only
@@ -518,6 +654,11 @@ export async function runDiscover(args = {}, ctx = {}) {
   const externalTasks = [];
   if (sourcesQueried.includes("bazaar")) {
     externalTasks.push(fetchBazaarCandidates(query, { fetchImpl, now, maxResults }));
+  }
+  for (const sourceId of Object.keys(DIRECTORY_SOURCES)) {
+    if (sourcesQueried.includes(sourceId)) {
+      externalTasks.push(fetchDirectorySource(sourceId, query, { fetchImpl, now }));
+    }
   }
   if (sourcesQueried.includes("wellknown")) {
     if (probeHosts.length) {
@@ -625,8 +766,11 @@ export const DISCOVER_TOOL = {
       },
       sources: {
         type: "array",
-        items: { type: "string", enum: ["apiosk", "bazaar", "x402scan", "wellknown"] },
-        description: "Discovery sources to query. Defaults to ['apiosk','bazaar'] — the Apiosk catalog (incl. federated externals) AND the live Coinbase x402 Bazaar, so external endpoints surface automatically. Add 'wellknown' with `probe_hosts` to also read a specific host's /.well-known/x402. 'x402scan'/'x402list' are not yet wired and return a soft warning.",
+        items: {
+          type: "string",
+          enum: ["all", "apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market", "wellknown"],
+        },
+        description: "Discovery sources to query. Default ['apiosk','bazaar'] (Apiosk catalog + live Coinbase Bazaar). Use ['all'] to also fan out to the other free public x402 directories (x402-list, x402-direct, agentic-market). Add 'wellknown' with `probe_hosts` to read a specific host's /.well-known/x402. Call apiosk_help topic='discovery' for the full source list + status.",
       },
       probe_hosts: {
         type: "array",

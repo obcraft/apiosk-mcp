@@ -254,6 +254,39 @@ test("discover isolates a failing Bazaar source (catalog still returned)", async
   assert.ok(payload.warnings.some((w) => /Bazaar/.test(w)), "records a Bazaar warning");
 });
 
+test("sources:['all'] fans out to the free directory sources and normalizes each shape", async () => {
+  clearDiscoveryCache();
+  clearDiscoveryCircuit();
+  const fetchImpl = async (url) => {
+    const u = String(url);
+    if (u.includes("x402-list.com")) {
+      return { ok: true, status: 200, json: async () => ({ data: [{ name: "WeatherX", description: "weather", base_url: "https://wx.example.com", category: "weather", min_price_usd: 0.004, networks_caip2: ["eip155:8453"] }] }) };
+    }
+    if (u.includes("x402.direct")) {
+      return { ok: true, status: 200, json: async () => ({ services: [{ resourceUrl: "https://d.example.com/w", provider: "DirectW", description: "weather", network: "base", priceUsd: "$0.006" }] }) };
+    }
+    if (u.includes("agentic.market")) {
+      return { ok: true, status: 200, json: async () => ({ services: [{ name: "AgenticW", description: "weather", priceSummary: { avgCostPerTransaction: 0.008 }, endpoints: [{ url: "https://a.example.com/w", pricing: { amount: 0.008, network: "eip155:8453" } }] }] }) };
+    }
+    throw new Error(`unexpected ${u}`); // bazaar stub throws → resilient, no items
+  };
+  const res = await runDiscover(
+    { query: "weather", sources: ["all"] },
+    { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com", fetchImpl }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  for (const s of ["apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market"]) {
+    assert.ok(payload.sources_queried.includes(s), `all → queried ${s}`);
+  }
+  const bySource = Object.fromEntries(payload.results.map((r) => [r.source, r]));
+  assert.equal(bySource["x402-list"].url, "https://wx.example.com");
+  assert.equal(bySource["x402-list"].price_usdc, 0.004);
+  assert.equal(bySource["x402-direct"].url, "https://d.example.com/w");
+  assert.equal(bySource["x402-direct"].price_usdc, 0.006);
+  assert.equal(bySource["agentic-market"].url, "https://a.example.com/w");
+  assert.ok(payload.results.every((r) => !r.external || r.executable_via === "apiosk_fetch_paid"));
+});
+
 test("wellknown source needs probe_hosts and probes only named hosts", async () => {
   clearDiscoveryCache();
   clearDiscoveryCircuit();
