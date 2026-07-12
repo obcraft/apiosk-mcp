@@ -21,6 +21,10 @@ import {
   buildDiscoveryDocument,
   getOpenApiRouteDocument,
 } from "./src/publisher.mjs";
+import {
+  SETTLEMENT_DISCLOSURE_PATH,
+  createSettlementDisclosurePage,
+} from "./src/settlement-disclosure.mjs";
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
@@ -271,6 +275,13 @@ app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
 
 app.get("/logo-optimized-light.png", (req, res) => {
   res.type("png").sendFile(fileURLToPath(new URL("./logo-optimized-light.png", import.meta.url)));
+});
+
+app.get(SETTLEMENT_DISCLOSURE_PATH, (_req, res) => {
+  res
+    .setHeader("cache-control", "public, max-age=300")
+    .type("html")
+    .send(createSettlementDisclosurePage());
 });
 
 // Self-hosted browser bundle for the /authorize Create-wallet flow (viem

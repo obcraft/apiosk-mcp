@@ -366,6 +366,8 @@ test("production OAuth requires explicit wallet limits before returning to ChatG
     assert.equal(identityResponse.statusCode, 200);
     assert.equal(identityResponse.redirectedTo, null, "identity alone must not redirect");
     assert.match(identityResponse.body, /Authorize automatic API payments/);
+    assert.match(identityResponse.body, /\/security\/settlement-contract/);
+    assert.match(identityResponse.body, /Verify the settlement contract, fee history, and approval scope/);
     const pending = identityResponse.body.match(/name="pending_authorization" value="([^"]+)"/)?.[1];
     assert.ok(pending);
 

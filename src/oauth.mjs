@@ -5,6 +5,7 @@ import express from "express";
 import { OAuthClientMetadataSchema } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { createOAuthMetadata, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { authorizationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
+import { SETTLEMENT_DISCLOSURE_PATH } from "./settlement-disclosure.mjs";
 import { tokenHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/token.js";
 import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/register.js";
 import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/metadata.js";
@@ -1583,6 +1584,7 @@ function createPaymentAuthorizationPage({
   pendingAuthorization,
   wallets,
   settlement,
+  disclosureUrl,
   errorMessage = "",
 }) {
   const scope = Array.isArray(oauthParams.scopes) ? oauthParams.scopes.join(" ") : "";
@@ -1643,7 +1645,7 @@ function createPaymentAuthorizationPage({
       <div class="field"><label for="daily">Maximum per day (USDC)</label><input id="daily" name="daily_limit_usdc" type="number" min="0.000001" max="1000" step="0.000001" value="${escapeHtml(first?.dailyLimitUsdc || 10)}" required /></div></div>
       <label class="consent"><input type="checkbox" name="payment_consent" value="yes" required /><span>I authorize ${escapeHtml(clientName.client_name || "this app")} to make pay-per-call x402 payments from this wallet within these limits. I can revoke the connection at any time.</span></label>
       <button id="authorize-button" type="submit">Authorize and return to ${escapeHtml(clientName.client_name || "app")}</button>
-    </form><p class="note">Only this MCP connection receives the scoped token. Direct x402 payments and other Apiosk connections are unchanged.</p>
+    </form><p class="note">Only this MCP connection receives the scoped token. Direct x402 payments and other Apiosk connections are unchanged. <a href="${escapeHtml(disclosureUrl)}" target="_blank" rel="noopener noreferrer">Verify the settlement contract, fee history, and approval scope</a>.</p>
   </main></div><script>(()=>{
     const settlement=${JSON.stringify(settlement || null).replaceAll("<", "\\u003c")};
     const form=document.getElementById("payment-form");
@@ -2012,6 +2014,7 @@ class ApioskHostedOAuthProvider {
         .send(
           createPaymentAuthorizationPage({
             actionPath: new URL("/authorize", this.issuerUrl).pathname,
+            disclosureUrl: new URL(SETTLEMENT_DISCLOSURE_PATH, this.issuerUrl).href,
             appName: this.appName,
             clientName: client,
             oauthParams: params,
