@@ -383,8 +383,15 @@ test("production OAuth requires explicit wallet limits before returning to ChatG
       },
     });
     await support.provider.authorize(client, params, consentResponse);
-    assert.equal(consentResponse.statusCode, 302);
-    assert.match(consentResponse.redirectedTo, /^https:\/\/chatgpt\.com\/connector\/oauth\/callback/);
+    assert.equal(consentResponse.statusCode, 200);
+    assert.equal(consentResponse.redirectedTo, null, "consent shows the connected page, not a bare redirect");
+    assert.match(consentResponse.body, /You're connected/);
+    const continueHref = consentResponse.body
+      .match(/id="continue" href="([^"]+)"/)?.[1]
+      ?.replaceAll("&amp;", "&");
+    assert.ok(continueHref, "the connected page links back to the client callback");
+    assert.match(continueHref, /^https:\/\/chatgpt\.com\/connector\/oauth\/callback/);
+    assert.ok(new URL(continueHref).searchParams.get("code"), "the callback link carries the authorization code");
     assert.equal(mintArgs.walletId, "wallet_payable_1");
     assert.equal(mintArgs.perTxLimitUsdc, "0.75");
     assert.equal(mintArgs.dailyLimitUsdc, "12");

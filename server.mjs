@@ -284,22 +284,29 @@ app.get(SETTLEMENT_DISCLOSURE_PATH, (_req, res) => {
     .send(createSettlementDisclosurePage());
 });
 
-// Self-hosted browser bundle for the /authorize Create-wallet flow (viem
-// generateMnemonic/mnemonicToAccount). Served same-origin because some
-// embedded browsers refuse cross-origin dynamic module imports, which would
-// silently break wallet creation if we pulled this from a CDN. Regenerate
-// with scripts/build-wallet-lib.mjs after a viem upgrade.
-let walletAccountsBundle = null;
-app.get("/assets/wallet-accounts.mjs", async (req, res) => {
+// Self-hosted browser bundles for the /authorize wallet flows. Served
+// same-origin because embedded mobile browsers can refuse cross-origin dynamic
+// module imports. Regenerate with scripts/build-wallet-lib.mjs after upgrades.
+const browserBundleFiles = new Map([
+  ["wallet-accounts.mjs", new URL("./src/assets/wallet-accounts.mjs", import.meta.url)],
+  ["walletconnect-provider.mjs", new URL("./src/assets/walletconnect-provider.mjs", import.meta.url)],
+]);
+const browserBundleCache = new Map();
+
+app.get("/assets/:bundle", async (req, res, next) => {
+  const bundleUrl = browserBundleFiles.get(req.params.bundle);
+  if (!bundleUrl) return next();
+
   try {
-    if (!walletAccountsBundle) {
+    let bundle = browserBundleCache.get(req.params.bundle);
+    if (!bundle) {
       const { readFile } = await import("node:fs/promises");
-      const bundleUrl = new URL("./src/assets/wallet-accounts.mjs", import.meta.url);
-      walletAccountsBundle = await readFile(bundleUrl);
+      bundle = await readFile(bundleUrl);
+      browserBundleCache.set(req.params.bundle, bundle);
     }
     res.setHeader("content-type", "text/javascript; charset=utf-8");
     res.setHeader("cache-control", "public, max-age=3600");
-    res.send(walletAccountsBundle);
+    res.send(bundle);
   } catch (error) {
     res.status(404).json({
       error: "not_found",

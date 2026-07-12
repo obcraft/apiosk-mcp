@@ -1302,7 +1302,10 @@ function createAuthorizePage({
         }
 
         async function connectWalletConnect() {
-          const mod = await import("https://esm.sh/@walletconnect/ethereum-provider@2.23.9?bundle");
+          // Keep this same-origin: iOS and other embedded OAuth browsers can
+          // reject a cross-origin dynamic module import before WalletConnect
+          // gets a chance to open its mobile/QR pairing modal.
+          const mod = await import("/assets/walletconnect-provider.mjs");
           const EthereumProvider = mod.EthereumProvider || (mod.default && mod.default.EthereumProvider) || mod.default;
           const origin = window.location.origin;
           const provider = await EthereumProvider.init({
@@ -1679,6 +1682,35 @@ function createPaymentAuthorizationPage({
       }catch(error){alert(error instanceof Error?error.message:"USDC authorization failed.");button.disabled=false;button.textContent="Authorize and return to ${escapeHtml(clientName.client_name || "app")}";}
     });
   })();</script></body></html>`;
+}
+
+function createConnectionCompletePage({ appName, clientName, redirectTarget }) {
+  const clientLabel = clientName.client_name || "the app";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  <meta http-equiv="refresh" content="2;url=${escapeHtml(redirectTarget)}" />
+  <title>Connected · ${escapeHtml(appName)}</title>
+  <style>
+    :root{font-family:"Google Sans","Product Sans","Google Sans Text",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:light dark;--background:#f8f9fb;--foreground:#1f2028;--card:#fff;--border:#e7e3ef;--muted:#676371;--primary:#6b38d4;--primary-accent:#8b5cf6;--glow:#eadfff;--success:#34a877;--shadow:0 22px 54px -28px rgba(48,28,100,.34);color:var(--foreground);background:var(--background)}
+    @media (prefers-color-scheme:dark){:root{--background:#0d0f13;--foreground:#ecebf2;--card:#15171d;--border:#262a34;--muted:#a5a2b0;--primary:#7a45e6;--primary-accent:#a78bfa;--glow:#1d1730;--success:#6fd8a6;--shadow:0 24px 52px -26px rgba(0,0,0,.72)}}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(820px 440px at 88% -10%,var(--glow),transparent 62%),var(--background);-webkit-font-smoothing:antialiased}
+    .page{min-height:100vh;display:grid;place-items:center;padding:44px 20px}
+    main{width:min(480px,100%);background:color-mix(in srgb,var(--card) 96%,transparent);border:1px solid var(--border);border-radius:18px;padding:32px;box-shadow:var(--shadow);text-align:center}
+    .check{width:56px;height:56px;margin:0 auto 18px;border-radius:50%;background:color-mix(in srgb,var(--success) 16%,transparent);display:grid;place-items:center}
+    .check svg{width:28px;height:28px;stroke:var(--success)}
+    h1{margin:0 0 10px;font-size:27px;font-weight:600;letter-spacing:-.02em}p{color:var(--muted);line-height:1.55;margin:0 0 22px}
+    .steps{display:flex;gap:7px;margin:0 0 22px}.step{height:5px;flex:1;border-radius:99px;background:var(--success)}
+    a.continue{display:block;border-radius:10px;padding:13px 16px;font-weight:600;background:linear-gradient(135deg,#6b38d4,#7c4ee6);color:#fff;text-decoration:none;box-shadow:0 10px 22px -14px rgba(107,56,212,.8)}
+    .note{font-size:12px;color:var(--muted);margin:14px 0 0}
+  </style></head><body><div class="page"><main>
+    <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <h1>You're connected</h1>
+    <p>Payments are authorized. Finishing up in ${escapeHtml(clientLabel)} — you can close this window once ${escapeHtml(clientLabel)} shows the connection.</p>
+    <div class="steps" aria-label="Authorization complete"><span class="step"></span><span class="step"></span><span class="step"></span></div>
+    <a class="continue" id="continue" href="${escapeHtml(redirectTarget)}">Continue to ${escapeHtml(clientLabel)}</a>
+    <p class="note">Returning you to ${escapeHtml(clientLabel)} automatically…</p>
+  </main></div><script>setTimeout(()=>{window.location.replace(${JSON.stringify(redirectTarget).replaceAll("<", "\\u003c")})},1200);</script></body></html>`;
 }
 
 function resolveMcpWalletAuthConfig(env = process.env) {
@@ -2138,7 +2170,9 @@ class ApioskHostedOAuthProvider {
         if (!mintedConnect?.connectToken) {
           throw statusError("Could not create the scoped Apiosk payment token. Try again.", 502);
         }
-        await this.finishAuthorization(res, client, params, pending.session, mintedConnect);
+        await this.finishAuthorization(res, client, params, pending.session, mintedConnect, {
+          successPage: true,
+        });
       } catch (error) {
         if (!wallets.length) {
           renderPage(error.status && error.status >= 400 ? error.status : 400, {
@@ -2161,7 +2195,14 @@ class ApioskHostedOAuthProvider {
     });
   }
 
-  async finishAuthorization(res, client, params, session, authorizedConnect = null) {
+  async finishAuthorization(
+    res,
+    client,
+    params,
+    session,
+    authorizedConnect = null,
+    { successPage = false } = {}
+  ) {
     const sessionToken = trimString(session.session_token);
     const normalizedSessionExpiry = normalizeSessionExpiry(session.expires_at);
 
@@ -2202,13 +2243,30 @@ class ApioskHostedOAuthProvider {
       normalizedSessionExpiry
     ).token;
 
-    res.redirect(
-      302,
-      buildRedirectUri(params.redirectUri, {
-        code: authorizationCode,
-        state: params.state,
-      })
-    );
+    const redirectTarget = buildRedirectUri(params.redirectUri, {
+      code: authorizationCode,
+      state: params.state,
+    });
+
+    if (successPage) {
+      // After the on-chain USDC approval, land on an explicit confirmation
+      // instead of bouncing straight to the client: the page still delivers
+      // the authorization code (auto-continue + manual link) because the
+      // OAuth client only completes the connection once its callback runs.
+      res
+        .status(200)
+        .setHeader("content-type", "text/html; charset=utf-8")
+        .send(
+          createConnectionCompletePage({
+            appName: this.appName,
+            clientName: client,
+            redirectTarget,
+          })
+        );
+      return;
+    }
+
+    res.redirect(302, redirectTarget);
   }
 
   async challengeForAuthorizationCode(client, authorizationCode) {

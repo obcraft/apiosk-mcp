@@ -210,6 +210,7 @@ const WALLET_TEST_ENV = {
   NODE_ENV: "test",
   APIOSK_SUPABASE_URL: "https://sb.test",
   APIOSK_SUPABASE_SERVICE_ROLE_KEY: "service-role-test",
+  APIOSK_MCP_WALLETCONNECT_PROJECT_ID: "walletconnect-test-project",
 };
 
 // A signed wallet message the way the browser builds it (multi-line, "\n").
@@ -565,9 +566,14 @@ test("authorize page offers wallet creation and created_wallet sign-ins reach wa
       "created_wallet",
       "generateMnemonic",
       "/assets/wallet-accounts.mjs",
+      "/assets/walletconnect-provider.mjs",
     ]) {
       assert.ok(html.includes(marker), `authorize page should include ${marker}`);
     }
+    assert.ok(
+      !html.includes('import("https://esm.sh/'),
+      "authorize page should not load wallet modules from a cross-origin CDN"
+    );
 
     // A created-wallet sign-in must forward method=created_wallet to the
     // wallet-auth function (it stamps auth_method on the new account).
