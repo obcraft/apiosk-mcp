@@ -41,7 +41,12 @@ const TRUST_TIER_WEIGHTS = {
 // instead of guessing an endpoint. Kept as a Set so an unknown source is a soft
 // warning, never a hard failure.
 const IMPLEMENTED_SOURCES = new Set(["apiosk", "bazaar", "wellknown"]);
-const DEFAULT_SOURCES = ["apiosk"];
+// Default: query every live source (Apiosk catalog + the live Coinbase Bazaar),
+// so the agent finds external x402 endpoints without having to remember to ask
+// for them. `wellknown` is not defaulted — it needs explicit `probe_hosts`.
+// Bazaar is resilient (per-source timeout + cache + circuit breaker), so if it's
+// slow/down, discovery degrades to catalog results with a warning.
+const DEFAULT_SOURCES = ["apiosk", "bazaar"];
 
 // Coinbase x402 Bazaar public discovery API (no auth for search).
 const CDP_BAZAAR_SEARCH_URL = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/search";
@@ -621,7 +626,7 @@ export const DISCOVER_TOOL = {
       sources: {
         type: "array",
         items: { type: "string", enum: ["apiosk", "bazaar", "x402scan", "wellknown"] },
-        description: "Discovery sources to query. Defaults to ['apiosk'] (which already includes federated external listings). Add 'bazaar' to also search the Coinbase x402 Bazaar live, or 'wellknown' with `probe_hosts` to read a specific host's /.well-known/x402. 'x402scan'/'x402list' are not yet wired and return a soft warning.",
+        description: "Discovery sources to query. Defaults to ['apiosk','bazaar'] — the Apiosk catalog (incl. federated externals) AND the live Coinbase x402 Bazaar, so external endpoints surface automatically. Add 'wellknown' with `probe_hosts` to also read a specific host's /.well-known/x402. 'x402scan'/'x402list' are not yet wired and return a soft warning.",
       },
       probe_hosts: {
         type: "array",

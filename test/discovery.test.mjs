@@ -108,7 +108,7 @@ test("tokenize drops stopwords and short noise", () => {
 test("discover ranks FX endpoints first and excludes unrelated weather", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "realtime USD exchange rate", segments: ["exchange rate", "currency conversion"] },
+    { query: "realtime USD exchange rate", segments: ["exchange rate", "currency conversion"], sources: ["apiosk"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
@@ -122,7 +122,7 @@ test("discover ranks FX endpoints first and excludes unrelated weather", async (
 test("discover normalizes federated externals with url + payTo + fetch_paid routing", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "exchange rate oracle" },
+    { query: "exchange rate oracle", sources: ["apiosk"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
@@ -148,7 +148,7 @@ test("normalizeApioskItem builds gateway url from base when gateway_url is blank
 test("discover enforces max_price_usdc ceiling", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "exchange rate", max_price_usdc: 0.02 },
+    { query: "exchange rate", max_price_usdc: 0.02, sources: ["apiosk"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
@@ -169,6 +169,39 @@ test("discover flags unimplemented sources without failing", async () => {
   assert.deepEqual(payload.sources_unavailable.sort(), ["x402list", "x402scan"]);
   assert.ok(payload.sources_queried.includes("apiosk"), "apiosk always queried");
   assert.ok(payload.results.length > 0, "still returns catalog results");
+});
+
+test("discover queries the Bazaar by default (no sources needed)", async () => {
+  clearDiscoveryCache();
+  clearDiscoveryCircuit();
+  let bazaarHit = false;
+  const bazaarFetch = async (url) => {
+    bazaarHit = true;
+    assert.match(String(url), /x402\/discovery\/search/);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        resources: [
+          {
+            resource: "https://weather.example.com/now",
+            description: "External weather feed",
+            metadata: { serviceName: "Weather X" },
+            accepts: [{ scheme: "exact", network: "base", amount: "3000", asset: "0xUSDC", payTo: "0xW" }],
+          },
+        ],
+      }),
+    };
+  };
+  // No `sources` passed → the default must include the live Bazaar.
+  const res = await runDiscover(
+    { query: "weather forecast" },
+    { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com", fetchImpl: bazaarFetch }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  assert.ok(bazaarHit, "Bazaar was queried without an explicit sources arg");
+  assert.ok(payload.sources_queried.includes("bazaar"), "bazaar reported as queried by default");
+  assert.ok(payload.results.some((r) => r.source === "bazaar"), "external Bazaar result merged in");
 });
 
 test("discover queries the Bazaar live source and merges external results", async () => {
@@ -259,7 +292,7 @@ test("discover requires a query", async () => {
 test("discover result carries the untrusted-text guardrail", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "exchange rate" },
+    { query: "exchange rate", sources: ["apiosk"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);

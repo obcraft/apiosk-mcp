@@ -113,6 +113,7 @@ async function main() {
   const discoverRes = await runtime.callTool("apiosk_discover", {
     query: "realtime USD exchange rate",
     segments: ["USD EUR exchange rate", "currency conversion"],
+    sources: ["apiosk"], // scope to catalog for a deterministic offline demo
   });
   const discover = JSON.parse(discoverRes.content[0].text);
   const topSlugs = discover.results.map((r) => r.listing_slug);
