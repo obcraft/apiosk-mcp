@@ -80,6 +80,7 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
     "apiosk_help",
     "apiosk_payment_guide",
     "apiosk_search",
+    "apiosk_explore",
     "apiosk_discover",
     "apiosk_inspect_x402",
     "apiosk_get_api",
@@ -92,9 +93,8 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
 
   // Noise removed from the default buyer surface (still dispatchable by name,
   // still restorable via APIOSK_MCP_FULL_TOOLS): advanced wallet CRUD,
-  // explore/metadata/health duplicates, and provider publishing.
+  // metadata/health duplicates, and provider publishing.
   for (const name of [
-    "apiosk_explore",
     "apiosk_metadata",
     "apiosk_health",
     "apiosk_create_wallet",
@@ -128,6 +128,20 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
   assert.equal(await runtime.isToolProtected("apiosk_fetch_paid"), true);
   assert.equal(await runtime.isToolProtected("apiosk_list_wallets"), true);
   assert.equal(await runtime.isToolProtected("demo-api"), true); // paid dynamic tool
+
+  const listedTools = await runtime.listTools();
+  assert.deepEqual(
+    listedTools.find((tool) => tool.name === "apiosk_search")?.securitySchemes,
+    [{ type: "noauth" }]
+  );
+  assert.deepEqual(
+    listedTools.find((tool) => tool.name === "apiosk_execute")?.securitySchemes,
+    [{ type: "oauth2", scopes: ["mcp:tools"] }]
+  );
+  assert.deepEqual(
+    listedTools.find((tool) => tool.name === "apiosk_execute")?._meta?.securitySchemes,
+    [{ type: "oauth2", scopes: ["mcp:tools"] }]
+  );
 
   const result = await runtime.callTool(
     "apiosk_execute",
@@ -165,6 +179,33 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
   } finally {
     delete process.env.APIOSK_MCP_DYNAMIC_TOOLS;
   }
+});
+
+test("hosted runtime ignores local-wallet enablement and safely rejects stale local-only calls", async () => {
+  let localStoreTouched = false;
+  const runtime = createApioskMcpRuntime({
+    env: { APIOSK_ENABLE_LOCAL_WALLETS: "true" },
+    enableLocalWallets: true,
+    hostedAuthEnabled: true,
+    localWalletStore: {
+      async resolveSigningWallet() {
+        localStoreTouched = true;
+        throw new Error("hosted runtime touched local wallet state");
+      },
+    },
+    client: createFakeGatewayClient(),
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+  });
+
+  for (const name of ["apiosk_get_started", "apiosk_wallet_create", "apiosk_publish_api"]) {
+    const result = await runtime.callTool(name, {});
+    assert.equal(result.isError, undefined, `${name} should not collapse into MCP -32603`);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.status, "unsupported");
+    assert.equal(payload.error_code, "tool.local_only");
+  }
+
+  assert.equal(localStoreTouched, false);
 });
 
 function createMockResponse(req) {

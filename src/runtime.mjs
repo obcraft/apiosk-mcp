@@ -42,6 +42,7 @@ import { FETCH_PAID_TOOL, runFetchPaid } from "./external-fetch.mjs";
 const DEFAULT_LIMIT = 25;
 const CACHE_TTL_MS = 60_000;
 const DEFAULT_GATEWAY_BASE_URL = "https://gateway.apiosk.com";
+const HOSTED_OAUTH_SCOPE = "mcp:tools";
 
 // Permissive default output schema advertised for every tool that does not
 // declare its own. MCP clients (ChatGPT, Claude, …) flag tools with no
@@ -115,7 +116,7 @@ const TOOL_ANNOTATIONS = {
 // default output schema and behaviour annotations for any tool that doesn't
 // already declare its own, so clients stop flagging "output schema recommended"
 // and render accurate read-only/destructive/open-world badges.
-function normalizeToolForClient(tool) {
+function normalizeToolForClient(tool, { hosted = false, protectedTool = false } = {}) {
   if (!tool || typeof tool !== "object") return tool;
   let next = tool;
   if (!next.outputSchema) {
@@ -124,11 +125,21 @@ function normalizeToolForClient(tool) {
   if (!next.annotations && TOOL_ANNOTATIONS[next.name]) {
     next = { ...next, annotations: TOOL_ANNOTATIONS[next.name] };
   }
+  if (hosted && !next.securitySchemes) {
+    const securitySchemes = protectedTool
+      ? [{ type: "oauth2", scopes: [HOSTED_OAUTH_SCOPE] }]
+      : [{ type: "noauth" }];
+    next = {
+      ...next,
+      securitySchemes,
+      _meta: {
+        ...(next._meta || {}),
+        // Back-compat mirror required by older ChatGPT connector clients.
+        securitySchemes,
+      },
+    };
+  }
   return next;
-}
-
-function normalizeToolsForClient(tools) {
-  return Array.isArray(tools) ? tools.map(normalizeToolForClient) : tools;
 }
 
 const DASHBOARD_WALLET_TOOLS = [
@@ -890,6 +901,7 @@ const HOSTED_REMOTE_TOOLS = [
 const HOSTED_BUYER_TOOLS = [
   HELP_TOOL,
   DISCOVER_TOOL,
+  EXPLORE_TOOL,
   INSPECT_TOOL,
   EXECUTE_TOOL,
   FETCH_PAID_TOOL,
@@ -919,6 +931,16 @@ const ALL_STATIC_TOOLS = [
   ...PUBLISH_TOOLS,
   ...PUBLISHER_TOOLS,
 ];
+
+// These tools read or mutate client-machine state (local files, local signing
+// keys, or a local dashboard session). They must never execute in the hosted
+// multi-tenant server, even if a stale MCP client cached an older tool list or
+// the deployment accidentally carries APIOSK_ENABLE_LOCAL_WALLETS=true.
+const LOCAL_ONLY_TOOL_NAMES = new Set([
+  ...LOCAL_ACCOUNT_AND_CREDITS_TOOLS.map((tool) => tool.name),
+  ...LOCAL_WALLET_TOOLS.map((tool) => tool.name),
+  ...PUBLISH_TOOLS.map((tool) => tool.name),
+]);
 
 const PUBLIC_STATIC_TOOL_NAMES = new Set(
   DISCOVERY_TOOLS.map((tool) => tool.name).filter((name) => name !== "apiosk_execute")
@@ -1583,8 +1605,10 @@ export function createApioskMcpRuntime(options = {}) {
   const providedDashboardManager = options.walletManager || null;
   const hostedAuthEnabled = options.hostedAuthEnabled === true;
   const localWalletStore =
-    options.localWalletStore ||
-    (options.enableLocalWallets === false ? null : createLocalWalletStore(env));
+    hostedAuthEnabled
+      ? null
+      : options.localWalletStore ||
+        (options.enableLocalWallets === false ? null : createLocalWalletStore(env));
   const cache = {
     catalog: null,
     expiresAt: 0,
@@ -1594,6 +1618,7 @@ export function createApioskMcpRuntime(options = {}) {
   };
 
   async function getActiveExecutionWallet() {
+    if (hostedAuthEnabled) return null;
     try {
       const envWallet = resolveEnvPrivateWallet(env);
       if (envWallet) return envWallet;
@@ -1606,6 +1631,7 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   async function getSavedConfig() {
+    if (hostedAuthEnabled) return null;
     return readLocalApioskConfig(env);
   }
 
@@ -3513,7 +3539,9 @@ export function createApioskMcpRuntime(options = {}) {
       );
     }
 
-    return "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.";
+    return hostedAuthEnabled
+      ? "Authorize Apiosk in your MCP client, then use apiosk_list_wallets to confirm that a funded managed wallet is linked before retrying."
+      : "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.";
   }
 
   // Observability wrapper: time + log every tools/call dispatch to mcp_tool_calls
@@ -3550,6 +3578,18 @@ export function createApioskMcpRuntime(options = {}) {
 
   async function dispatchTool(name, argumentsObject = {}, authInfo = null) {
     try {
+      if (hostedAuthEnabled && LOCAL_ONLY_TOOL_NAMES.has(name)) {
+        return content({
+          status: "unsupported",
+          error_code: "tool.local_only",
+          message: `${name} is only available in the local stdio package and cannot run on the hosted Apiosk MCP server.`,
+          next_steps: [
+            "Use apiosk_search, apiosk_explore, or apiosk_discover anonymously.",
+            "For paid or account-specific actions, authorize Apiosk in the MCP client and use apiosk_list_wallets or apiosk_execute.",
+          ],
+        });
+      }
+
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
       if (name === "apiosk_payment_guide") return await handlePaymentGuide(argumentsObject, authInfo);
       if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
@@ -3622,8 +3662,19 @@ export function createApioskMcpRuntime(options = {}) {
   }
 
   return {
-    listTools: async (authInfo = null) =>
-      normalizeToolsForClient(await getTools(false, authInfo)),
+    listTools: async (authInfo = null) => {
+      const tools = await getTools(false, authInfo);
+      return Promise.all(
+        tools.map(async (tool) =>
+          normalizeToolForClient(tool, {
+            hosted: hostedAuthEnabled,
+            protectedTool: hostedAuthEnabled
+              ? await isToolProtected(tool.name, authInfo)
+              : false,
+          })
+        )
+      );
+    },
     isToolProtected,
     callTool,
   };

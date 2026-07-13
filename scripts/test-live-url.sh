@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-MCP_DIR="$ROOT_DIR/subs/mcp"
+MCP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$MCP_DIR/.." && pwd)"
 HOSTED_URL="${HOSTED_URL:-https://mcp.apiosk.com}"
 HOSTED_URL="${HOSTED_URL%/}"
 RUN_REMOTE_WALLET_TEST="${APIOSK_RUN_REMOTE_WALLET_TEST:-0}"
@@ -10,8 +10,8 @@ RUN_FUNDED_TESTS="${APIOSK_RUN_FUNDED_TESTS:-0}"
 RUN_PUBLISH_TEST="${APIOSK_RUN_PUBLISH_TEST:-0}"
 TEST_PRIVATE_KEY="${APIOSK_TEST_PRIVATE_KEY:-}"
 MCP_BEARER_TOKEN="${APIOSK_MCP_BEARER_TOKEN:-}"
-PAY_TEST_SLUG="${APIOSK_PAY_TEST_SLUG:-agent-json-diff}"
-PAY_TEST_OPERATION="${APIOSK_PAY_TEST_OPERATION:-/diff}"
+PAY_TEST_SLUG="${APIOSK_PAY_TEST_SLUG:-open-meteo}"
+PAY_TEST_OPERATION="${APIOSK_PAY_TEST_OPERATION:-forecast}"
 PUBLISH_ENDPOINT_URL="${APIOSK_PUBLISH_TEST_ENDPOINT_URL:-https://httpbin.org/anything}"
 CREATED_WALLET_IDS=()
 
@@ -193,9 +193,57 @@ process.stdin.on("end", () => {
       process.exit(1);
     }
   }
+  const forbidden = ["apiosk_get_started", "apiosk_wallet_create", "apiosk_configure", "apiosk_publish_api"];
+  for (const name of forbidden) {
+    if (names.includes(name)) {
+      console.error(`Hosted server leaked local-only tool: ${name}`);
+      process.exit(1);
+    }
+  }
+  const byName = new Map((response.result?.tools || []).map((tool) => [tool.name, tool]));
+  // @modelcontextprotocol/sdk currently preserves the ChatGPT compatibility
+  // mirror on the wire while stripping the newer top-level extension.
+  const searchSchemes = byName.get("apiosk_search")?._meta?.securitySchemes;
+  const executeSchemes = byName.get("apiosk_execute")?._meta?.securitySchemes;
+  if (JSON.stringify(searchSchemes) !== JSON.stringify([{ type: "noauth" }])) {
+    console.error(`apiosk_search securitySchemes mismatch: ${JSON.stringify(searchSchemes)}`);
+    process.exit(1);
+  }
+  if (JSON.stringify(executeSchemes) !== JSON.stringify([{ type: "oauth2", scopes: ["mcp:tools"] }])) {
+    console.error(`apiosk_execute securitySchemes mismatch: ${JSON.stringify(executeSchemes)}`);
+    process.exit(1);
+  }
   console.log(`Found ${names.length} tools.`);
 });
 ' "$@"
+}
+
+assert_sse_transport() {
+  local base_url="$1"
+  BASE_URL="$base_url" node --input-type=module <<'NODE'
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+
+const client = new Client({ name: "apiosk-live-sse-check", version: "1.0.0" });
+const transport = new SSEClientTransport(new URL(`${process.env.BASE_URL}/sse`));
+try {
+  await client.connect(transport);
+  const tools = await client.listTools();
+  if (!tools.tools.some((tool) => tool.name === "apiosk_search")) {
+    throw new Error("Legacy SSE transport did not expose apiosk_search");
+  }
+  const result = await client.callTool({
+    name: "apiosk_search",
+    arguments: { search: "x402scan", limit: 1 },
+  });
+  if (result.isError || !Array.isArray(result.structuredContent?.sources)) {
+    throw new Error("Legacy SSE public search did not return structured source results");
+  }
+  console.log("Legacy SSE transport completed list + public tool call.");
+} finally {
+  await client.close().catch(() => {});
+}
+NODE
 }
 
 assert_search_payload() {
@@ -525,29 +573,39 @@ process.stdin.on("end", () => {
 echo "==> Step 2: live OAuth metadata"
 assert_oauth_metadata "$HOSTED_URL"
 assert_protected_resource_metadata "$HOSTED_URL"
-assert_control_plane_auth_proxy "$HOSTED_URL"
 
 echo "==> Step 3: live tool surface"
 assert_tools "$HOSTED_URL" \
+  "apiosk_help" \
+  "apiosk_discover" \
   "apiosk_explore" \
+  "apiosk_search" \
+  "apiosk_get_api" \
   "apiosk_execute" \
-  "apiosk_metadata" \
-  "apiosk_health"
+  "apiosk_list_wallets"
 
 echo "==> Step 4: live discovery flow"
 explore_text="$(mcp_call_text "$HOSTED_URL" "apiosk_explore" '{"listing_type":"api","search":"weather","limit":2}')"
 assert_explore_payload "$explore_text"
 
-get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_metadata" '{"slug":"agent-json-diff"}')"
+get_text="$(mcp_call_text "$HOSTED_URL" "apiosk_get_api" '{"slug":"open-meteo"}')"
 assert_get_api_payload "$get_text"
 
-health_text="$(mcp_call_text "$HOSTED_URL" "apiosk_health" '{}')"
-assert_health_payload "$health_text"
+source_text="$(mcp_call_text "$HOSTED_URL" "apiosk_search" '{"search":"x402scan","limit":2}')"
+printf '%s' "$source_text" | node -e '
+const chunks=[]; process.stdin.on("data",c=>chunks.push(c)); process.stdin.on("end",()=>{
+  const payload=JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!payload.sources?.some((source)=>source.id==="x402scan")) process.exit(1);
+  console.log("Source registry search returned x402scan.");
+});'
 
-echo "==> Step 5: protected tools must challenge without auth"
-assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_execute" '{"slug":"agent-json-diff","input":{"before":{"ok":true},"after":{"ok":false}}}'
+echo "==> Step 5: legacy SSE compatibility"
+assert_sse_transport "$HOSTED_URL"
 
-echo "==> Step 6: optional authenticated protected-tool check"
+echo "==> Step 6: protected tools must challenge without auth"
+assert_protected_call_requires_auth "$HOSTED_URL" "apiosk_execute" '{"slug":"open-meteo","operation":"forecast","query":{"latitude":52.37,"longitude":4.89,"current":"temperature_2m"}}'
+
+echo "==> Step 7: optional authenticated protected-tool check"
 if [[ "$RUN_REMOTE_WALLET_TEST" == "1" ]]; then
   if [[ -z "$MCP_BEARER_TOKEN" ]]; then
     echo "APIOSK_RUN_REMOTE_WALLET_TEST=1 requires APIOSK_MCP_BEARER_TOKEN." >&2
@@ -557,10 +615,7 @@ if [[ "$RUN_REMOTE_WALLET_TEST" == "1" ]]; then
 process.stdout.write(JSON.stringify({
   slug: process.argv[1],
   operation: process.argv[2],
-  input: {
-    before: { ok: true, version: 1 },
-    after: { ok: false, version: 2 }
-  }
+  query: { latitude: 52.37, longitude: 4.89, current: "temperature_2m" }
 }));
 ' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")" "$MCP_BEARER_TOKEN")"
   assert_paid_execute_payload "$paid_text" "$PAY_TEST_SLUG"
@@ -584,10 +639,7 @@ paid_text="$(mcp_call_text "$HOSTED_URL" "apiosk_execute" "$(node -e '
 process.stdout.write(JSON.stringify({
   slug: process.argv[1],
   operation: process.argv[2],
-  input: {
-    before: { ok: true, version: 1 },
-    after: { ok: false, version: 2 }
-  }
+  query: { latitude: 52.37, longitude: 4.89, current: "temperature_2m" }
 }));
 ' "$PAY_TEST_SLUG" "$PAY_TEST_OPERATION")" "$MCP_BEARER_TOKEN")"
 assert_paid_execute_payload "$paid_text" "$PAY_TEST_SLUG"

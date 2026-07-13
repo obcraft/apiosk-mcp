@@ -248,7 +248,10 @@ const { issuerUrl, mcpServerUrl } = resolveHostedMcpUrls({
   port,
 });
 const runtime = createApioskMcpRuntime({
-  enableLocalWallets: process.env.APIOSK_ENABLE_LOCAL_WALLETS === "true",
+  // Hosted MCP is multi-tenant and must never read/write machine-local wallet
+  // or config state. Buyer identity and payment capability are request-scoped
+  // through OAuth/connect tokens; local wallets belong only to stdio installs.
+  enableLocalWallets: false,
   hostedAuthEnabled: true,
 });
 const hostedOAuth = createHostedOAuthSupport({
