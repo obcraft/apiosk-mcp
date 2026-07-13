@@ -16,7 +16,9 @@
 // The insert path mirrors the buyer portal's createConnection exactly
 // (buyer/src/lib/data/connections.ts + agent-wallet.ts) so the token format is
 // byte-identical and RLS applies as the signed-in user (we call PostgREST with
-// the user's own JWT, never the service role, as the Authorization bearer).
+// the user's own JWT as the Authorization bearer). The one service-role
+// exception is reclaimWalletRowForUser: rebinding an orphaned connected-wallet
+// row to the user who just proved control of the address via SIWE.
 
 import crypto from "node:crypto";
 
@@ -59,10 +61,12 @@ export function resolveSupabaseConfig(env = process.env) {
     env.APIOSK_SUPABASE_URL || env.SUPABASE_URL,
     DEFAULT_SUPABASE_URL
   );
-  const apiKey =
+  const serviceRoleKey =
     trimString(env.APIOSK_SUPABASE_SERVICE_ROLE_KEY) ||
     trimString(env.SUPABASE_SERVICE_ROLE_KEY) ||
-    trimString(env.SUPABASE_SERVICE_KEY) ||
+    trimString(env.SUPABASE_SERVICE_KEY);
+  const apiKey =
+    serviceRoleKey ||
     trimString(env.APIOSK_SUPABASE_PUBLISHABLE_KEY) ||
     trimString(env.APIOSK_SUPABASE_ANON_KEY) ||
     trimString(env.SUPABASE_PUBLISHABLE_KEY) ||
@@ -71,6 +75,7 @@ export function resolveSupabaseConfig(env = process.env) {
   return {
     supabaseUrl,
     apiKey,
+    serviceRoleKey,
     configured: Boolean(supabaseUrl && apiKey),
   };
 }
@@ -166,6 +171,135 @@ export async function listHostedPayableWallets({
     }));
 }
 
+function isDuplicateWalletAddressError(error) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return error?.status === 409 || /duplicate key|23505|agent_wallets_wallet_address_key/i.test(message);
+}
+
+async function fetchWalletRowByAddress(config, { bearer, address, select }) {
+  const rows = await supabaseRest(
+    config,
+    `agent_wallets?select=${select}&wallet_address=eq.${encodeURIComponent(address)}&limit=1`,
+    { sessionToken: bearer }
+  );
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+// Service-role repair for the reconnect 409: agent_wallets.wallet_address is
+// globally UNIQUE, so when the row for this address is invisible to the user's
+// JWT (it belongs to an older auth user, e.g. after re-onboarding) the plain
+// insert always collides. The caller has just proven control of the address by
+// signing the SIWE message, so rebinding the row to the current user is the
+// legitimate outcome. Custodial rows (stored key) are never rebound — proving
+// control of the address does not prove ownership of the platform-held key's
+// account.
+async function reclaimWalletRowForUser(config, { userId, address }) {
+  const serviceKey = trimString(config.serviceRoleKey);
+  if (!serviceKey) return false;
+
+  const row = await fetchWalletRowByAddress(config, {
+    bearer: serviceKey,
+    address,
+    select: "id,user_id,status,encrypted_private_key",
+  });
+  if (!row || trimString(row.encrypted_private_key)) return false;
+
+  const previousOwner = trimString(row.user_id);
+  const patched = await supabaseRest(config, `agent_wallets?id=eq.${encodeURIComponent(row.id)}`, {
+    method: "PATCH",
+    sessionToken: serviceKey,
+    prefer: "return=representation",
+    body: { user_id: userId, status: "active", updated_at: new Date().toISOString() },
+  });
+  if (!Array.isArray(patched) || !patched.length) return false;
+
+  if (previousOwner && previousOwner !== userId) {
+    // The row changed hands: revoke live connect tokens minted under the old
+    // account so they cannot keep authorizing spends from this wallet.
+    await supabaseRest(
+      config,
+      `agent_wallet_connect_tokens?wallet_id=eq.${encodeURIComponent(row.id)}&revoked_at=is.null`,
+      {
+        method: "PATCH",
+        sessionToken: serviceKey,
+        body: { revoked_at: new Date().toISOString() },
+      }
+    ).catch(() => {});
+  }
+  return true;
+}
+
+async function ensureConnectedWalletRegistered(config, { sessionToken, userId, address }) {
+  // The payable listing filters on status=active, so a paused/revoked row the
+  // user already owns must be looked up separately and re-activated instead of
+  // re-inserted (the global UNIQUE on wallet_address rejects the insert).
+  const own = await fetchWalletRowByAddress(config, {
+    bearer: sessionToken,
+    address,
+    select: "id,status",
+  });
+  if (own) {
+    if (own.status === "active") return;
+    const updated = await supabaseRest(config, `agent_wallets?id=eq.${encodeURIComponent(own.id)}`, {
+      method: "PATCH",
+      sessionToken,
+      prefer: "return=representation",
+      body: { status: "active", updated_at: new Date().toISOString() },
+    });
+    if (Array.isArray(updated) && updated.length) return;
+    if (await reclaimWalletRowForUser(config, { userId, address })) return;
+    throw statusError(
+      `This wallet is registered on your account but ${trimString(own.status) || "inactive"}, and it could not be re-activated automatically. Re-activate it in the Apiosk dashboard, then connect again.`,
+      409
+    );
+  }
+
+  try {
+    const inserted = await supabaseRest(config, "agent_wallets", {
+      method: "POST",
+      sessionToken,
+      prefer: "return=representation",
+      body: {
+        user_id: userId,
+        label: "Connected wallet",
+        wallet_address: address,
+        chain: "base",
+        chain_id: BASE_CHAIN_ID,
+        status: "active",
+        daily_limit_usdc: 10,
+        per_tx_limit_usdc: 1,
+      },
+    });
+    if (!Array.isArray(inserted) || !inserted.length) {
+      throw statusError("Could not register the connected wallet for payments.", 502);
+    }
+  } catch (error) {
+    if (!isDuplicateWalletAddressError(error)) throw error;
+    // A concurrent connect may have inserted the row for this same user
+    // between our lookup and the POST — if it is visible now, adopt it.
+    const raced = await fetchWalletRowByAddress(config, {
+      bearer: sessionToken,
+      address,
+      select: "id,status",
+    });
+    if (raced) {
+      if (raced.status === "active") return;
+      const updated = await supabaseRest(config, `agent_wallets?id=eq.${encodeURIComponent(raced.id)}`, {
+        method: "PATCH",
+        sessionToken,
+        prefer: "return=representation",
+        body: { status: "active", updated_at: new Date().toISOString() },
+      });
+      if (Array.isArray(updated) && updated.length) return;
+    }
+    if (await reclaimWalletRowForUser(config, { userId, address })) return;
+    throw statusError(
+      "This wallet address is already registered to a different Apiosk account, so it could not be linked here automatically. Sign in with the account that originally registered it, or contact support to move the wallet.",
+      409
+    );
+  }
+}
+
 export async function prepareHostedPaymentWallets({
   env = process.env,
   sessionToken,
@@ -180,24 +314,7 @@ export async function prepareHostedPaymentWallets({
 
   let wallets = await listHostedPayableWallets({ env, sessionToken: token });
   if (!wallets.some((wallet) => wallet.address === address)) {
-    const inserted = await supabaseRest(config, "agent_wallets", {
-      method: "POST",
-      sessionToken: token,
-      prefer: "return=representation",
-      body: {
-        user_id: uid,
-        label: "Connected wallet",
-        wallet_address: address,
-        chain: "base",
-        chain_id: BASE_CHAIN_ID,
-        status: "active",
-        daily_limit_usdc: 10,
-        per_tx_limit_usdc: 1,
-      },
-    });
-    if (!Array.isArray(inserted) || !inserted.length) {
-      throw statusError("Could not register the connected wallet for payments.", 502);
-    }
+    await ensureConnectedWalletRegistered(config, { sessionToken: token, userId: uid, address });
     wallets = await listHostedPayableWallets({ env, sessionToken: token });
   }
 

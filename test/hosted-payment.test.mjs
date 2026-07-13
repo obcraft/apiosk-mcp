@@ -532,3 +532,132 @@ test("a signed browser wallet is registered and receives a scoped token after co
     globalThis.fetch = originalFetch;
   }
 });
+
+test("reconnecting re-activates the user's own revoked wallet row instead of inserting a duplicate", async () => {
+  const payer = "0x6666666666666666666666666666666666666666";
+  const activeRow = {
+    id: "wallet_revoked_1",
+    label: "Connected wallet",
+    wallet_address: payer,
+    status: "active",
+    daily_limit_usdc: 10,
+    per_tx_limit_usdc: 1,
+    encrypted_private_key: null,
+    created_at: "2026-07-12T00:00:00Z",
+  };
+  const calls = [];
+  let reactivated = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    const method = options.method || "GET";
+    calls.push({ href, method });
+    if (href.includes("/rest/v1/agent_wallets") && href.includes("status=eq.active")) {
+      return new Response(JSON.stringify(reactivated ? [activeRow] : []), { status: 200 });
+    }
+    if (href.includes("/rest/v1/agent_wallets") && href.includes(`wallet_address=eq.${payer}`)) {
+      return new Response(
+        JSON.stringify([{ id: "wallet_revoked_1", status: "revoked" }]),
+        { status: 200 }
+      );
+    }
+    if (href.includes("/rest/v1/agent_wallets?id=eq.wallet_revoked_1") && method === "PATCH") {
+      reactivated = true;
+      assert.equal(options.headers.authorization, "Bearer jwt_dashboard_session");
+      assert.equal(JSON.parse(options.body).status, "active");
+      return new Response(JSON.stringify([activeRow]), { status: 200 });
+    }
+    throw new Error(`Unexpected fetch: ${method} ${href}`);
+  };
+
+  try {
+    const wallets = await prepareHostedPaymentWallets({
+      env: WALLET_TEST_ENV,
+      sessionToken: "jwt_dashboard_session",
+      userId: "user_123",
+      connectedAddress: payer,
+    });
+    assert.equal(wallets.length, 1);
+    assert.equal(wallets[0].connected, true);
+    assert.ok(!calls.some((call) => call.method === "POST"), "no duplicate insert attempted");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("reconnecting reclaims a wallet row owned by a stale user via the service role", async () => {
+  const payer = "0x7777777777777777777777777777777777777777";
+  const activeRow = {
+    id: "wallet_stale_1",
+    label: "Connected wallet",
+    wallet_address: payer,
+    status: "active",
+    daily_limit_usdc: 10,
+    per_tx_limit_usdc: 1,
+    encrypted_private_key: null,
+    created_at: "2026-07-12T00:00:00Z",
+  };
+  const calls = [];
+  let reclaimed = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    const method = options.method || "GET";
+    const bearer = options.headers?.authorization || "";
+    calls.push({ href, method, bearer, body: options.body ? JSON.parse(options.body) : null });
+    if (href.includes("/rest/v1/agent_wallets") && href.includes("status=eq.active")) {
+      return new Response(JSON.stringify(reclaimed ? [activeRow] : []), { status: 200 });
+    }
+    if (href.includes("/rest/v1/agent_wallets") && href.includes(`wallet_address=eq.${payer}`)) {
+      // Invisible to the user's JWT (owned by a stale auth user); only the
+      // service role can see it.
+      if (bearer === "Bearer service-role-test") {
+        return new Response(
+          JSON.stringify([
+            { id: "wallet_stale_1", user_id: "user_old", status: "active", encrypted_private_key: null },
+          ]),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    if (href.endsWith("/rest/v1/agent_wallets") && method === "POST") {
+      return new Response(
+        JSON.stringify({
+          message: 'duplicate key value violates unique constraint "agent_wallets_wallet_address_key"',
+        }),
+        { status: 409 }
+      );
+    }
+    if (href.includes("/rest/v1/agent_wallets?id=eq.wallet_stale_1") && method === "PATCH") {
+      reclaimed = true;
+      assert.equal(bearer, "Bearer service-role-test");
+      const body = JSON.parse(options.body);
+      assert.equal(body.user_id, "user_123");
+      assert.equal(body.status, "active");
+      return new Response(JSON.stringify([activeRow]), { status: 200 });
+    }
+    if (href.includes("/rest/v1/agent_wallet_connect_tokens?wallet_id=eq.wallet_stale_1") && method === "PATCH") {
+      assert.equal(bearer, "Bearer service-role-test");
+      return new Response(JSON.stringify([]), { status: 200 });
+    }
+    throw new Error(`Unexpected fetch: ${method} ${href}`);
+  };
+
+  try {
+    const wallets = await prepareHostedPaymentWallets({
+      env: WALLET_TEST_ENV,
+      sessionToken: "jwt_dashboard_session",
+      userId: "user_123",
+      connectedAddress: payer,
+    });
+    assert.equal(wallets.length, 1);
+    assert.equal(wallets[0].connected, true);
+    const tokenRevoke = calls.find((call) =>
+      call.href.includes("agent_wallet_connect_tokens?wallet_id=eq.wallet_stale_1")
+    );
+    assert.ok(tokenRevoke, "stale owner's connect tokens are revoked on reclaim");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
