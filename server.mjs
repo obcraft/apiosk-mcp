@@ -193,7 +193,10 @@ function renderMcpWelcomeHtml(mcpUrl) {
     <h2>Connect from Claude Code</h2>
     <code>claude mcp add --transport http apiosk ${mcpUrl}</code>
 
-    <h2>Connect from ChatGPT (legacy SSE)</h2>
+    <h2>Connect from ChatGPT</h2>
+    <code class="endpoint">${mcpUrl}</code>
+
+    <h2>Legacy SSE fallback</h2>
     <code class="endpoint">${mcpUrl.replace(/\/mcp$/, "/sse")}</code>
 
     <div class="links">
@@ -486,9 +489,8 @@ app.delete("/mcp", (req, res) => {
 });
 
 // Legacy HTTP+SSE transport (protocol version 2024-11-05), kept alongside
-// Streamable HTTP for clients that only speak the older transport (e.g.
-// ChatGPT's MCP connector, which opens a GET /sse stream and posts messages
-// to /messages?sessionId=...).
+// Streamable HTTP for older MCP clients. Current ChatGPT and Claude installs
+// should use the preferred /mcp Streamable HTTP endpoint.
 const sseTransports = new Map();
 
 app.get("/sse", async (req, res) => {
