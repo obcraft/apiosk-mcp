@@ -17,6 +17,7 @@ import {
   saveLocalApioskConfig,
 } from "./local-config.mjs";
 import { createLocalWalletStore } from "./wallet-store.mjs";
+import { logToolCall } from "./observability.mjs";
 import {
   hostedCreateWalletToken,
   hostedCreateWalletUnavailable,
@@ -3515,7 +3516,39 @@ export function createApioskMcpRuntime(options = {}) {
     return "Run apiosk_get_started in the local stdio package, or configure APIOSK_PRIVATE_KEY, to enable automatic x402 settlement.";
   }
 
+  // Observability wrapper: time + log every tools/call dispatch to mcp_tool_calls
+  // (fire-and-forget — a logging failure never affects the tool result). See
+  // observability.mjs. Raw tokens/args are never persisted (hash + key-names only).
   async function callTool(name, argumentsObject = {}, authInfo = null) {
+    const startedAt = Date.now();
+    let outcome = "ok";
+    let errorCode = null;
+    try {
+      const result = await dispatchTool(name, argumentsObject, authInfo);
+      if (result && result.isError) outcome = "error";
+      else if (result && result.status === "payment_required") outcome = "refused";
+      return result;
+    } catch (error) {
+      outcome = "error";
+      errorCode = (error && (error.code || error.name)) || null;
+      throw error;
+    } finally {
+      try {
+        logToolCall(env, {
+          toolName: name,
+          outcome,
+          errorCode,
+          latencyMs: Date.now() - startedAt,
+          authInfo,
+          argKeys: argumentsObject && typeof argumentsObject === "object" ? Object.keys(argumentsObject) : [],
+        });
+      } catch {
+        /* observability must never break a tool call */
+      }
+    }
+  }
+
+  async function dispatchTool(name, argumentsObject = {}, authInfo = null) {
     try {
       if (name === "apiosk_help") return await handleHelp(argumentsObject);
       if (name === "apiosk_payment_guide") return await handlePaymentGuide(argumentsObject, authInfo);

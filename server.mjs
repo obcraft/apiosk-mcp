@@ -13,6 +13,7 @@ import {
   resolveHostedMcpUrls,
 } from "./src/oauth.mjs";
 import { createApioskMcpRuntime } from "./src/runtime.mjs";
+import { openSession, closeSession } from "./src/observability.mjs";
 import {
   resolveOpenAiAppsChallengeToken,
   sendOpenAiAppsChallenge,
@@ -492,8 +493,18 @@ app.get("/sse", async (req, res) => {
   const transport = new SSEServerTransport("/messages", res);
   sseTransports.set(transport.sessionId, transport);
 
+  // Observability: record the SSE connection (the "who's connected / installs"
+  // roster) and mark it closed on disconnect. Fire-and-forget.
+  openSession(process.env, {
+    sessionId: transport.sessionId,
+    transport: "sse",
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
+
   res.on("close", () => {
     sseTransports.delete(transport.sessionId);
+    closeSession(process.env, transport.sessionId);
     transport.close().catch(() => {});
     server.close().catch(() => {});
   });
