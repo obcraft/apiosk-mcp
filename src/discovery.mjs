@@ -16,6 +16,8 @@
 // Trust model: results carry a `trust_tier` and provider-supplied text (name,
 // description) is sanitized and flagged as untrusted data — never instructions.
 
+import { materializeEndpoint, searchKnownSources } from "./source-registry.mjs";
+
 const DEFAULT_MAX_RESULTS = 8;
 const MAX_SEARCH_TERMS = 8;
 const PER_TERM_LIMIT = 25;
@@ -37,6 +39,9 @@ const TRUST_TIER_WEIGHTS = {
   x402direct: 42,
   agentic: 42,
   x402list: 35,
+  x402engine: 50,
+  anchor: 50,
+  apify: 48,
   wellknown_probe: 20,
 };
 
@@ -49,11 +54,27 @@ const IMPLEMENTED_SOURCES = new Set([
   "x402-list",
   "x402-direct",
   "agentic-market",
+  "thirdweb",
+  "payai",
+  "x402engine",
+  "anchor-x402",
+  "apify",
+  "x402scan",
   "wellknown",
 ]);
 // `sources: ["all"]` fans out to every free, keyword-searchable index (not
 // wellknown — that needs probe_hosts; not the paid x402scan).
-const ALL_WIREABLE_SOURCES = ["apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market"];
+const ALL_WIREABLE_SOURCES = [
+  "apiosk",
+  "bazaar",
+  "x402-list",
+  "x402-direct",
+  "agentic-market",
+  "thirdweb",
+  "payai",
+  "x402engine",
+  "anchor-x402",
+];
 // Default: query every live source (Apiosk catalog + the live Coinbase Bazaar),
 // so the agent finds external x402 endpoints without having to remember to ask
 // for them. `wellknown` is not defaulted — it needs explicit `probe_hosts`.
@@ -379,7 +400,9 @@ function normalizeExternalRow(row, source, trustTier) {
   const url = trimString(row?.resource || row?.url);
   if (!url) return null;
   const accepts = Array.isArray(row?.accepts) ? row.accepts : [];
-  const offer = accepts[0] || {};
+  // Prefer Base because apiosk_fetch_paid can currently settle Base + USDC.
+  // Several mirrors put Solana first even when a Base offer is also present.
+  const offer = accepts.find((entry) => normalizeNetworkName(entry?.network) === "base") || accepts[0] || {};
   const meta = row?.metadata || {};
   const name = sanitizeText(meta.serviceName || meta.name || row?.name || url, 120);
   return {
@@ -525,6 +548,70 @@ const DIRECTORY_SOURCES = {
       });
     },
   },
+  thirdweb: {
+    tier: "thirdweb",
+    urlFor: (q) =>
+      `https://api.thirdweb.com/v1/payments/x402/discovery/resources?limit=25${q ? `&query=${encodeURIComponent(q)}` : ""}`,
+    rows: (doc) => (Array.isArray(doc?.items) ? doc.items : []),
+    normalize: (r) => normalizeExternalRow(r, "thirdweb", "thirdweb"),
+  },
+  payai: {
+    tier: "payai",
+    urlFor: () => "https://facilitator.payai.network/discovery/resources?limit=100",
+    rows: (doc) => (Array.isArray(doc?.items) ? doc.items : []),
+    normalize: (r) => normalizeExternalRow(r, "payai", "payai"),
+  },
+};
+
+const MANIFEST_SOURCES = {
+  x402engine: {
+    tier: "x402engine",
+    url: "https://x402engine.app/.well-known/x402.json",
+    rows(doc) {
+      const routes = doc?.routes && typeof doc.routes === "object" ? doc.routes : {};
+      return (Array.isArray(doc?.services) ? doc.services : []).map((service) => {
+        let path = "";
+        try {
+          path = new URL(service?.endpoint).pathname;
+        } catch {
+          path = "";
+        }
+        const method = trimString(service?.method).toUpperCase() || "GET";
+        const route = routes[`${method} ${path}`] || {};
+        return {
+          resource: service?.endpoint,
+          method,
+          description: service?.description || route?.description,
+          metadata: { serviceName: service?.name, category: service?.category },
+          accepts: Array.isArray(route?.accepts) ? route.accepts : [],
+        };
+      });
+    },
+    normalize: (r) => normalizeExternalRow(r, "x402engine", "x402engine"),
+  },
+  "anchor-x402": {
+    tier: "anchor",
+    url: "https://api.anchor-x402.com/.well-known/x402",
+    rows(doc) {
+      const baseUrl = trimString(doc?.base_url) || "https://api.anchor-x402.com";
+      const networks = Array.isArray(doc?.networks) ? doc.networks : [];
+      const base = networks.find((network) => normalizeNetworkName(network?.id) === "base") || networks[0] || {};
+      return (Array.isArray(doc?.routes) ? doc.routes : []).map((route) => ({
+        resource: `${baseUrl.replace(/\/+$/, "")}/${trimString(route?.path).replace(/^\/+/, "")}`,
+        method: route?.method,
+        description: route?.description,
+        metadata: { serviceName: route?.name || `anchor-x402 ${route?.path}`, category: route?.category, tags: route?.tags },
+        accepts: [{
+          scheme: "exact",
+          network: base?.id,
+          amount: Number.isFinite(route?.price_usd) ? String(Math.round(route.price_usd * 1_000_000)) : null,
+          asset: base?.asset,
+          payTo: base?.payment_address,
+        }],
+      }));
+    },
+    normalize: (r) => normalizeExternalRow(r, "anchor-x402", "anchor"),
+  },
 };
 
 // Query one free-REST directory source (resilient: circuit breaker + cache +
@@ -550,6 +637,49 @@ async function fetchDirectorySource(sourceId, query, { fetchImpl, now }) {
     recordSourceFailure(sourceId, now);
     return { items: [], warnings: [`${sourceId} search failed: ${trimString(error?.message || error)}`] };
   }
+}
+
+async function fetchManifestSource(sourceId, { fetchImpl, now }) {
+  const cfg = MANIFEST_SOURCES[sourceId];
+  if (!cfg) return { items: [], warnings: [] };
+  if (circuitOpen(sourceId, now)) {
+    return { items: [], warnings: [`${sourceId} temporarily skipped (circuit open).`] };
+  }
+  const cacheKey = `${sourceId}:manifest`;
+  const hit = searchCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) return { items: hit.items, warnings: [] };
+
+  try {
+    const doc = await fetchJsonWithTimeout(cfg.url, { fetchImpl, timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS });
+    const items = cfg.rows(doc).map((row) => cfg.normalize(row)).filter(Boolean);
+    recordSourceSuccess(sourceId);
+    if (searchCache.size >= CACHE_MAX_ENTRIES) searchCache.clear();
+    searchCache.set(cacheKey, { items, expiresAt: now + EXTERNAL_CACHE_TTL_MS });
+    return { items, warnings: [] };
+  } catch (error) {
+    recordSourceFailure(sourceId, now);
+    return { items: [], warnings: [`${sourceId} manifest failed: ${trimString(error?.message || error)}`] };
+  }
+}
+
+function paidSourcePointer(sourceId, query) {
+  const match = searchKnownSources(sourceId, { limit: 1 })[0];
+  if (!match) return null;
+  const role = sourceId === "x402scan" ? "search" : "buy_prepaid_token";
+  const endpoint = match.endpoints.find((candidate) => candidate.role === role && candidate.payment_required);
+  const url = materializeEndpoint(endpoint, query);
+  if (!url) return null;
+  const item = makeExternalItem({
+    source: sourceId,
+    tier: sourceId === "x402scan" ? "x402scan" : "apify",
+    url,
+    name: sourceId === "x402scan" ? `x402scan paid search: ${query}` : "Apify x402 prepaid token",
+    description: match.summary,
+    priceUsdc: endpoint.price_usdc,
+    network: "base",
+    category: "discovery",
+  });
+  return item ? { ...item, result_kind: "paid_source_endpoint", price_must_be_inspected_live: true } : null;
 }
 
 // Generic /.well-known probing — ONLY for hosts the caller explicitly names, so
@@ -660,6 +790,17 @@ export async function runDiscover(args = {}, ctx = {}) {
       externalTasks.push(fetchDirectorySource(sourceId, query, { fetchImpl, now }));
     }
   }
+  for (const sourceId of Object.keys(MANIFEST_SOURCES)) {
+    if (sourcesQueried.includes(sourceId)) {
+      externalTasks.push(fetchManifestSource(sourceId, { fetchImpl, now }));
+    }
+  }
+  for (const sourceId of ["x402scan", "apify"]) {
+    if (sourcesQueried.includes(sourceId)) {
+      const pointer = paidSourcePointer(sourceId, query);
+      if (pointer) gathered.push(pointer);
+    }
+  }
   if (sourcesQueried.includes("wellknown")) {
     if (probeHosts.length) {
       for (const host of probeHosts) externalTasks.push(probeWellKnownHost(host, { fetchImpl, now }));
@@ -729,6 +870,8 @@ export async function runDiscover(args = {}, ctx = {}) {
     search_terms: terms,
     result_count: results.length,
     results,
+    source_match_count: searchKnownSources(query, { limit: maxResults }).length,
+    source_matches: searchKnownSources(query, { limit: maxResults }),
     max_price_usdc: maxPrice,
     guidance: guidanceParts.join(" "),
     untrusted_provider_text:
@@ -768,9 +911,9 @@ export const DISCOVER_TOOL = {
         type: "array",
         items: {
           type: "string",
-          enum: ["all", "apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market", "wellknown"],
+          enum: ["all", "apiosk", "bazaar", "x402-list", "x402-direct", "agentic-market", "thirdweb", "payai", "x402engine", "anchor-x402", "apify", "x402scan", "wellknown"],
         },
-        description: "Discovery sources to query. Default ['apiosk','bazaar'] (Apiosk catalog + live Coinbase Bazaar). Use ['all'] to also fan out to the other free public x402 directories (x402-list, x402-direct, agentic-market). Add 'wellknown' with `probe_hosts` to read a specific host's /.well-known/x402. Call apiosk_help topic='discovery' for the full source list + status.",
+        description: "Discovery sources to query. Default ['apiosk','bazaar']. Use ['all'] for every directly wired free REST source. Paid sources 'x402scan' and 'apify' are opt-in and return their payable endpoint for apiosk_inspect_x402 + apiosk_fetch_paid; discovery never spends automatically. Add 'wellknown' with probe_hosts for a specific host.",
       },
       probe_hosts: {
         type: "array",

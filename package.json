@@ -1,6 +1,6 @@
 {
   "name": "@apiosk/mcp",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",

@@ -34,6 +34,7 @@ import {
   isPublisherTool,
 } from "./publisher.mjs";
 import { DISCOVER_TOOL, runDiscover } from "./discovery.mjs";
+import { searchKnownSources } from "./source-registry.mjs";
 import { INSPECT_TOOL, runInspect } from "./x402-inspect.mjs";
 import { FETCH_PAID_TOOL, runFetchPaid } from "./external-fetch.mjs";
 
@@ -1399,13 +1400,16 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "x402-list — x402-list.com public directory (free REST).",
         "x402-direct — x402.direct search engine with trust scores (free REST).",
         "agentic-market — Coinbase Agentic.Market directory (free REST).",
+        "thirdweb — public thirdweb Payments x402 resource index (free REST).",
+        "payai — public PayAI facilitator discovery mirror (free REST).",
+        "x402engine — direct manifest with paid AI/media/code/web endpoints.",
+        "anchor-x402 — direct manifest with paid primitives and LLM endpoints.",
+        "x402scan — paid full-text resource search; returned as an inspect/fetch-paid pointer, never auto-paid.",
+        "apify — paid x402 prepaid-token endpoint plus the public Actor catalog; never auto-paid.",
         "wellknown — probe a specific host's /.well-known/x402 (needs probe_hosts).",
-        "Use sources:['all'] to fan out to apiosk + bazaar + x402-list + x402-direct + agentic-market at once.",
+        "Use sources:['all'] to fan out to all directly wired free REST sources at once. Paid sources remain explicit opt-ins.",
       ],
       indexed_or_reference_only: [
-        "thirdweb Payments & PayAI facilitator — large indexes that MIRROR the Bazaar (deduped, not separately queried).",
-        "x402engine, anchor-x402, Apify (39k Actors, prepaid token) — reachable/payable; catalogued in gateway/config/x402-sources.json.",
-        "x402scan — verified but PAID per query ($0.01), reachable via apiosk_fetch_paid on demand.",
         "x402list.fun (paid MCP), awesome-x402 (markdown), and facilitators Nevermined / @swader / x402.rs — reference, not directly searchable.",
       ],
       important_note:
@@ -2266,12 +2270,20 @@ export function createApioskMcpRuntime(options = {}) {
     });
 
     const catalog = response.apis || [];
+    const sourceMatches = searchKnownSources(argumentsObject.search, {
+      limit: argumentsObject.limit || DEFAULT_LIMIT,
+    });
     await getTools(false, authInfo);
     const capability = await resolvePaymentCapability(authInfo);
 
     return content({
       apis: catalog.map((api) => buildCatalogEntry(api, cache.toolNamesBySlug.get(api.slug) || null)),
+      sources: sourceMatches,
       meta: response.meta,
+      source_meta: {
+        total: sourceMatches.length,
+        note: "These are direct x402 discovery sources, not Apiosk catalog API listings. Their public and paid endpoints are included inline.",
+      },
       payment: buildDiscoveryPaymentHint({
         capability,
         mode: capability.mode,
@@ -2280,7 +2292,9 @@ export function createApioskMcpRuntime(options = {}) {
       for_providers:
         "Listing your own API? Call apiosk_payment_guide with role='provider' (or apiosk_publish_api) to publish it for other agents.",
       next_steps:
-        "Call apiosk_get_api for full metadata plus a per-listing payment block, use the API-specific tool directly when tool_name is present, or call apiosk_payment_guide to learn exactly how to settle a paid call.",
+        sourceMatches.length > 0
+          ? "For a matched source, pass its discover_source to apiosk_discover. For endpoints marked payment_required=true, call apiosk_inspect_x402 first and only then apiosk_fetch_paid after the user confirms the live price. Catalog APIs still use apiosk_get_api/apiosk_execute."
+          : "Call apiosk_get_api for full metadata plus a per-listing payment block, use the API-specific tool directly when tool_name is present, or call apiosk_payment_guide to learn exactly how to settle a paid call.",
     });
   }
 

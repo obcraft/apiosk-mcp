@@ -159,16 +159,73 @@ test("discover enforces max_price_usdc ceiling", async () => {
   assert.ok(!payload.results.some((r) => r.listing_slug === "twelve-data"), "0.03 dropped");
 });
 
-test("discover flags unimplemented sources without failing", async () => {
+test("discover flags only genuinely unimplemented sources without failing", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
     { query: "exchange rate", sources: ["x402scan", "x402list"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
-  assert.deepEqual(payload.sources_unavailable.sort(), ["x402list", "x402scan"]);
+  assert.deepEqual(payload.sources_unavailable, ["x402list"]);
+  assert.ok(payload.sources_queried.includes("x402scan"), "paid x402scan source is now wired");
   assert.ok(payload.sources_queried.includes("apiosk"), "apiosk always queried");
   assert.ok(payload.results.length > 0, "still returns catalog results");
+});
+
+test("source-name discovery returns direct source metadata and a paid x402scan search pointer", async () => {
+  clearDiscoveryCache();
+  const res = await runDiscover(
+    { query: "x402scan", sources: ["x402scan"], max_results: 5 },
+    { listApis: makeListApis([]), gatewayBaseUrl: "https://gateway.apiosk.com" }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  assert.equal(payload.sources_unavailable.length, 0);
+  assert.equal(payload.source_matches[0].id, "x402scan");
+  const paid = payload.results.find((result) => result.source === "x402scan");
+  assert.ok(paid, "paid search endpoint is returned even without a catalog listing");
+  assert.equal(paid.result_kind, "paid_source_endpoint");
+  assert.equal(paid.price_usdc, 0.02);
+  assert.match(paid.url, /resources\/search\?q=x402scan/);
+  assert.equal(paid.executable_via, "apiosk_fetch_paid");
+  assert.equal(paid.price_must_be_inspected_live, true);
+});
+
+test("discover directly normalizes thirdweb, PayAI, x402engine, and anchor manifests", async () => {
+  clearDiscoveryCache();
+  clearDiscoveryCircuit();
+  const offer = { scheme: "exact", network: "eip155:8453", amount: "5000", asset: "0xUSDC", payTo: "0xPay" };
+  const fetchImpl = async (url) => {
+    const target = String(url);
+    if (target.includes("thirdweb.com")) {
+      return { ok: true, status: 200, json: async () => ({ items: [{ resource: "https://third.example/weather", description: "weather", accepts: [offer] }] }) };
+    }
+    if (target.includes("payai.network")) {
+      return { ok: true, status: 200, json: async () => ({ items: [{ resource: "https://payai.example/weather", description: "weather", accepts: [offer] }] }) };
+    }
+    if (target.includes("x402engine.app")) {
+      return { ok: true, status: 200, json: async () => ({
+        services: [{ name: "Engine Weather", description: "weather", endpoint: "https://engine.example/api/weather", method: "POST", category: "weather" }],
+        routes: { "POST /api/weather": { description: "weather", accepts: [offer] } },
+      }) };
+    }
+    if (target.includes("anchor-x402.com")) {
+      return { ok: true, status: 200, json: async () => ({
+        base_url: "https://api.anchor-x402.com",
+        networks: [{ id: "eip155:8453", asset: "0xUSDC", payment_address: "0xAnchor" }],
+        routes: [{ path: "/v1/weather", method: "POST", price_usd: 0.007, category: "weather", description: "weather anchor" }],
+      }) };
+    }
+    throw new Error(`unexpected ${target}`);
+  };
+  const res = await runDiscover(
+    { query: "weather", sources: ["thirdweb", "payai", "x402engine", "anchor-x402"], max_results: 25 },
+    { listApis: makeListApis([]), gatewayBaseUrl: "https://gateway.apiosk.com", fetchImpl }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  for (const source of ["thirdweb", "payai", "x402engine", "anchor-x402"]) {
+    assert.ok(payload.results.some((result) => result.source === source), `${source} result present`);
+  }
+  assert.equal(payload.results.find((result) => result.source === "anchor-x402").price_usdc, 0.007);
 });
 
 test("discover queries the Bazaar by default (no sources needed)", async () => {

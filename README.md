@@ -366,12 +366,24 @@ Static tools:
 - `apiosk_payment_guide`: buyer + provider guide for paying through and publishing on the gateway
 - `apiosk_explore`
 - `apiosk_search`
+- `apiosk_discover`
+- `apiosk_inspect_x402`
+- `apiosk_fetch_paid`
 - `apiosk_get_api`
 - `apiosk_execute`
 
+`apiosk_search` also returns matching x402 discovery sources in `sources`, even
+when the Apiosk API catalog has no listing with that name. Each source includes
+its direct REST/MCP endpoints and marks paid endpoints with
+`payment_required`, `price_usdc`, and `executable_via`. `apiosk_discover` can
+query the wired free sources directly; paid discovery sources such as x402scan
+and Apify are returned as `apiosk_inspect_x402` → `apiosk_fetch_paid` pointers
+and are never paid automatically.
+
 Hosted remote MCP tools (in addition to dynamic per-API tools):
 
-- Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
+- Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_discover`, `apiosk_inspect_x402`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
+- External paid fetch: `apiosk_fetch_paid` (OAuth/connect-token protected; requires explicit live-price confirmation)
 - Prepaid credits: `apiosk_buy_credits`, `apiosk_get_credits_status`
 - Managed wallets: `apiosk_list_wallets`, `apiosk_create_wallet`, `apiosk_update_wallet`, `apiosk_delete_wallet`, `apiosk_get_wallet_activity`, `apiosk_create_wallet_connect_string`, `apiosk_list_wallet_api_keys`, `apiosk_create_wallet_api_key`, `apiosk_update_wallet_api_key`, `apiosk_delete_wallet_api_key`
 

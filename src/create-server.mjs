@@ -10,7 +10,7 @@ import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
-  version: "1.6.0",
+  version: "1.7.0",
   title: "Apiosk Connect",
 };
 

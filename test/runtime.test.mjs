@@ -369,6 +369,20 @@ test("search surfaces a payment hint and provider pointer so agents learn how to
   await rm(homeDir, { recursive: true, force: true });
 });
 
+test("search returns known x402 sources and paid endpoints even when the API catalog has no match", async () => {
+  const homeDir = path.join(os.tmpdir(), `apiosk-mcp-source-search-${Date.now()}`);
+  const runtime = createRuntime(homeDir);
+
+  const result = await runtime.callTool("apiosk_search", { search: "x402scan" });
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.equal(payload.sources[0].id, "x402scan");
+  assert.ok(payload.sources[0].endpoints.some((endpoint) => endpoint.payment_required === true));
+  assert.match(payload.next_steps, /apiosk_inspect_x402/);
+
+  await rm(homeDir, { recursive: true, force: true });
+});
+
 test("paid execution advertises a credential-free result canvas", async () => {
   const runtime = createApioskMcpRuntime({
     client: createFakeClient(),
