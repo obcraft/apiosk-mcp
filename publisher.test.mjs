@@ -563,11 +563,9 @@ describe("update_x402_route status transitions", () => {
     };
   }
 
-  // supabaseRest writes with the service-role key, so trg_apis_review_gate's
-  // `auth.uid() is not null` check never fires for these calls — the DB can't
-  // force a never-approved listing back into 'pending' on its own. This must
-  // be enforced in handleUpdateRoute instead (see the fix in src/publisher.mjs).
-  it("re-enters review instead of going active when the listing was never approved", async () => {
+  // supabaseRest writes with the service-role key, so the provider-only DB
+  // trigger does not fire. The publisher must always enforce review itself.
+  it("enters review instead of going active", async () => {
     const { fetchImpl, calls } = scriptedFetch([
       verifyKeyRule(),
       routeGetRule({ approved_at: null }),
@@ -588,13 +586,13 @@ describe("update_x402_route status transitions", () => {
     assert.deepEqual(JSON.parse(patch.init.body), { status: "pending" });
   });
 
-  it("goes straight active when the listing already cleared review once", async () => {
+  it("re-enters review even when the listing was approved before", async () => {
     const { fetchImpl, calls } = scriptedFetch([
       verifyKeyRule(),
       routeGetRule({ approved_at: "2026-06-01T00:00:00Z" }),
       {
         match: (url, method) => method === "PATCH" && url.includes("apis?id=eq.api-1"),
-        respond: jsonResponse([{ id: "api-1", slug: "pdf-tools", status: "active" }]),
+        respond: jsonResponse([{ id: "api-1", slug: "pdf-tools", status: "pending" }]),
       },
     ]);
 
@@ -606,7 +604,7 @@ describe("update_x402_route status transitions", () => {
     );
 
     const patch = calls.find((call) => call.method === "PATCH" && call.url.includes("apis?id=eq.api-1"));
-    assert.deepEqual(JSON.parse(patch.init.body), { status: "active" });
+    assert.deepEqual(JSON.parse(patch.init.body), { status: "pending" });
   });
 });
 

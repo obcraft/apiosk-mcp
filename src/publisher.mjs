@@ -864,13 +864,9 @@ async function handleUpdateRoute(args, authInfo, ctx) {
     if (trimString(args.status) === "disabled") {
       listingPatch.status = "inactive";
     } else {
-      // This write goes through supabaseRest with the service-role key, so
-      // trg_apis_review_gate's `auth.uid() is not null` check never applies —
-      // the DB can't force a never-approved listing back into 'pending' for
-      // us. Mirror that gate here: only a listing that has already cleared
-      // review once (approved_at set) gets to go straight to 'active';
-      // everything else re-enters the review queue.
-      listingPatch.status = api.approved_at ? "active" : "pending";
+      // Service-role writes bypass the provider-only DB trigger, so every MCP
+      // publish/resume request explicitly enters the admin review queue.
+      listingPatch.status = "pending";
     }
   }
 
