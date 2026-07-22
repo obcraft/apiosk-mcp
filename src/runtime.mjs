@@ -898,6 +898,13 @@ const HOSTED_REMOTE_TOOLS = [
 // name (callTool + isToolProtected are unchanged) and the full set is one env
 // flag away (APIOSK_MCP_FULL_TOOLS=true). apiosk_list_wallets stays so buyers can
 // see their wallet address, spend limits, and funding.
+// `publish_x402_route` is the ONE exception to "providers only": publishing is a
+// headline capability of this server, and a tool that is absent cannot be
+// discovered. Listing the entry point means an agent can see that publishing
+// exists and read how to authenticate; calling it without a provider key still
+// fails closed in `requireProvider` with instructions for minting one. The other
+// six publisher tools only make sense once you hold a key, so they stay on the
+// provider surface.
 const HOSTED_BUYER_TOOLS = [
   HELP_TOOL,
   DISCOVER_TOOL,
@@ -909,6 +916,7 @@ const HOSTED_BUYER_TOOLS = [
   SEARCH_TOOL,
   PAYMENT_GUIDE_TOOL,
   DASHBOARD_WALLET_TOOLS.find((tool) => tool.name === "apiosk_list_wallets"),
+  PUBLISHER_TOOLS.find((tool) => tool.name === "publish_x402_route"),
 ].filter(Boolean);
 
 // PROVIDER surface (caller authenticated with a sk_live_ provider key): a focused
@@ -1454,24 +1462,23 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Use apiosk_wallet_create and apiosk_wallet_select in the local stdio package for the cleanest autonomous workflow",
         "Use APIOSK_PRIVATE_KEY when you want deterministic wallet selection from environment variables",
         "Use APIOSK_CONNECT_TOKEN when access is managed in the dashboard",
-        "Use the buyer portal to top up a prepaid credits balance and let the agent keep spending from it",
       ],
       see_also:
-        "Call apiosk_help with topic='rails' to learn how the same connect token settles over USDC and prepaid credits, including the rail fallback order.",
+        "Call apiosk_help with topic='rails' to learn how a connect token settles paid calls over USDC.",
     },
     rails: {
       topic: "rails",
       summary:
-        "Apiosk supports two settlement rails. A single buyer connect token can settle paid calls over USDC (x402 on Base) or prepaid credits. The gateway picks the rail per call; the agent does not need to know which one is used.",
+        "Apiosk settles buyer calls over USDC (x402). A single buyer connect token covers every paid call; the agent produces a payment proof and the gateway settles per call.",
       settlement_rails: [
         "usdc_x402: on-chain USDC on Base (chain 8453), settled per call via an x402 payment proof from the agent wallet or APIOSK_PRIVATE_KEY.",
-        "credits: prepaid balance topped up once by a human via the buyer portal, then spent down per call.",
       ],
       rail_fallback_order: [
         "1. USDC / x402 wallet when the agent can produce a payment proof.",
-        "2. Prepaid credits balance.",
-        "A 402 is only returned when none of the buyer's enabled rails can cover the call.",
+        "A 402 is returned when the buyer's wallet cannot cover the call.",
       ],
+      legacy_rails_note:
+        "A prepaid-credits rail exists in older gateway code paths but is no longer offered to buyers — do not plan around it.",
       connect_string_note:
         "The connect string identifies the buyer's managed wallet and connect token; APIO_WALLET_* limits bound the USDC rail. See help topic 'setup' for the connect string format.",
       provider_settlement: {

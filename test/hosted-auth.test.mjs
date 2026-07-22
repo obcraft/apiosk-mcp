@@ -92,8 +92,8 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
   }
 
   // Noise removed from the default buyer surface (still dispatchable by name,
-  // still restorable via APIOSK_MCP_FULL_TOOLS): advanced wallet CRUD,
-  // metadata/health duplicates, and provider publishing.
+  // still restorable via APIOSK_MCP_FULL_TOOLS): advanced wallet CRUD and
+  // metadata/health duplicates.
   for (const name of [
     "apiosk_metadata",
     "apiosk_health",
@@ -101,9 +101,20 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
     "apiosk_update_wallet",
     "apiosk_delete_wallet",
     "apiosk_create_wallet_api_key",
-    "publish_x402_route",
   ]) {
     assert.ok(!toolNames.includes(name), `buyer surface should hide ${name}`);
+  }
+
+  // Publishing is a headline capability, so its entry point is discoverable even
+  // before a provider key is presented — a tool that is absent cannot be found.
+  // Calling it without a key still fails closed in requireProvider.
+  assert.ok(
+    toolNames.includes("publish_x402_route"),
+    "default surface should advertise publish_x402_route"
+  );
+  // The rest of the publisher toolkit only makes sense once you hold a key.
+  for (const name of ["update_x402_route", "unpublish_x402_route", "list_x402_routes"]) {
+    assert.ok(!toolNames.includes(name), `default surface should hide ${name}`);
   }
 
   // Dynamic per-API tools still append when explicitly enabled.

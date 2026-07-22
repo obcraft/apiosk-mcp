@@ -5,7 +5,7 @@
 
 # Apiosk MCP Server
 
-**AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent, over USDC/x402 or prepaid credits, through the Model Context Protocol.
+**AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent, settled per call in USDC over x402, through the Model Context Protocol.
 
 `payments` · `finance` · `x402` · `commerce` · `crypto`
 
@@ -261,10 +261,14 @@ https://mcp.apiosk.com/mcp
 
 Protected tools on the hosted server use OAuth. The remote MCP surface is fully
 capable, discovery, payment guidance, generic **and** dynamic per-API
-execution, prepaid credits, and managed agent-wallet CRUD. Public tools
-(discovery + guidance) work before authorization; paid execution and managed
-tools require OAuth. Publishing stays local/portal-only because it needs a
-client-side signing key the hosted server never holds.
+execution, and managed agent-wallet CRUD. Public tools (discovery + guidance)
+work before authorization; paid execution and managed tools require OAuth.
+
+Publishing works on the hosted server too: `publish_x402_route` is listed in the
+default tool surface, and authenticating with a provider key
+(`Authorization: Bearer sk_live_...`) swaps in the full publisher toolkit. Only
+the wallet-signed `apiosk_publish_api` stays local/portal-only, because it needs
+a client-side signing key the hosted server never holds.
 
 ## Provider MCP Monetization
 
@@ -385,7 +389,7 @@ Hosted remote MCP tools (in addition to dynamic per-API tools):
 
 - Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_discover`, `apiosk_inspect_x402`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
 - External paid fetch: `apiosk_fetch_paid` (OAuth/connect-token protected; requires explicit live-price confirmation)
-- Prepaid credits: `apiosk_buy_credits`, `apiosk_get_credits_status`
+- Prepaid credits (legacy, no longer offered): `apiosk_buy_credits`, `apiosk_get_credits_status`
 - Managed wallets: `apiosk_list_wallets`, `apiosk_create_wallet`, `apiosk_update_wallet`, `apiosk_delete_wallet`, `apiosk_get_wallet_activity`, `apiosk_create_wallet_connect_string`, `apiosk_list_wallet_api_keys`, `apiosk_create_wallet_api_key`, `apiosk_update_wallet_api_key`, `apiosk_delete_wallet_api_key`
 
 Local wallet tools in stdio mode:
@@ -471,7 +475,7 @@ what to do next.
 { "role": "buyer", "slug": "weather-now" }
 ```
 
-Returns a buyer guide (USDC/x402 or credits, tailored to the configured auth)
+Returns a buyer guide (USDC/x402, tailored to the configured auth)
 and a provider guide (how to publish an API and get paid). Pass `slug` to scope
 buyer guidance to one listing, or `role` to pick a side.
 
@@ -519,10 +523,8 @@ Or save a dashboard-managed connect string locally and verify it:
 ```
 
 The connect string identifies the buyer's managed wallet and connect token. The
-`APIO_WALLET_*` limits bound the USDC (x402) rail. The same connect token also
-settles over prepaid credits when USDC is unavailable, the gateway picks the
-rail per call. Call `apiosk_help` with `topic="rails"` for the full settlement
-model.
+`APIO_WALLET_*` limits bound the USDC (x402) rail, which is how buyer calls
+settle. Call `apiosk_help` with `topic="rails"` for the full settlement model.
 
 ### Open the configure menu
 
@@ -655,9 +657,13 @@ The live hosted suite no longer imports a private key into the hosted MCP. Prote
 - `APIOSK_HOME`: override the default `~/.apiosk` directory
 - `APIOSK_MCP_WALLET_STORE`: override the local wallet store path
 
-## Human-Funded Credits Flow
+## Human-Funded Credits Flow (legacy, not offered)
 
-In the local stdio package, MCP can now help a human top up Apiosk credits and then let the agent spend those credits later:
+> **Deprecated.** Prepaid credits are no longer offered to buyers. Buyers settle
+> in USDC over x402. The tools and control-plane routes below still exist in the
+> local stdio package but are unsupported — do not build on them.
+
+In the local stdio package, MCP can help a human top up Apiosk credits and then let the agent spend those credits later:
 
 1. `apiosk_create_account` if the user needs a new Apiosk account
 2. `apiosk_sign_in` to store a local dashboard session token
