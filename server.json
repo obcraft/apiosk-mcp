@@ -3,7 +3,7 @@
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk Connect",
   "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
-  "version": "1.4.4",
+  "version": "1.7.0",
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
@@ -26,6 +26,56 @@
     "url": "https://github.com/obcraft/apiosk-mcp",
     "source": "github"
   },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@apiosk/mcp",
+      "version": "1.7.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "APIOSK_PRIVATE_KEY",
+          "description": "Optional wallet private key for automatic x402 payments.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "APIOSK_CONNECT_TOKEN",
+          "description": "Optional dashboard-managed access token.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    },
+    {
+      "registryType": "pypi",
+      "identifier": "apiosk-mcp",
+      "version": "1.7.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "APIOSK_PRIVATE_KEY",
+          "description": "Optional wallet private key for automatic x402 payments.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "APIOSK_CONNECT_TOKEN",
+          "description": "Optional dashboard-managed access token.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",

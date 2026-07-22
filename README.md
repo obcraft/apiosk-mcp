@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.obcraft/apiosk-mcp -->
 <p align="center">
   <img src="https://apiosk.com/logo.svg" alt="Apiosk" width="120" />
 </p>
