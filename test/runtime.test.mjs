@@ -608,3 +608,58 @@ test("dynamic order tools return a human confirmation summary with structured co
     await rm(homeDir, { recursive: true, force: true });
   }
 });
+
+test("a session that granted publishing keeps the buyer tools and gains the publisher set", async () => {
+  const runtime = createApioskMcpRuntime({
+    client: createFakeClient(),
+    env: {},
+    enableLocalWallets: false,
+    hostedAuthEnabled: true,
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+  });
+
+  const authInfo = {
+    extra: {
+      apiosk_publish_granted: true,
+      apiosk_provider_key: `sk_live_${"a".repeat(64)}`,
+    },
+  };
+  const tools = (await runtime.listTools(authInfo)).map((tool) => tool.name);
+
+  // One person who both buys and sells: publishing must not cost the buyer surface.
+  for (const name of ["apiosk_discover", "apiosk_execute", "apiosk_inspect_x402", "apiosk_fetch_paid"]) {
+    assert.ok(tools.includes(name), `buyer tool ${name} should survive the publish grant`);
+  }
+  for (const name of [
+    "publish_x402_route",
+    "publish_project",
+    "list_x402_routes",
+    "update_x402_route",
+    "unpublish_x402_route",
+    "test_x402_route",
+    "generate_openapi_spec",
+  ]) {
+    assert.ok(tools.includes(name), `publisher tool ${name} should be exposed`);
+  }
+
+  // publish_x402_route is on both source lists; it must appear once.
+  assert.equal(new Set(tools).size, tools.length, "merged surface must not duplicate tools");
+});
+
+test("a bare provider-key session still gets the focused publisher surface", async () => {
+  const runtime = createApioskMcpRuntime({
+    client: createFakeClient(),
+    env: {},
+    enableLocalWallets: false,
+    hostedAuthEnabled: true,
+    walletManager: { isConfigured: () => false, request: async () => ({}) },
+  });
+
+  // Authenticated by an sk_live_ bearer alone — a headless publisher, not a buyer.
+  const authInfo = { extra: { apiosk_provider_key: `sk_live_${"a".repeat(64)}` } };
+  const tools = (await runtime.listTools(authInfo)).map((tool) => tool.name);
+
+  assert.ok(tools.includes("publish_x402_route"));
+  assert.equal(tools.includes("apiosk_execute"), false, "no buyer execution surface");
+  assert.equal(tools.includes("apiosk_fetch_paid"), false, "no external spend surface");
+});

@@ -1017,3 +1017,143 @@ test("hosted surface: APIOSK_MCP_FULL_TOOLS restores the full 28-tool set", asyn
     assert.ok(names.includes(name), `full surface should still expose ${name}`);
   }
 });
+
+// Publishing used to be reachable only with a provider key minted by hand in
+// the portal, which dead-ended the hosted flow: connect a wallet, ask to
+// publish, get sent to a browser. The sign-in screen now carries an explicit
+// opt-in that mints that key for the account signing in.
+async function authorizeWithPublishConsent({ publishConsent, providerKeyMinter }) {
+  const support = createHostedOAuthSupport({
+    connectTokenMinter: async () => null,
+    providerKeyMinter,
+    env: WALLET_TEST_ENV,
+    issuerUrl: new URL("http://localhost:3000"),
+    mcpServerUrl: new URL("http://localhost:3000/mcp"),
+    appName: "Apiosk",
+    resourceName: "Apiosk MCP",
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "cursor-test-client",
+    client_name: "Cursor",
+    redirect_uris: ["https://cursor.com/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+
+  const address = "0x2222222222222222222222222222222222222222";
+  const restoreFetch = stubWalletAuthFetch({
+    address,
+    sessionToken: "jwt_dashboard_session",
+    userId: "wallet_user_123",
+  });
+
+  try {
+    const body = {
+      action: "wallet_sign_in",
+      wallet_address: address,
+      wallet_message: walletMessage(address),
+      wallet_signature: "0xsignature",
+    };
+    if (publishConsent !== undefined) {
+      body.publish_consent = publishConsent;
+    }
+
+    const authorizeResponse = createMockResponse({ method: "POST", body });
+    await support.provider.authorize(
+      client,
+      {
+        state: "state_pub",
+        scopes: ["mcp:tools"],
+        codeChallenge: "challenge_pub",
+        redirectUri: "https://cursor.com/oauth/callback",
+        resource: new URL("http://localhost:3000/mcp"),
+      },
+      authorizeResponse
+    );
+
+    assert.equal(authorizeResponse.statusCode, 302);
+    const code = new URL(authorizeResponse.redirectedTo).searchParams.get("code");
+    assert.ok(code);
+
+    const tokens = await support.provider.exchangeAuthorizationCode(
+      client,
+      code,
+      undefined,
+      "https://cursor.com/oauth/callback",
+      new URL("http://localhost:3000/mcp")
+    );
+
+    return {
+      support,
+      tokens,
+      authInfo: await support.provider.verifyAccessToken(tokens.access_token),
+    };
+  } finally {
+    restoreFetch();
+  }
+}
+
+test("granting publishing at sign-in puts a provider key on the session", async () => {
+  const providerKey = `sk_live_${"a".repeat(64)}`;
+  const minted = [];
+
+  const { support, tokens, authInfo } = await authorizeWithPublishConsent({
+    publishConsent: "yes",
+    providerKeyMinter: async (args) => {
+      minted.push(args);
+      return { providerKey, keyId: "key_1", label: "MCP - Cursor" };
+    },
+  });
+
+  // The key is minted for the account that just signed in, labelled by client.
+  assert.equal(minted.length, 1);
+  assert.equal(minted[0].userId, "wallet_user_123");
+  assert.equal(minted[0].sessionToken, "jwt_dashboard_session");
+  assert.equal(minted[0].clientName, "Cursor");
+
+  assert.equal(authInfo.extra.apiosk_provider_key, providerKey);
+  assert.equal(authInfo.extra.apiosk_publish_granted, true);
+
+  // Publishing is granted by the person signing in, not requested by the
+  // client, so the advertised scopes are unchanged.
+  assert.equal(tokens.scope.includes("mcp:publish"), false);
+  assert.deepEqual(support.oauthMetadata.scopes_supported, ["mcp:tools", "offline_access"]);
+
+  // A refreshed access token keeps publishing alive for the same session.
+  const refreshed = await support.provider.exchangeRefreshToken(
+    { client_id: "cursor-test-client" },
+    tokens.refresh_token
+  );
+  const refreshedAuth = await support.provider.verifyAccessToken(refreshed.access_token);
+  assert.equal(refreshedAuth.extra.apiosk_provider_key, providerKey);
+  assert.equal(refreshedAuth.extra.apiosk_publish_granted, true);
+});
+
+test("without the publishing opt-in no provider key is minted", async () => {
+  let mintCalls = 0;
+  const minter = async () => {
+    mintCalls += 1;
+    return { providerKey: `sk_live_${"b".repeat(64)}` };
+  };
+
+  for (const publishConsent of [undefined, "", "no"]) {
+    const { authInfo } = await authorizeWithPublishConsent({
+      publishConsent,
+      providerKeyMinter: minter,
+    });
+    assert.equal(mintCalls, 0, `publish_consent=${String(publishConsent)} must not mint`);
+    assert.equal(authInfo.extra.apiosk_provider_key, undefined);
+    assert.equal(authInfo.extra.apiosk_publish_granted, false);
+  }
+});
+
+test("a failed mint still completes the connection, minus publishing", async () => {
+  const { authInfo } = await authorizeWithPublishConsent({
+    publishConsent: "yes",
+    providerKeyMinter: async () => null,
+  });
+
+  assert.ok(authInfo.extra.dashboardSessionToken, "sign-in still succeeds");
+  assert.equal(authInfo.extra.apiosk_provider_key, undefined);
+  assert.equal(authInfo.extra.apiosk_publish_granted, false);
+});

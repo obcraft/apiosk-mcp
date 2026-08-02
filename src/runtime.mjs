@@ -905,6 +905,17 @@ const HOSTED_REMOTE_TOOLS = [
 // fails closed in `requireProvider` with instructions for minting one. The other
 // six publisher tools only make sense once you hold a key, so they stay on the
 // provider surface.
+/** Merge tool lists that legitimately overlap, keeping the first definition. */
+function dedupeToolsByName(tools) {
+  const seen = new Set();
+  return tools.filter((tool) => {
+    const name = tool?.name;
+    if (!name || seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+}
+
 const HOSTED_BUYER_TOOLS = [
   HELP_TOOL,
   DISCOVER_TOOL,
@@ -1803,6 +1814,12 @@ export function createApioskMcpRuntime(options = {}) {
       // Escape hatch: expose the full 28-tool surface when explicitly opted in.
       if (env.APIOSK_MCP_FULL_TOOLS === "true") {
         return [...HOSTED_REMOTE_TOOLS];
+      }
+      // A signed-in user who granted publishing at OAuth consent is one person
+      // who both buys and sells: keep the buyer surface and add the publisher
+      // tools, rather than swapping one for the other.
+      if (authInfo?.extra?.apiosk_publish_granted) {
+        return dedupeToolsByName([...HOSTED_BUYER_TOOLS, ...PUBLISHER_TOOLS]);
       }
       // Providers authenticate with a sk_live_ key → focused publishing surface.
       if (trimString(authInfo?.extra?.apiosk_provider_key)) {

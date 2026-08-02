@@ -17,6 +17,7 @@ import {
   mintHostedConnectToken,
   prepareHostedPaymentWallets,
 } from "./hosted-payment.mjs";
+import { mintHostedProviderKey } from "./provider-key.mjs";
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 const AUTHORIZATION_CODE_TTL_SECONDS = 10 * 60;
@@ -921,6 +922,10 @@ function createAuthorizePage({
         accent-color: var(--primary);
       }
 
+      .publish-consent {
+        margin: 18px 0 2px;
+      }
+
       button.primary-wide {
         background: var(--primary);
         border: 1px solid transparent;
@@ -1099,6 +1104,10 @@ function createAuthorizePage({
             }
             <p id="wallet-status" class="meta">${walletEnabled ? "Connect MetaMask, Coinbase Wallet, or another browser wallet. The next step separately authorizes limited USDC payments." : "Wallet sign-in is not configured on this MCP server."}</p>
           </section>
+          <label class="checkbox-row publish-consent">
+            <input id="publish-consent" type="checkbox" />
+            <span>Also let ${escapeHtml(clientName.client_name || "this app")} publish APIs on my behalf. New listings pay out to this account and enter Apiosk&rsquo;s review queue before going live. Revocable any time in the provider portal under Settings &rarr; API keys.</span>
+          </label>
           <form method="post" action="${escapeHtml(actionPath)}" class="cancel-row">
             ${hiddenInputs}
             <button class="cancel-link" type="submit" name="action" value="cancel" formnovalidate>Cancel</button>
@@ -1111,6 +1120,7 @@ function createAuthorizePage({
             <input type="hidden" name="wallet_message_encoding" value="base64url" />
             <input type="hidden" name="wallet_signature" />
             <input type="hidden" name="wallet_method" value="connected_wallet" />
+            <input type="hidden" name="publish_consent" value="" />
           </form>
           <div class="grant">
             Requested scope: <code>${escapeHtml(scope || DEFAULT_SCOPE)}</code><br />
@@ -1169,6 +1179,13 @@ function createAuthorizePage({
             const saved = document.getElementById("phrase-saved");
             createSignInButton.disabled = next || !saved || !saved.checked;
           }
+        }
+
+        // The publishing grant is a plain checkbox outside the hidden form the
+        // wallet flow submits, so carry its state across just before submitting.
+        function applyPublishConsent() {
+          const box = document.getElementById("publish-consent");
+          walletForm.elements.publish_consent.value = box && box.checked ? "yes" : "";
         }
 
         function hexEncode(value) {
@@ -1355,6 +1372,7 @@ function createAuthorizePage({
             walletForm.elements.wallet_message.value = base64UrlEncode(message);
             walletForm.elements.wallet_signature.value = signature;
             walletForm.elements.wallet_method.value = "connected_wallet";
+            applyPublishConsent();
             setStatus("Wallet verified. Continuing...", "success");
             walletForm.submit();
           } catch (error) {
@@ -1564,6 +1582,7 @@ function createAuthorizePage({
               walletForm.elements.wallet_message.value = base64UrlEncode(message);
               walletForm.elements.wallet_signature.value = signature;
               walletForm.elements.wallet_method.value = "created_wallet";
+              applyPublishConsent();
               setStatus("Wallet verified. Continuing...", "success");
               walletForm.submit();
             } catch (error) {
@@ -1985,6 +2004,7 @@ class ApioskHostedOAuthProvider {
     resourceName,
     connectTokenMinter,
     payableWalletLister,
+    providerKeyMinter,
     requirePaymentAuthorization,
   }) {
     this.env = env;
@@ -1997,6 +2017,9 @@ class ApioskHostedOAuthProvider {
     // real hosted-payment minter.
     this.connectTokenMinter = connectTokenMinter || mintHostedConnectToken;
     this.payableWalletLister = payableWalletLister || prepareHostedPaymentWallets;
+    // Mints the provider key that unlocks publishing for a session that opted
+    // into it on the consent screen. Injectable for the same reason.
+    this.providerKeyMinter = providerKeyMinter || mintHostedProviderKey;
     // Production always uses the explicit two-step consent screen. Existing
     // test/custom minters keep their legacy single-step behavior unless they
     // explicitly opt in, so this remains an additive integration surface.
@@ -2091,8 +2114,13 @@ class ApioskHostedOAuthProvider {
           signature: req.body.wallet_signature,
           method: req.body.wallet_method,
         });
+        // Opt-in on the sign-in screen, not an OAuth scope: the client never
+        // asks for publishing, the person signing in grants it.
+        const publishGranted = trimString(req.body.publish_consent) === "yes";
         if (!this.requirePaymentAuthorization) {
-          await this.finishAuthorization(res, client, params, session);
+          await this.finishAuthorization(res, client, params, session, null, {
+            publishGranted,
+          });
           return;
         }
         const wallets = await this.payableWalletLister({
@@ -2115,6 +2143,7 @@ class ApioskHostedOAuthProvider {
             clientId: client.client_id,
             redirectUri: params.redirectUri,
             session,
+            publishGranted,
           },
           AUTHORIZATION_CODE_TTL_SECONDS,
           normalizeSessionExpiry(session.expires_at)
@@ -2172,6 +2201,7 @@ class ApioskHostedOAuthProvider {
         }
         await this.finishAuthorization(res, client, params, pending.session, mintedConnect, {
           successPage: true,
+          publishGranted: pending.publishGranted === true,
         });
       } catch (error) {
         if (!wallets.length) {
@@ -2201,7 +2231,7 @@ class ApioskHostedOAuthProvider {
     params,
     session,
     authorizedConnect = null,
-    { successPage = false } = {}
+    { successPage = false, publishGranted = false } = {}
   ) {
     const sessionToken = trimString(session.session_token);
     const normalizedSessionExpiry = normalizeSessionExpiry(session.expires_at);
@@ -2222,6 +2252,22 @@ class ApioskHostedOAuthProvider {
     const apioskConnectWalletAddress =
       trimString(mintedConnect?.walletAddress) || undefined;
 
+    // Publishing rights, only when the user ticked the box on the sign-in
+    // screen: mint a provider key for the account that just signed in and carry
+    // it on the issued token, so the publisher tools work in the same session
+    // that discovers and pays for APIs. Best-effort, like the connect token —
+    // if minting fails the connection still completes, without publishing.
+    const mintedProviderKey =
+      publishGranted && sessionToken
+        ? await this.providerKeyMinter({
+            env: this.env,
+            sessionToken,
+            userId: trimString(session.user_id),
+            clientName: client.client_name,
+          })
+        : null;
+    const apioskProviderKey = trimString(mintedProviderKey?.providerKey) || undefined;
+
     const authorizationCode = buildIssuedToken(
       this.secret,
       "code",
@@ -2238,6 +2284,7 @@ class ApioskHostedOAuthProvider {
         walletAddress: trimString(session.wallet_address) || undefined,
         apioskConnectToken,
         apioskConnectWalletAddress,
+        apioskProviderKey,
       },
       AUTHORIZATION_CODE_TTL_SECONDS,
       normalizedSessionExpiry
@@ -2308,6 +2355,7 @@ class ApioskHostedOAuthProvider {
       walletAddress: payload.walletAddress,
       apioskConnectToken: payload.apioskConnectToken,
       apioskConnectWalletAddress: payload.apioskConnectWalletAddress,
+      apioskProviderKey: payload.apioskProviderKey,
     };
 
     const accessToken = buildIssuedToken(
@@ -2363,6 +2411,7 @@ class ApioskHostedOAuthProvider {
         walletAddress: payload.walletAddress,
         apioskConnectToken: payload.apioskConnectToken,
         apioskConnectWalletAddress: payload.apioskConnectWalletAddress,
+        apioskProviderKey: payload.apioskProviderKey,
       },
       ACCESS_TOKEN_TTL_SECONDS,
       maxExpiry
@@ -2426,6 +2475,11 @@ class ApioskHostedOAuthProvider {
         // extra.apiosk_connect_token).
         apiosk_connect_token: payload.apioskConnectToken,
         apiosk_connect_wallet_address: payload.apioskConnectWalletAddress,
+        // Provider key minted at sign-in when publishing was granted. Read by
+        // publisher.mjs `extractProviderToken`, and by runtime `getStaticTools`
+        // to widen this session's tool surface with the publisher tools.
+        apiosk_provider_key: payload.apioskProviderKey,
+        apiosk_publish_granted: Boolean(payload.apioskProviderKey),
       },
     };
   }
@@ -2645,6 +2699,7 @@ export function createHostedOAuthSupport({
   resourceName = "Apiosk MCP",
   connectTokenMinter,
   payableWalletLister,
+  providerKeyMinter,
   requirePaymentAuthorization,
 } = {}) {
   const secret = resolveOAuthSecret(env);
@@ -2657,6 +2712,7 @@ export function createHostedOAuthSupport({
     resourceName,
     connectTokenMinter,
     payableWalletLister,
+    providerKeyMinter,
     requirePaymentAuthorization,
   });
 

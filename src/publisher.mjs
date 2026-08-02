@@ -1235,6 +1235,52 @@ export function reshapeDiscoveryItems(env, wellKnownDocument) {
   });
 }
 
+/**
+ * Pages the gateway's discovery document is walked in. The gateway caps
+ * `perPage` at 100; asking for it keeps a full catalog walk to a dozen or so
+ * requests instead of one per fifteen resources.
+ */
+const DISCOVERY_PAGE_SIZE = 100;
+
+/**
+ * Safety bound on the walk. At the cap this is 5,000 resources — well past the
+ * live catalog — and it stops a gateway bug that always advertises a `next`
+ * from turning this endpoint into an infinite loop.
+ */
+const DISCOVERY_MAX_PAGES = 50;
+
+/**
+ * Every item in the gateway's x402 document, following `links.next` to the end.
+ *
+ * The document is paginated (a single response was 7.3 MB and unreadable), so
+ * this endpoint — which promises an index of EVERY paid route — has to walk it.
+ * A document without `links.next` is treated as complete, which is also what an
+ * older, unpaginated gateway produces.
+ */
+async function fetchAllDiscoveryItems(gateway, doFetch) {
+  // `include=all`: the discovery document publishes managed listings by default,
+  // but this endpoint promises an index of EVERY paid route published through
+  // Apiosk — federated ones included.
+  let url = `${gateway}/.well-known/x402?perPage=${DISCOVERY_PAGE_SIZE}&include=all`;
+  let first = null;
+  const items = [];
+
+  for (let page = 0; page < DISCOVERY_MAX_PAGES && url; page += 1) {
+    const response = await doFetch(url, { headers: { accept: "application/json" } });
+    if (!response.ok) {
+      throw new Error(`Gateway discovery document unavailable (HTTP ${response.status}).`);
+    }
+    const document = await response.json();
+    first = first || document;
+    if (Array.isArray(document.items)) items.push(...document.items);
+
+    const next = document?.links?.next;
+    url = typeof next === "string" && next ? next : null;
+  }
+
+  return { document: first || {}, items };
+}
+
 export async function buildDiscoveryDocument({ env = process.env, fetchImpl } = {}) {
   if (discoveryCache && discoveryCache.expiresAt > Date.now()) {
     return discoveryCache.document;
@@ -1242,15 +1288,9 @@ export async function buildDiscoveryDocument({ env = process.env, fetchImpl } = 
 
   const gateway = resolveGatewayBaseUrl(env);
   const doFetch = fetchImpl || globalThis.fetch;
-  const response = await doFetch(`${gateway}/.well-known/x402`, {
-    headers: { accept: "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error(`Gateway discovery document unavailable (HTTP ${response.status}).`);
-  }
-  const wellKnown = await response.json();
+  const { document: wellKnown, items } = await fetchAllDiscoveryItems(gateway, doFetch);
 
-  const routes = reshapeDiscoveryItems(env, wellKnown);
+  const routes = reshapeDiscoveryItems(env, { ...wellKnown, items });
   const document = {
     name: "Apiosk paid API routes",
     description:
