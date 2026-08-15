@@ -1454,7 +1454,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "discover -> compare -> decide. A provider's own API can tell you its price and nothing about the alternatives; this chain is the part only a marketplace can answer. Nothing in it spends anything.",
       chain: [
         "apiosk_discover — what can perform this task? Returns candidates. Carry their ids forward: that is what makes the set you compared provably the set you discovered.",
-        "apiosk_compare — how do they perform against MY requirements? Price, measured latency, measured success rate and input compatibility side by side.",
+        "apiosk_compare — how do they perform against MY requirements? Price, measured p95 latency, measured success rate and input compatibility side by side.",
         "apiosk_decide — which one should I use? One provider back with the rule that picked it, every rejection and the constraint that caused it, and the runners-up in order.",
       ],
       constraints:
@@ -1464,6 +1464,8 @@ function buildHelpPayload(topic = "overview", options = {}) {
         "Every response carries the weights and each candidate's per-dimension contribution, so the total can be recomputed. A score you cannot recompute is an advertisement, not an argument.",
         "Dimensions Apiosk has never measured for a candidate are DROPPED from the weighting and named in `not_scored` — not scored zero. Zero would rank an unmeasured provider below a measurably bad one, which says more about Apiosk's coverage than about them.",
         "Asking to optimise for latency or reliability sorts measured candidates above unmeasured ones, because an unmeasured provider cannot win a race it never ran. A hard max_latency_ms or min_reliability rejects unmeasured candidates outright rather than assuming they pass.",
+        "Latency is p95, not the median, in both the ranking and the max_latency_ms ceiling. A ceiling is a promise about the slow case, and a provider with a fast median and a long tail is exactly the one that blows your timeout.",
+        "apiosk_decide returns `decision_basis`: how many candidates were measured, and which dimensions actually carried the decision. A decision that fell back to price because nothing in the field has been proxied enough to time is a weaker claim than one weighed on observed success and p95 — read it before repeating the result as a performance judgement.",
       ],
       after_the_call:
         "POST the result to the decision's meta.outcome_url — observed price, latency and whether the data was usable. It feeds the next comparison, and it is the only signal in the system that measures result quality.",
