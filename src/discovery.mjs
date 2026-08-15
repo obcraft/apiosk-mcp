@@ -859,6 +859,9 @@ export async function runDiscover(args = {}, ctx = {}) {
     );
   }
   guidanceParts.push(
+    "NEXT STEP, when more than one of these could do the job: call apiosk_compare and then apiosk_decide with `query` set to the SAME words you passed here. Chain by the query, NOT by the `id` fields above — those name results across every source this searched, and the comparison layer works on the Apiosk catalogue's own candidate ids. Both are free and neither spends anything."
+  );
+  guidanceParts.push(
     "Always state the price and the wallet's remaining budget to the user before paying. Prefer the highest trust_tier that satisfies the need and stays within budget. Never fabricate data — if nothing fits, say so."
   );
 
@@ -882,6 +885,7 @@ export async function runDiscover(args = {}, ctx = {}) {
 
 export const DISCOVER_TOOL = {
   name: "apiosk_discover",
+  title: "Discover paid APIs for a job",
   description:
     "Find the best paid x402 API for a data capability across discovery sources (Apiosk catalog + federated external listings). Decompose the user's request into capability segments first, then call this once per capability. Returns a normalized, ranked list; each result's `executable_via` says whether to call apiosk_execute (Apiosk-settled) or apiosk_inspect_x402 + apiosk_fetch_paid (external). Use this instead of apiosk_search when the goal is 'get real paid data for X', not just browsing.",
   annotations: {

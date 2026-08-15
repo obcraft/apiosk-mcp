@@ -513,10 +513,21 @@ test("hosted remote surface exposes discovery + payment guidance tools", async (
   });
 
   const tools = (await runtime.listTools()).map((tool) => tool.name);
-  assert.ok(tools.includes("apiosk_payment_guide"), "hosted should expose the payment guide");
+  // The comparison layer and the help that explains it, nothing else on the
+  // buyer side. Payment guidance and search stay callable by name but are no
+  // longer advertised — they are not what this connector is for.
   assert.ok(tools.includes("apiosk_help"), "hosted should expose help");
-  assert.ok(tools.includes("apiosk_search"), "hosted should expose search");
-  // The payment guide is public/unprotected so buyers can read it pre-auth.
+  assert.ok(tools.includes("apiosk_discover"), "hosted should expose discover");
+  assert.ok(tools.includes("apiosk_compare"), "hosted should expose compare");
+  assert.ok(tools.includes("apiosk_decide"), "hosted should expose decide");
+  assert.ok(!tools.includes("apiosk_payment_guide"), "payment guide should be delisted");
+  assert.ok(!tools.includes("apiosk_search"), "search should be delisted");
+
+  // Delisting must not change who may call what. The three comparison tools
+  // stay public so an agent can get an answer pre-auth; spending stays gated.
+  assert.equal(await runtime.isToolProtected("apiosk_discover"), false);
+  assert.equal(await runtime.isToolProtected("apiosk_compare"), false);
+  assert.equal(await runtime.isToolProtected("apiosk_decide"), false);
   assert.equal(await runtime.isToolProtected("apiosk_payment_guide"), false);
   assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
 });
@@ -626,8 +637,9 @@ test("a session that granted publishing keeps the buyer tools and gains the publ
   };
   const tools = (await runtime.listTools(authInfo)).map((tool) => tool.name);
 
-  // One person who both buys and sells: publishing must not cost the buyer surface.
-  for (const name of ["apiosk_discover", "apiosk_execute", "apiosk_inspect_x402", "apiosk_fetch_paid"]) {
+  // One person who both buys and sells: publishing must not cost the buyer
+  // surface. That surface is now the comparison layer, so this guards those.
+  for (const name of ["apiosk_help", "apiosk_discover", "apiosk_compare", "apiosk_decide"]) {
     assert.ok(tools.includes(name), `buyer tool ${name} should survive the publish grant`);
   }
   for (const name of [

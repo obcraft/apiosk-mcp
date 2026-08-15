@@ -1,7 +1,7 @@
 {
   "name": "@apiosk/mcp",
   "version": "1.7.0",
-  "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
+  "description": "The comparison layer for paid APIs: discover what can do a job, compare the candidates on price and measured performance, decide which to call \u2014 then pay per request over x402.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "exports": {
@@ -29,6 +29,10 @@
     "api",
     "model-context-protocol",
     "agent-tools",
+    "agent-commerce",
+    "compare-apis",
+    "api-discovery",
+    "api-comparison",
     "payments",
     "finance",
     "x402",

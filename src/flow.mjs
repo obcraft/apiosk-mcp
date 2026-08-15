@@ -71,19 +71,37 @@ function appendRequirements(params, args) {
   if (optimizeFor) params.set("optimize_for", optimizeFor);
 }
 
-/// `candidates` accepts what `apiosk_discover` hands back — an array of ids, or
-/// the comma-separated string the HTTP endpoint takes — because an agent that
-/// just read a list should not have to reformat it to ask about that list.
-function normalizeCandidates(value) {
-  if (!value) return "";
+/// Only the gateway's own candidate ids mean anything to `/v1/compare`.
+///
+/// `apiosk_discover` is a CROSS-SOURCE search — it merges the Apiosk catalogue
+/// with the Coinbase Bazaar and the other directories — so it hands back ids of
+/// its own making (`apiosk:<listing-slug>`, `bazaar:<url>`). The gateway's
+/// comparison works on endpoint UUIDs. Forwarding a discover id verbatim made
+/// the gateway resolve nothing and answer 404, which an agent reads as "there
+/// are no such providers" when the truth is "you passed the wrong kind of id".
+///
+/// So anything that is not a UUID is dropped here rather than sent onward, and
+/// the caller is told to chain by query instead. Silently dropping would be
+/// worse than the 404: it would compare a different set than the agent asked
+/// for and say nothing.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function splitCandidates(value) {
+  if (!value) return { usable: [], rejected: [] };
   const list = Array.isArray(value) ? value : String(value).split(",");
-  return list.map((entry) => trimString(entry)).filter(Boolean).join(",");
+  const usable = [];
+  const rejected = [];
+  for (const raw of list) {
+    const entry = trimString(raw);
+    if (!entry) continue;
+    (UUID_RE.test(entry) ? usable : rejected).push(entry);
+  }
+  return { usable, rejected };
 }
 
-function buildQuery(args) {
+function buildQuery(args, usableCandidates) {
   const params = new URLSearchParams();
-  const candidates = normalizeCandidates(args.candidates);
-  if (candidates) params.set("candidates", candidates);
+  if (usableCandidates.length) params.set("candidates", usableCandidates.join(","));
 
   const capability = trimString(args.capability);
   if (capability) params.set("capability", capability);
@@ -93,6 +111,29 @@ function buildQuery(args) {
 
   appendRequirements(params, args);
   return params;
+}
+
+/// The gateway needs at least one of candidates / capability / q to work with.
+/// Returns an error payload when it has none, naming the actual cause — an
+/// agent that passed discover ids gets told they were the wrong shape, not that
+/// its arguments were empty.
+function subjectError(args, usable, rejected, verb) {
+  const hasSubject =
+    usable.length || trimString(args.capability) || trimString(args.query ?? args.q);
+  if (hasSubject) return null;
+
+  if (rejected.length) {
+    return {
+      error: "unusable_candidates",
+      rejected,
+      message:
+        `Those are apiosk_discover ids, which name results across every source it searched; ${verb} works on the Apiosk catalogue's own candidate ids (UUIDs, issued by GET /v1/discover on the gateway). Call this again with \`query\` set to the same plain-words need you gave apiosk_discover — that is how the chain works over MCP.`,
+    };
+  }
+  return {
+    error: "no_subject",
+    message: `Nothing to ${verb}. Pass \`query\` (the need in plain words), or a \`capability\` slug, or gateway candidate ids.`,
+  };
 }
 
 async function callGateway(path, params, { gatewayBaseUrl, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
@@ -133,20 +174,13 @@ async function callGateway(path, params, { gatewayBaseUrl, timeoutMs = DEFAULT_T
   return { ok: parsed, url };
 }
 
-/// Neither endpoint can answer without knowing what is being compared.
-function missingSubject(args) {
-  return !normalizeCandidates(args.candidates) && !trimString(args.capability) && !trimString(args.query ?? args.q);
-}
 
 export async function runCompare(args = {}, ctx = {}) {
-  if (missingSubject(args)) {
-    return errorContent({
-      error:
-        "Nothing to compare. Pass `candidates` (ids from apiosk_discover), or a `capability` slug, or a plain-words `query`.",
-    });
-  }
+  const { usable, rejected } = splitCandidates(args.candidates);
+  const bad = subjectError(args, usable, rejected, "compare");
+  if (bad) return errorContent(bad);
 
-  const result = await callGateway("/v1/compare", buildQuery(args), ctx);
+  const result = await callGateway("/v1/compare", buildQuery(args, usable), ctx);
   if (result.error) return errorContent(result);
 
   const payload = result.ok;
@@ -160,14 +194,11 @@ export async function runCompare(args = {}, ctx = {}) {
 }
 
 export async function runDecide(args = {}, ctx = {}) {
-  if (missingSubject(args)) {
-    return errorContent({
-      error:
-        "Nothing to decide between. Pass `candidates` (ids from apiosk_discover), or a `capability` slug, or a plain-words `query`.",
-    });
-  }
+  const { usable, rejected } = splitCandidates(args.candidates);
+  const bad = subjectError(args, usable, rejected, "decide between");
+  if (bad) return errorContent(bad);
 
-  const result = await callGateway("/v1/decide", buildQuery(args), ctx);
+  const result = await callGateway("/v1/decide", buildQuery(args, usable), ctx);
   if (result.error) return errorContent(result);
 
   const payload = result.ok;
@@ -219,26 +250,29 @@ const REQUIREMENT_PROPERTIES = {
 };
 
 const SUBJECT_PROPERTIES = {
+  query: {
+    type: "string",
+    description:
+      "What you need, in plain words — the SAME words you gave apiosk_discover. This is how the chain works over MCP: pass the query forward, not the ids from apiosk_discover (those name results across every source it searched and are not the Apiosk catalogue's candidate ids).",
+  },
+  capability: {
+    type: "string",
+    description: "A capability slug, to work over every provider of one task directly.",
+  },
   candidates: {
     type: "array",
     items: { type: "string" },
     description:
-      "candidate_id values carried over from a discover step. Passing them makes the set you compared provably the set you discovered. Only reviewed Apiosk candidates carry an id — external x402 hits from the wider ecosystem have none, because there is no measurement or input mapping to score them on.",
-  },
-  capability: {
-    type: "string",
-    description: "A capability slug, to compare every provider of one task directly (see apiosk_explore for the list).",
-  },
-  query: {
-    type: "string",
-    description: "What you need, in plain words, when you do not know the capability slug — e.g. 'read a web page'.",
+      "Advanced: Apiosk candidate ids (UUIDs) as issued by GET /v1/discover on the gateway over plain HTTP. Passing them makes the set you compared provably the set you discovered. Ids from the apiosk_discover TOOL are a different namespace and are rejected — use `query` instead. External x402 hits never carry an id, because there is no measurement or input mapping to score them on.",
   },
 };
 
 export const COMPARE_TOOL = {
   name: "apiosk_compare",
+  // Human-readable label for clients that show one; the name stays the id.
+  title: "Compare providers",
   description:
-    "Turn a set of candidate providers into evidence against YOUR requirements: price, measured latency, measured success rate and input compatibility, side by side, each scored 0-100 with the weights and the per-dimension contribution that produced the number. Use after apiosk_discover (pass its candidate ids), or go straight in with a capability slug or a plain-words query. Dimensions Apiosk has not measured are dropped from the weighting and named, never scored zero. Reads only — nothing is paid. Follow with apiosk_decide to collapse the comparison into one choice.",
+    "Turn a set of candidate providers into evidence against YOUR requirements: price, measured latency, measured success rate and input compatibility, side by side, each scored 0-100 with the weights and the per-dimension contribution that produced the number. Chain it after apiosk_discover by passing the SAME plain-words query, or go straight in with a query or capability slug. Dimensions Apiosk has not measured are dropped from the weighting and named, never scored zero. Reads only — nothing is paid. Follow with apiosk_decide to collapse the comparison into one choice.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -253,8 +287,9 @@ export const COMPARE_TOOL = {
 
 export const DECIDE_TOOL = {
   name: "apiosk_decide",
+  title: "Decide which provider to use",
   description:
-    "Get one provider back for a job, with the reasoning: the rule that picked it, every rejected candidate and the exact constraint that removed it, and the runners-up in order so you can overrule it in one read. Takes the same arguments as apiosk_compare — candidate ids from apiosk_discover, or a capability slug, or a plain-words query — plus hard constraints (max_price_usdc, max_latency_ms, min_reliability, settlement, require_all_inputs) and optimize_for. Reads only; it selects but never pays. The response carries `execution` telling you how to call the winner, and an outcome URL to report back whether it delivered.",
+    "Get one provider back for a job, with the reasoning: the rule that picked it, every rejected candidate and the exact constraint that removed it, and the runners-up in order so you can overrule it in one read. Takes the same arguments as apiosk_compare (chain it by passing the same plain-words query you gave apiosk_discover, or use a capability slug) plus hard constraints (max_price_usdc, max_latency_ms, min_reliability, settlement, require_all_inputs) and optimize_for. Reads only; it selects but never pays. The response carries `execution` telling you how to call the winner, and an outcome URL to report back whether it delivered.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,

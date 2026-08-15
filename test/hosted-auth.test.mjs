@@ -75,21 +75,30 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
 
   const toolNames = (await runtime.listTools()).map((tool) => tool.name);
 
-  // Lean BUYER surface (default): the agentic flow + one wallet view, no noise.
+  // The hosted connector lists five tools and nothing else: the comparison
+  // layer, the help that explains it, and the publishing entry point. A
+  // connector that lists a dozen general-purpose tools is judged as a toolbox;
+  // these four are the part no other server has.
   for (const name of [
     "apiosk_help",
-    "apiosk_payment_guide",
-    "apiosk_search",
-    "apiosk_explore",
     "apiosk_discover",
-    "apiosk_inspect_x402",
-    "apiosk_get_api",
-    "apiosk_execute",
-    "apiosk_fetch_paid",
-    "apiosk_list_wallets",
+    "apiosk_compare",
+    "apiosk_decide",
+    "publish_x402_route",
   ]) {
     assert.ok(toolNames.includes(name), `hosted buyer surface should expose ${name}`);
   }
+  // Exactly those five and nothing more — counted over the STATIC surface only,
+  // since this runtime also builds a dynamic tool per listing and those are a
+  // separate, opt-in mechanism.
+  const staticNames = toolNames.filter(
+    (name) => name.startsWith("apiosk_") || name.startsWith("publish_"),
+  );
+  assert.deepEqual(
+    [...staticNames].sort(),
+    ["apiosk_compare", "apiosk_decide", "apiosk_discover", "apiosk_help", "publish_x402_route"],
+    `hosted static surface drifted: ${staticNames.join(", ")}`,
+  );
 
   // Noise removed from the default buyer surface (still dispatchable by name,
   // still restorable via APIOSK_MCP_FULL_TOOLS): advanced wallet CRUD and
@@ -101,8 +110,31 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
     "apiosk_update_wallet",
     "apiosk_delete_wallet",
     "apiosk_create_wallet_api_key",
+    // Hidden, not removed. Each of these answers a question some other server
+    // also answers, so listing them buried the comparison layer. All stay
+    // dispatchable by name — see the "still callable" assertions below.
+    "apiosk_explore",
+    "apiosk_search",
+    "apiosk_get_api",
+    "apiosk_inspect_x402",
+    "apiosk_execute",
+    "apiosk_fetch_paid",
+    "apiosk_payment_guide",
+    "apiosk_list_wallets",
   ]) {
     assert.ok(!toolNames.includes(name), `buyer surface should hide ${name}`);
+  }
+
+  // The claim the trimmed surface rests on: hiding a tool from the list must
+  // not remove the capability. Dispatch is keyed on the name, not on the list,
+  // so an agent holding a slug can still execute — it just is not handed the
+  // tool before it has decided what to buy.
+  for (const name of ["apiosk_search", "apiosk_execute", "apiosk_payment_guide"]) {
+    assert.equal(
+      typeof (await runtime.isToolProtected(name)),
+      "boolean",
+      `${name} should still resolve after being delisted`,
+    );
   }
 
   // Publishing is a headline capability, so its entry point is discoverable even
@@ -140,17 +172,24 @@ test("hosted runtime exposes the full remote surface (discovery + managed + dyna
   assert.equal(await runtime.isToolProtected("apiosk_list_wallets"), true);
   assert.equal(await runtime.isToolProtected("demo-api"), true); // paid dynamic tool
 
+  // securitySchemes are stamped at the list boundary, so they can only be
+  // asserted on tools the surface actually lists. Public and protected are both
+  // represented: the comparison layer is reachable pre-auth, publishing is not.
   const listedTools = await runtime.listTools();
   assert.deepEqual(
-    listedTools.find((tool) => tool.name === "apiosk_search")?.securitySchemes,
+    listedTools.find((tool) => tool.name === "apiosk_discover")?.securitySchemes,
     [{ type: "noauth" }]
   );
   assert.deepEqual(
-    listedTools.find((tool) => tool.name === "apiosk_execute")?.securitySchemes,
+    listedTools.find((tool) => tool.name === "apiosk_compare")?.securitySchemes,
+    [{ type: "noauth" }]
+  );
+  assert.deepEqual(
+    listedTools.find((tool) => tool.name === "publish_x402_route")?.securitySchemes,
     [{ type: "oauth2", scopes: ["mcp:tools"] }]
   );
   assert.deepEqual(
-    listedTools.find((tool) => tool.name === "apiosk_execute")?._meta?.securitySchemes,
+    listedTools.find((tool) => tool.name === "publish_x402_route")?._meta?.securitySchemes,
     [{ type: "oauth2", scopes: ["mcp:tools"] }]
   );
 

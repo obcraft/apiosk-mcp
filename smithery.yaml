@@ -1,0 +1,53 @@
+# Smithery deployment config.
+#
+# The server is a plain Node HTTP MCP server (server.mjs, streamable-http on
+# :3000) and ships with a Dockerfile, so Smithery builds and runs the container
+# rather than a language-specific runtime.
+#
+# ON CONFIG: there are no required connection parameters, which is deliberate
+# rather than an omission. The three tools this server exists for —
+# apiosk_discover, apiosk_compare, apiosk_decide — are read-only, spend nothing,
+# and are served pre-auth, so a user can install this and get an answer without
+# handing over anything. Credentials are only needed to SPEND (apiosk_execute,
+# apiosk_fetch_paid) or to PUBLISH (publish_x402_route), and those authenticate
+# per call through the hosted OAuth flow or an Apiosk connect token rather than
+# through install-time config. Requiring a key up front to run a free comparison
+# would be a worse first run and a false claim about what the tool needs.
+
+runtime: container
+
+build:
+  dockerfile: Dockerfile
+  dockerBuildPath: .
+
+startCommand:
+  type: http
+  # Every field is optional; a user who supplies nothing gets the full
+  # discovery + comparison surface and read-only x402 inspection.
+  configSchema:
+    type: object
+    required: []
+    properties:
+      APIOSK_CONNECT_TOKEN:
+        type: string
+        title: Apiosk connect token
+        description: >-
+          Optional. An aw_ token minted in the Apiosk buyer dashboard. Lets the
+          server settle paid calls from your managed wallet, which is what
+          apiosk_execute and apiosk_fetch_paid need. Discovery, comparison and
+          decisions work without it.
+      APIOSK_GATEWAY:
+        type: string
+        title: Gateway base URL
+        default: https://gateway.apiosk.com
+        description: >-
+          Optional. Point the comparison layer at a different Apiosk gateway.
+          Leave unset unless you are testing against staging.
+      APIOSK_MCP_FULL_TOOLS:
+        type: string
+        title: Expose the full tool surface
+        description: >-
+          Optional, "true" to list every tool instead of the lean buyer surface.
+          The default surface leads with discover, compare and decide because
+          those are what this server is for; the rest stay callable by name.
+  exampleConfig: {}

@@ -83,7 +83,11 @@ export const PUBLISHER_TOOLS = [
       required: ["name", "upstream_url", "price", "settlement_address"],
       properties: {
         name: { type: "string", description: "Human-readable API name, e.g. 'Weather API'." },
-        description: { type: "string" },
+        description: {
+          type: "string",
+          description:
+            "What the endpoint does, in one or two sentences. This is what an agent reads when comparing your route against the alternatives, so describe the job it performs rather than the brand.",
+        },
         upstream_url: {
           type: "string",
           description: "Full HTTPS URL of your existing endpoint the gateway forwards paid requests to.",
@@ -107,9 +111,22 @@ export const PUBLISHER_TOOLS = [
           type: "string",
           description: "Wallet that receives 98% of each payment (Apiosk keeps a 2% platform fee).",
         },
-        input_schema: { type: "object", additionalProperties: true },
-        output_schema: { type: "object", additionalProperties: true },
-        tags: { type: "array", items: { type: "string" } },
+        input_schema: {
+          type: "object",
+          additionalProperties: true,
+          description:
+            "JSON Schema for the request body or query parameters. Supplying it is what lets Apiosk map a capability's shared inputs onto your parameter names, which is what makes your route substitutable for a competitor's — and therefore comparable at all.",
+        },
+        output_schema: {
+          type: "object",
+          additionalProperties: true,
+          description: "JSON Schema for the response body, so an agent knows what it is buying before it pays.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Keywords used for catalogue search and capability matching, e.g. ['weather', 'forecast'].",
+        },
         slug: {
           type: "string",
           description: "Optional gateway slug override (lowercase letters, numbers, hyphens). Defaults to a slug derived from name.",

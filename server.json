@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk Connect",
-  "description": "Discover, compare, decide between, pay for, execute, and publish APIs through Apiosk.",
+  "description": "The comparison layer for paid APIs: discover what can do a job, compare the candidates on price and measured performance, decide which to call — then pay per request over x402.",
   "version": "1.7.0",
   "websiteUrl": "https://apiosk.com",
   "icons": [

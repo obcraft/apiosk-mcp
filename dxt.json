@@ -1,16 +1,24 @@
 {
   "name": "apiosk-mcp",
   "version": "1.7.0",
-  "description": "Discover, pay for, execute, and publish APIs through Apiosk.",
+  "description": "The comparison layer for paid APIs: discover what can do a job, compare the candidates on price and measured performance, decide which to call \u2014 then pay per request over x402.",
   "author": "Apiosk",
   "license": "MIT",
   "homepage": "https://apiosk.com",
   "icon": "https://mcp.apiosk.com/logo-optimized-light.png",
-  "keywords": ["payments", "finance", "x402", "commerce", "crypto"],
+  "keywords": [
+    "payments",
+    "finance",
+    "x402",
+    "commerce",
+    "crypto"
+  ],
   "repository": "https://github.com/obcraft/apiosk-mcp",
   "mcp": {
     "command": "node",
-    "args": ["index.mjs"]
+    "args": [
+      "index.mjs"
+    ]
   },
   "tools": [
     {

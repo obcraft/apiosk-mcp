@@ -623,7 +623,8 @@ const PUBLISH_TOOLS = [
 
 const HELP_TOOL = {
   name: "apiosk_help",
-  description: "Explain what Apiosk MCP is, how to connect it, how auth and USDC/x402 payments work, and the recommended workflow for discovery, wallets, and publishing.",
+  title: "How Apiosk works",
+  description: "Explain what Apiosk MCP is, how to connect it, how auth and USDC/x402 payments work, and the recommended workflow for discovery, wallets, and publishing. Use topic='comparison' for the discover -> compare -> decide chain.",
   annotations: {
     readOnlyHint: true,
     openWorldHint: false,
@@ -895,21 +896,38 @@ const HOSTED_REMOTE_TOOLS = [
   ...PUBLISHER_TOOLS,
 ];
 
-// Lean BUYER surface for the hosted connector. A buyer opening the connector in
-// ChatGPT/Claude should see the agentic flow + one wallet view — not 28 tools.
-// Ordered flow-first. The advanced wallet CRUD (create/update/delete wallet +
-// api-keys), explore/metadata/health, and provider publishing are dropped from
-// the default list. Nothing is lost: every hidden tool is still dispatchable by
-// name (callTool + isToolProtected are unchanged) and the full set is one env
-// flag away (APIOSK_MCP_FULL_TOOLS=true). apiosk_list_wallets stays so buyers can
-// see their wallet address, spend limits, and funding.
-// `publish_x402_route` is the ONE exception to "providers only": publishing is a
-// headline capability of this server, and a tool that is absent cannot be
-// discovered. Listing the entry point means an agent can see that publishing
-// exists and read how to authenticate; calling it without a provider key still
-// fails closed in `requireProvider` with instructions for minting one. The other
-// six publisher tools only make sense once you hold a key, so they stay on the
-// provider surface.
+// The hosted connector surface: five tools, and a deliberate argument about
+// what this server is.
+//
+// A connector that lists thirteen tools is a toolbox, and a toolbox is judged
+// against every other toolbox. Four of these are the thing nobody else does —
+// discover, compare, decide, plus the help that explains them — and the fifth
+// is the other side of the marketplace. Everything that was here before
+// (explore, search, get_api, inspect_x402, execute, fetch_paid, payment_guide,
+// list_wallets) answers a question some other server also answers, so listing
+// them buried the part that is ours.
+//
+// NOTHING IS LOST, and this is the part to keep true: every removed tool is
+// still dispatchable by name, because `callTool` and `isToolProtected` are
+// keyed on the name and not on this list. An agent holding a slug can still
+// call apiosk_execute; it just will not be handed one before it has decided
+// what to buy. The full surface is one env flag away (APIOSK_MCP_FULL_TOOLS=true),
+// and the local stdio package is untouched — it keeps wallets, publishing and
+// the per-API dynamic tools, because that is a different product.
+//
+// The consequence worth naming: an agent that finishes `apiosk_decide` has no
+// LISTED tool to execute the winner with. That is on purpose. `decide` returns
+// an `execution` block with the call URL and the route, and a paid endpoint
+// answers 402 with its own terms, so an agent pays the provider over plain
+// x402 rather than through us. The comparison is the product; the call is the
+// open protocol.
+//
+// `publish_x402_route` is the ONE exception to "providers only": a tool that is
+// absent cannot be discovered, so listing the entry point lets an agent see
+// that publishing exists and read how to authenticate. Calling it without a
+// provider key still fails closed in `requireProvider` with instructions for
+// minting one. The other six publisher tools only make sense once you hold a
+// key, so they stay on the provider surface.
 /** Merge tool lists that legitimately overlap, keeping the first definition. */
 function dedupeToolsByName(tools) {
   const seen = new Set();
@@ -926,14 +944,6 @@ const HOSTED_BUYER_TOOLS = [
   DISCOVER_TOOL,
   COMPARE_TOOL,
   DECIDE_TOOL,
-  EXPLORE_TOOL,
-  INSPECT_TOOL,
-  EXECUTE_TOOL,
-  FETCH_PAID_TOOL,
-  GET_API_TOOL,
-  SEARCH_TOOL,
-  PAYMENT_GUIDE_TOOL,
-  DASHBOARD_WALLET_TOOLS.find((tool) => tool.name === "apiosk_list_wallets"),
   PUBLISHER_TOOLS.find((tool) => tool.name === "publish_x402_route"),
 ].filter(Boolean);
 

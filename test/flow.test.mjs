@@ -54,14 +54,49 @@ test("decide refuses when there is nothing to decide between", async () => {
   assert.match(result.content[0].text, /Nothing to decide between/);
 });
 
-test("candidate ids survive as an array or a comma string", async () => {
+const UUID_A = "11111111-2222-4333-8444-555555555555";
+const UUID_B = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+
+test("gateway candidate ids survive as an array or a comma string", async () => {
   const handler = jsonHandler({ capability: "read-a-web-page", ranked: [] });
   await withStubGateway(handler, async (ctx) => {
-    await runCompare({ candidates: ["a", " b ", ""] }, ctx);
-    await runCompare({ candidates: "c, d" }, ctx);
+    await runCompare({ candidates: [UUID_A, ` ${UUID_B} `, ""] }, ctx);
+    await runCompare({ candidates: `${UUID_A}, ${UUID_B}` }, ctx);
   });
-  assert.match(decodeURIComponent(handler.seen[0]), /candidates=a,b/);
-  assert.match(decodeURIComponent(handler.seen[1]), /candidates=c,d/);
+  assert.match(decodeURIComponent(handler.seen[0]), new RegExp(`candidates=${UUID_A},${UUID_B}`));
+  assert.match(decodeURIComponent(handler.seen[1]), new RegExp(`candidates=${UUID_A},${UUID_B}`));
+});
+
+/// The bug this guards: apiosk_discover is a cross-source search and mints its
+/// own ids (`apiosk:<slug>`, `bazaar:<url>`). Forwarding one reached the gateway
+/// as an unresolvable candidate and came back 404 "nothing performs that", which
+/// reads as "no such providers" rather than "wrong kind of id".
+test("apiosk_discover ids are refused with the fix, not forwarded into a 404", async () => {
+  const handler = jsonHandler({ ranked: [] });
+  const result = await withStubGateway(handler, (ctx) =>
+    runCompare({ candidates: ["apiosk:apyhub-extract-links", "bazaar:https://x.example/y"] }, ctx),
+  );
+
+  assert.equal(handler.seen.length, 0, "must not reach the gateway at all");
+  assert.equal(result.isError, true);
+  const body = JSON.parse(result.content[0].text);
+  assert.equal(body.error, "unusable_candidates");
+  assert.deepEqual(body.rejected, ["apiosk:apyhub-extract-links", "bazaar:https://x.example/y"]);
+  // The message has to say what to do instead, or the agent just retries.
+  assert.match(body.message, /query/);
+});
+
+test("a discover id alongside a query is dropped, and the query still runs", async () => {
+  const handler = jsonHandler({ ranked: [] });
+  await withStubGateway(handler, (ctx) =>
+    runCompare({ candidates: ["apiosk:something", UUID_A], query: "read a web page" }, ctx),
+  );
+  const seen = decodeURIComponent(handler.seen[0]);
+  // The UUID survives, the discover id does not, and the query goes along so
+  // the gateway can still resolve a capability.
+  assert.match(seen, new RegExp(`candidates=${UUID_A}`));
+  assert.doesNotMatch(seen, /apiosk:something/);
+  assert.match(seen, /q=read\+a\+web\+page/);
 });
 
 test("requirements are passed through under the names the gateway expects", async () => {
