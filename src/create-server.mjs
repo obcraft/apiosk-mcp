@@ -4,9 +4,12 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas.mjs";
+import { PROMPTS, getPrompt } from "./prompts.mjs";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
@@ -68,7 +71,10 @@ export function createApioskMcpServer(options = {}) {
   const runtime = resolveRuntime(options);
   const server = new Server(
     SERVER_INFO,
-    { capabilities: { tools: {}, resources: {} }, instructions: SERVER_INSTRUCTIONS }
+    // `prompts` is declared because it is implemented. Leaving it out made
+    // prompts/list answer -32601 Method not found, which a scanner reads as a
+    // broken server rather than a server without prompts.
+    { capabilities: { tools: {}, resources: {}, prompts: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
@@ -79,6 +85,12 @@ export function createApioskMcpServer(options = {}) {
     if (request.params.uri !== APIO_RESULT_CANVAS_URI) throw new Error("Unknown Apiosk resource");
     return { contents: [{ uri: APIO_RESULT_CANVAS_URI, mimeType: "text/html+skybridge", text: APIO_RESULT_CANVAS_HTML }] };
   });
+
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: PROMPTS }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) =>
+    getPrompt(request.params.name, request.params.arguments || {}),
+  );
 
   server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => ({
     tools: await runtime.listTools(extra.authInfo),

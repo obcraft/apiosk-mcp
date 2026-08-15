@@ -4,9 +4,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   SERVER_INFO,
+  SERVER_INSTRUCTIONS,
   createApioskMcpServer,
   listApioskTools,
 } from "./src/create-server.mjs";
+import { PROMPTS } from "./src/prompts.mjs";
+import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
 import {
   createHostedOAuthSupport,
   createMcpWalletAuthNonce,
@@ -384,6 +387,47 @@ app.get("/openapi/:routeId", async (req, res) => {
       error: "bad_gateway",
       message: error instanceof Error ? error.message : String(error),
       status: 502,
+    });
+  }
+});
+
+// Static server card (SEP-1649). Lets a registry read this server's identity,
+// auth model and capabilities without opening an MCP session.
+//
+// Built from the SAME runtime that answers tools/list rather than from a
+// hand-written literal, because a card that disagrees with the live server is
+// worse than no card: a scanner would publish a tool list nobody can call.
+//
+// `authentication.required` is false and that is the substantive claim here:
+// the comparison layer (discover, compare, decide) plus help are served
+// pre-auth and spend nothing, so a client can install this and get a real
+// answer before authenticating. OAuth only gates publishing and spending.
+app.get("/.well-known/mcp/server-card.json", async (req, res) => {
+  try {
+    const tools = await listApioskTools({ hostedAuthEnabled: true });
+    res.setHeader("cache-control", "public, max-age=300");
+    res.json({
+      serverInfo: SERVER_INFO,
+      instructions: SERVER_INSTRUCTIONS,
+      authentication: {
+        required: false,
+        schemes: ["oauth2", "noauth"],
+      },
+      capabilities: { tools: {}, resources: {}, prompts: {} },
+      tools,
+      prompts: PROMPTS,
+      resources: [
+        {
+          uri: APIO_RESULT_CANVAS_URI,
+          name: "Apiosk paid result canvas",
+          mimeType: "text/html+skybridge",
+        },
+      ],
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "server_card_unavailable",
+      message: error instanceof Error ? error.message : String(error),
     });
   }
 });
