@@ -372,10 +372,41 @@ Static tools:
 - `apiosk_explore`
 - `apiosk_search`
 - `apiosk_discover`
+- `apiosk_compare`
+- `apiosk_decide`
 - `apiosk_inspect_x402`
 - `apiosk_fetch_paid`
 - `apiosk_get_api`
 - `apiosk_execute`
+
+### The comparison layer: `discover` → `compare` → `decide`
+
+A provider's own API can tell you its price and nothing about the alternatives.
+These three chain to answer the part only a marketplace can, and none of them
+spends anything:
+
+| Tool | Question it answers |
+| --- | --- |
+| `apiosk_discover` | What can perform this task? Returns candidates. |
+| `apiosk_compare` | How do they perform against **my** requirements? Price, measured latency, measured success rate and input compatibility, side by side. |
+| `apiosk_decide` | Which one should I use? One provider, the rule that picked it, every rejection with the constraint that caused it, and the runners-up in order. |
+
+Carrying candidate ids from one step to the next is what makes the set you
+compared provably the set you discovered. State constraints once
+(`max_price_usdc`, `max_latency_ms`, `min_reliability`, `settlement`,
+`require_all_inputs`, `optimize_for`) and pass the same ones down the chain.
+
+Scores are 0–100 **relative to the candidates in that one comparison** — the
+cheapest scores 1 on price, the dearest 0 — and every response ships the weights
+and each candidate's per-dimension contribution, so the number can be recomputed
+rather than trusted. Dimensions Apiosk has not measured for a candidate are
+dropped from the weighting and named in `not_scored`, never scored zero: zero
+would rank an unmeasured provider below a measurably bad one, which says more
+about Apiosk's coverage than about the provider.
+
+The same arithmetic is on the gateway over plain HTTP for agents not speaking
+MCP: `GET /v1/discover`, `GET /v1/compare`, `GET /v1/decide`. Run
+`apiosk_help topic='comparison'` for the full contract.
 
 `apiosk_search` also returns matching x402 discovery sources in `sources`, even
 when the Apiosk API catalog has no listing with that name. Each source includes
@@ -387,7 +418,7 @@ and are never paid automatically.
 
 Hosted remote MCP tools (in addition to dynamic per-API tools):
 
-- Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_discover`, `apiosk_inspect_x402`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
+- Discovery / guidance: `apiosk_help`, `apiosk_payment_guide`, `apiosk_search`, `apiosk_explore`, `apiosk_discover`, `apiosk_compare`, `apiosk_decide`, `apiosk_inspect_x402`, `apiosk_get_api`, `apiosk_metadata`, `apiosk_execute`, `apiosk_health`
 - External paid fetch: `apiosk_fetch_paid` (OAuth/connect-token protected; requires explicit live-price confirmation)
 - Prepaid credits (legacy, no longer offered): `apiosk_buy_credits`, `apiosk_get_credits_status`
 - Managed wallets: `apiosk_list_wallets`, `apiosk_create_wallet`, `apiosk_update_wallet`, `apiosk_delete_wallet`, `apiosk_get_wallet_activity`, `apiosk_create_wallet_connect_string`, `apiosk_list_wallet_api_keys`, `apiosk_create_wallet_api_key`, `apiosk_update_wallet_api_key`, `apiosk_delete_wallet_api_key`

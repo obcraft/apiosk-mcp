@@ -35,6 +35,7 @@ import {
   isPublisherTool,
 } from "./publisher.mjs";
 import { DISCOVER_TOOL, runDiscover } from "./discovery.mjs";
+import { COMPARE_TOOL, DECIDE_TOOL, runCompare, runDecide } from "./flow.mjs";
 import { searchKnownSources } from "./source-registry.mjs";
 import { INSPECT_TOOL, runInspect } from "./x402-inspect.mjs";
 import { FETCH_PAID_TOOL, runFetchPaid } from "./external-fetch.mjs";
@@ -633,8 +634,8 @@ const HELP_TOOL = {
     properties: {
       topic: {
         type: "string",
-        enum: ["overview", "setup", "auth", "workflow", "discovery", "payments", "rails", "wallets", "publish", "configure"],
-        description: "Optional help topic. Defaults to overview. Use 'discovery' to learn which live sources apiosk_discover searches (Apiosk catalog + Coinbase Bazaar + well-known); use 'rails' for how USDC/x402 settlement works.",
+        enum: ["overview", "setup", "auth", "workflow", "discovery", "comparison", "payments", "rails", "wallets", "publish", "configure"],
+        description: "Optional help topic. Defaults to overview. Use 'discovery' to learn which live sources apiosk_discover searches (Apiosk catalog + Coinbase Bazaar + well-known); use 'comparison' for the discover -> compare -> decide chain and how the scoring works; use 'rails' for how USDC/x402 settlement works.",
       },
     },
   },
@@ -842,6 +843,8 @@ const DISCOVERY_TOOLS = [
   EXPLORE_TOOL,
   SEARCH_TOOL,
   DISCOVER_TOOL,
+  COMPARE_TOOL,
+  DECIDE_TOOL,
   INSPECT_TOOL,
   GET_API_TOOL,
   EXECUTE_TOOL,
@@ -855,6 +858,8 @@ const HOSTED_DISCOVERY_TOOLS = [
   PAYMENT_GUIDE_TOOL,
   SEARCH_TOOL,
   DISCOVER_TOOL,
+  COMPARE_TOOL,
+  DECIDE_TOOL,
   INSPECT_TOOL,
   EXPLORE_TOOL,
   GET_API_TOOL,
@@ -919,6 +924,8 @@ function dedupeToolsByName(tools) {
 const HOSTED_BUYER_TOOLS = [
   HELP_TOOL,
   DISCOVER_TOOL,
+  COMPARE_TOOL,
+  DECIDE_TOOL,
   EXPLORE_TOOL,
   INSPECT_TOOL,
   EXECUTE_TOOL,
@@ -1421,6 +1428,7 @@ function buildHelpPayload(topic = "overview", options = {}) {
           ? "Call apiosk_get_started first when you want the MCP package to configure local auth and prove the setup with a test call"
           : "Call apiosk_search or apiosk_explore to find a capability",
         "Call apiosk_explore to browse listing groups or apiosk_search to find a capability",
+        "When more than one provider can do the job, run the comparison chain rather than picking the first hit: apiosk_discover -> apiosk_compare -> apiosk_decide (apiosk_help topic='comparison'). None of the three spends anything.",
         "Read tool_name from search results when a dynamic tool is available",
         "Call apiosk_get_api when you need detail, docs_url, or listing metadata",
         "Use the dynamic tool directly for the cleanest invocation shape",
@@ -1429,6 +1437,28 @@ function buildHelpPayload(topic = "overview", options = {}) {
           ? "Create or select a local wallet before making paid calls or publishing APIs"
           : "Use APIOSK_PRIVATE_KEY if you need autonomous payment on the public server mode",
       ],
+    },
+    comparison: {
+      topic: "comparison",
+      summary:
+        "discover -> compare -> decide. A provider's own API can tell you its price and nothing about the alternatives; this chain is the part only a marketplace can answer. Nothing in it spends anything.",
+      chain: [
+        "apiosk_discover — what can perform this task? Returns candidates. Carry their ids forward: that is what makes the set you compared provably the set you discovered.",
+        "apiosk_compare — how do they perform against MY requirements? Price, measured latency, measured success rate and input compatibility side by side.",
+        "apiosk_decide — which one should I use? One provider back with the rule that picked it, every rejection and the constraint that caused it, and the runners-up in order.",
+      ],
+      constraints:
+        "State them once and pass the same ones down the chain: max_price_usdc, max_latency_ms, min_reliability (0..1 or 0..100), settlement ('apiosk' proxied | 'direct' federated), require_all_inputs, optimize_for ('price' default | 'latency' | 'reliability' | 'balanced').",
+      how_the_score_works: [
+        "0-100, relative to the candidates in THIS comparison: the cheapest scores 1 on price, the dearest 0. Meaningful within the set, meaningless across sets.",
+        "Every response carries the weights and each candidate's per-dimension contribution, so the total can be recomputed. A score you cannot recompute is an advertisement, not an argument.",
+        "Dimensions Apiosk has never measured for a candidate are DROPPED from the weighting and named in `not_scored` — not scored zero. Zero would rank an unmeasured provider below a measurably bad one, which says more about Apiosk's coverage than about them.",
+        "Asking to optimise for latency or reliability sorts measured candidates above unmeasured ones, because an unmeasured provider cannot win a race it never ran. A hard max_latency_ms or min_reliability rejects unmeasured candidates outright rather than assuming they pass.",
+      ],
+      after_the_call:
+        "POST the result to the decision's meta.outcome_url — observed price, latency and whether the data was usable. It feeds the next comparison, and it is the only signal in the system that measures result quality.",
+      also_over_http:
+        "GET /v1/discover, /v1/compare and /v1/decide on https://gateway.apiosk.com return the same arithmetic for agents not speaking MCP.",
     },
     discovery: {
       topic: "discovery",
@@ -2428,6 +2458,19 @@ export function createApioskMcpRuntime(options = {}) {
       listApis: (params) => client.listApis(params),
       gatewayBaseUrl: resolveGatewayBaseUrl(env, savedConfig),
     });
+  }
+
+  // The two steps after discovery. Both are read-only reads of the gateway's
+  // comparison layer — no wallet, no connect token, nothing spent — so they
+  // resolve the gateway base URL and nothing else.
+  async function handleCompare(argumentsObject = {}) {
+    const savedConfig = await getSavedConfig().catch(() => null);
+    return runCompare(argumentsObject, { gatewayBaseUrl: resolveGatewayBaseUrl(env, savedConfig) });
+  }
+
+  async function handleDecide(argumentsObject = {}) {
+    const savedConfig = await getSavedConfig().catch(() => null);
+    return runDecide(argumentsObject, { gatewayBaseUrl: resolveGatewayBaseUrl(env, savedConfig) });
   }
 
   // Read an arbitrary URL's x402 402 terms without paying. Read-only probe; no
@@ -3619,6 +3662,8 @@ export function createApioskMcpRuntime(options = {}) {
       if (name === "apiosk_explore") return await handleExplore(argumentsObject, authInfo);
       if (name === "apiosk_search") return await handleSearch(argumentsObject, authInfo);
       if (name === "apiosk_discover") return await handleDiscover(argumentsObject, authInfo);
+      if (name === "apiosk_compare") return await handleCompare(argumentsObject);
+      if (name === "apiosk_decide") return await handleDecide(argumentsObject);
       if (name === "apiosk_inspect_x402") return await handleInspect(argumentsObject, authInfo);
       if (name === "apiosk_fetch_paid") return await handleFetchPaid(argumentsObject, authInfo);
       if (name === "apiosk_get_api" || name === "apiosk_metadata") {

@@ -25,6 +25,13 @@ BUYERS (call paid APIs):
 3. apiosk_execute: call any listing through one uniform envelope; payment settles automatically when a wallet or connect token is configured.
 Auth options: x402 wallet (APIOSK_PRIVATE_KEY), an aw_ connect token from the buyer dashboard, or OAuth sign-in on the hosted server.
 
+THE COMPARISON LAYER (discover -> compare -> decide):
+Apiosk's reason to exist is that one provider's API can never tell you how it compares to the alternatives. Three tools chain to answer that, and none of them spends anything:
+- apiosk_discover -> what can perform this task? Returns candidate ids.
+- apiosk_compare -> how do those candidates perform against MY requirements? Price, measured latency, measured success rate and input compatibility side by side, each scored 0-100 WITH the weights and per-dimension contributions that produced the number, so it can be recomputed rather than trusted. Dimensions Apiosk has not measured are dropped from the weighting and named, never scored zero.
+- apiosk_decide -> which one should I use? One provider back, plus the rule that picked it, every rejected candidate and the exact constraint that removed it, and the runners-up in order so you can overrule it in one read.
+State constraints once (max_price_usdc, max_latency_ms, min_reliability, settlement, require_all_inputs, optimize_for) and pass the same ones down the chain. Chaining candidate ids is what makes the set you compared provably the set you discovered. After executing the winner, report back to the decision's outcome_url: observed price, latency and success are the only signal that measures whether the choice was right.
+
 AGENTIC DATA FLOW (turn a user request into real paid data, no dummy data, one connection):
 When the user asks for real/live/paid data ("build a canvas of the realtime USD rate", "get the company registry record for X"), follow this loop instead of hand-picking APIs:
 1. DECOMPOSE the request yourself into distinct data-capability segments (e.g. "USD/EUR exchange rate", "historical rate series"). No server call — you do this reasoning.
