@@ -1,7 +1,7 @@
 {
   "name": "apiosk-mcp",
   "version": "1.7.0",
-  "description": "The comparison layer for paid APIs: discover what can do a job, compare the candidates on price and measured performance, decide which to call \u2014 then pay per request over x402.",
+  "description": "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, then decide which to call. Pay per request in USDC over x402. No accounts, no API keys.",
   "author": "Apiosk",
   "license": "MIT",
   "homepage": "https://apiosk.com",

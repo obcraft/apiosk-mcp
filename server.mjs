@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   SERVER_INFO,
+  SERVER_DESCRIPTION,
   SERVER_INSTRUCTIONS,
   createApioskMcpServer,
   listApioskTools,
@@ -408,6 +409,20 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
     res.setHeader("cache-control", "public, max-age=300");
     res.json({
       serverInfo: SERVER_INFO,
+      // Repeated at the top level, not only inside serverInfo. Registries look
+      // for these where their own schema puts them, and a scanner that finds
+      // nothing publishes a listing with a blank description and a placeholder
+      // icon — which is exactly what happened to apiosk/apiosk on first
+      // publish. Duplication is cheap; an empty storefront is not.
+      name: SERVER_INFO.name,
+      title: SERVER_INFO.title,
+      description: SERVER_DESCRIPTION,
+      version: SERVER_INFO.version,
+      websiteUrl: "https://apiosk.com",
+      icons: [
+        { src: "https://mcp.apiosk.com/logo-optimized-light.png", mimeType: "image/png", sizes: ["2048x2048"] },
+        { src: "https://apiosk.com/logo.svg", mimeType: "image/svg+xml", sizes: ["any"] },
+      ],
       instructions: SERVER_INSTRUCTIONS,
       authentication: {
         required: false,

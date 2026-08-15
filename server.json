@@ -2,24 +2,30 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk Connect",
-  "description": "The comparison layer for paid APIs: discover what can do a job, compare the candidates on price and measured performance, decide which to call — then pay per request over x402.",
+  "description": "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, then decide which to call. Pay per request in USDC over x402. No accounts, no API keys.",
   "version": "1.7.0",
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
       "src": "https://mcp.apiosk.com/logo-optimized-light.png",
       "mimeType": "image/png",
-      "sizes": ["2048x2048"]
+      "sizes": [
+        "2048x2048"
+      ]
     },
     {
       "src": "https://apiosk.com/logo.svg",
       "mimeType": "image/svg+xml",
-      "sizes": ["any"]
+      "sizes": [
+        "any"
+      ]
     },
     {
       "src": "https://apiosk.com/apple-touch-icon.png",
       "mimeType": "image/png",
-      "sizes": ["180x180"]
+      "sizes": [
+        "180x180"
+      ]
     }
   ],
   "repository": {
@@ -84,8 +90,17 @@
   ],
   "_meta": {
     "com.apiosk": {
-      "tags": ["payments", "finance", "x402", "commerce", "crypto"],
-      "categories": ["payments", "finance"]
+      "tags": [
+        "payments",
+        "finance",
+        "x402",
+        "commerce",
+        "crypto"
+      ],
+      "categories": [
+        "payments",
+        "finance"
+      ]
     }
   }
 }

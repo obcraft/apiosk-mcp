@@ -22,7 +22,7 @@ import { PROMPTS, getPrompt } from "./prompts.mjs";
  * changing the pitch means changing it here.
  */
 export const SERVER_DESCRIPTION =
-  "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, and decide which to call — with the reasoning shown — then pay per request in USDC over x402. No accounts, no API keys.";
+  "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, then decide which to call. Pay per request in USDC over x402. No accounts, no API keys.";
 
 export const SERVER_INFO = {
   name: "apiosk-mcp",
