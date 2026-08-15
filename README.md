@@ -5,6 +5,8 @@
 
 # Apiosk MCP Server
 
+[![smithery badge](https://smithery.ai/badge/olivier-fovn/apiosk)](https://smithery.ai/servers/olivier-fovn/apiosk)
+
 **AI-native payments for tools and APIs.** Discover, pay for, execute, and publish monetized APIs directly from your agent, settled per call in USDC over x402, through the Model Context Protocol.
 
 `payments` · `finance` · `x402` · `commerce` · `crypto`

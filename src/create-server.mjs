@@ -11,10 +11,25 @@ import { createApioskMcpRuntime } from "./runtime.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI } from "./result-canvas.mjs";
 import { PROMPTS, getPrompt } from "./prompts.mjs";
 
+/**
+ * One sentence, defined once.
+ *
+ * Registries take a server's description from wherever they can find it: the
+ * server card, `serverInfo`, or by scraping the HTML at the root. Smithery's
+ * existing listing quotes the welcome page almost verbatim, which is how a
+ * stale paragraph became our public description on a directory with thousands
+ * of installs. So every one of those surfaces now reads this constant, and
+ * changing the pitch means changing it here.
+ */
+export const SERVER_DESCRIPTION =
+  "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, and decide which to call — with the reasoning shown — then pay per request in USDC over x402. No accounts, no API keys.";
+
 export const SERVER_INFO = {
   name: "apiosk-mcp",
   version: "1.7.0",
   title: "Apiosk Connect",
+  description: SERVER_DESCRIPTION,
+  websiteUrl: "https://apiosk.com",
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.
