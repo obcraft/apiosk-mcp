@@ -160,7 +160,68 @@ test("hosted apiosk_create_wallet_api_key mints a gateway-compatible connect tok
   ]);
 });
 
-test("hosted apiosk_create_wallet explains custodial creation is unavailable instead of proxying HTML", async () => {
+test("hosted apiosk_create_wallet mints a phrase and registers it via the agent-wallet-create function", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let request = null;
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    if (href === "https://sb.test/functions/v1/agent-wallet-create") {
+      request = { init, body: JSON.parse(init.body) };
+      return jsonResponse({
+        wallet: {
+          id: "wallet_new",
+          label: "New wallet",
+          wallet_address: "0xAbCd000000000000000000000000000000000003",
+          status: "active",
+          daily_limit_usdc: 25,
+          per_tx_limit_usdc: 5,
+          last_used_at: null,
+          created_at: "2026-08-17T00:00:00Z",
+          icon: null,
+          color: null,
+        },
+        secrets: null,
+      });
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const runtime = createHostedRuntime();
+  const result = await runtime.callTool(
+    "apiosk_create_wallet",
+    { label: "New wallet" },
+    SESSION_AUTH
+  );
+
+  assert.notEqual(result.isError, true);
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.wallet.id, "wallet_new");
+  assert.equal(payload.wallet.custodial, true);
+  // The recovery phrase is minted server-side, sent to the function as an
+  // import, and surfaced to the caller exactly once.
+  assert.match(payload.secrets.recovery_phrase, /^(\w+ ){11}\w+$/);
+  assert.equal(request.body.mode, "import_phrase");
+  assert.equal(request.body.secret, payload.secrets.recovery_phrase);
+  assert.equal(request.body.label, "New wallet");
+  assert.equal(request.init.headers.authorization, "Bearer jwt_dashboard_session");
+});
+
+test("hosted apiosk_create_wallet falls back to the honest explanation when the function is missing", async (t) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    if (href === "https://sb.test/functions/v1/agent-wallet-create") {
+      return jsonResponse({ error: "not_found" }, 404);
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   const runtime = createHostedRuntime();
   const result = await runtime.callTool(
     "apiosk_create_wallet",
@@ -172,6 +233,7 @@ test("hosted apiosk_create_wallet explains custodial creation is unavailable ins
   const payload = JSON.parse(result.content[0].text);
   assert.equal(payload.error, "custodial_wallet_creation_unavailable");
   assert.ok(Array.isArray(payload.what_you_can_do));
+  assert.match(payload.detail, /not_found/);
 });
 
 test("402 hint names the managed wallet for connect-token sessions and guides walletless sign-ins", async () => {

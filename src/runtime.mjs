@@ -19,6 +19,7 @@ import {
 import { createLocalWalletStore } from "./wallet-store.mjs";
 import { logToolCall } from "./observability.mjs";
 import {
+  hostedCreateWallet,
   hostedCreateWalletToken,
   hostedCreateWalletUnavailable,
   hostedDeleteWallet,
@@ -2754,9 +2755,28 @@ export function createApioskMcpRuntime(options = {}) {
   async function handleWalletCreate(argumentsObject = {}, authInfo = null) {
     const hosted = hostedWalletContext(authInfo);
     if (hosted) {
-      // Key derivation + encryption lived in the retired dashboard backend, so
-      // hosted sessions get an honest explanation instead of proxied HTML.
-      return errorContent(hostedCreateWalletUnavailable());
+      // Key derivation + encryption moved from the retired dashboard backend to
+      // the agent-wallet-create Supabase Edge Function. When that function is
+      // missing or unconfigured, fall back to the honest explanation rather
+      // than an opaque error.
+      try {
+        return content(
+          await hostedCreateWallet({
+            ...hosted,
+            label: argumentsObject.label,
+            dailyLimitUsdc: argumentsObject.daily_limit_usdc,
+            perTxLimitUsdc: argumentsObject.per_tx_limit_usdc,
+          })
+        );
+      } catch (error) {
+        if (error?.status === 404 || error?.status === 503) {
+          return errorContent({
+            ...hostedCreateWalletUnavailable(),
+            detail: error.message,
+          });
+        }
+        throw error;
+      }
     }
     return content(
       await requestDashboard(

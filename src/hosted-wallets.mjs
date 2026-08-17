@@ -528,3 +528,71 @@ export function hostedCreateWalletUnavailable() {
     ],
   };
 }
+
+/**
+ * Create a managed (custodial) wallet via the `agent-wallet-create` Supabase
+ * Edge Function — the service that replaced the retired dashboard backend. The
+ * mnemonic is minted here, registered as an import (the function re-derives
+ * the address and encrypts the key at rest), and returned to the caller ONCE.
+ * Nothing on this server stores it.
+ *
+ * Throws with the function's own sentence when it is unreachable or
+ * unconfigured, so the caller can fall back to the honest explanation above.
+ */
+export async function hostedCreateWallet({
+  env = process.env,
+  sessionToken,
+  label,
+  dailyLimitUsdc,
+  perTxLimitUsdc,
+} = {}) {
+  const config = requireConfig(env);
+  const token = requireSession(sessionToken);
+
+  const { generateMnemonic, english, mnemonicToAccount } = await import("viem/accounts");
+  const mnemonic = generateMnemonic(english);
+  const address = mnemonicToAccount(mnemonic).address.toLowerCase();
+
+  const response = await fetch(`${config.supabaseUrl}/functions/v1/agent-wallet-create`, {
+    method: "POST",
+    headers: {
+      apikey: config.apiKey,
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    cache: "no-store",
+    body: JSON.stringify({
+      mode: "import_phrase",
+      secret: mnemonic,
+      label: trimString(label),
+      ...(Number.isFinite(Number(dailyLimitUsdc)) && Number(dailyLimitUsdc) > 0
+        ? { daily_limit_usdc: Number(dailyLimitUsdc) }
+        : {}),
+      ...(Number.isFinite(Number(perTxLimitUsdc)) && Number(perTxLimitUsdc) > 0
+        ? { per_tx_limit_usdc: Number(perTxLimitUsdc) }
+        : {}),
+    }),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail =
+      (payload && typeof payload === "object" && (payload.message || payload.error)) ||
+      `HTTP ${response.status}`;
+    throw statusError(`Wallet creation failed: ${detail}`, response.status);
+  }
+
+  const wallet = payload?.wallet
+    ? toWalletSummary({ ...payload.wallet, encrypted_private_key: "held" })
+    : { address };
+
+  return {
+    wallet,
+    funding: fundingInstructions(wallet),
+    secrets: {
+      recovery_phrase: mnemonic,
+      note: "Shown once and stored nowhere on this server. Anyone with this phrase controls the wallet — save it now.",
+    },
+  };
+}
