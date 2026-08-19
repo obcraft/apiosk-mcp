@@ -16,9 +16,6 @@
   },
   "scripts": {
     "pack:check": "npm pack --dry-run",
-    "smoke:new-env": "bash scripts/smoke-new-env.sh",
-    "test:macbook-air": "bash scripts/test-macbook-air.sh",
-    "test:live": "bash scripts/test-live-url.sh",
     "test": "node --test",
     "dev": "node server.mjs",
     "start": "node server.mjs"
