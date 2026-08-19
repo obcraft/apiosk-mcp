@@ -22,10 +22,7 @@ import {
   resolveOpenAiAppsChallengeToken,
   sendOpenAiAppsChallenge,
 } from "./well-known.mjs";
-import {
-  buildDiscoveryDocument,
-  getOpenApiRouteDocument,
-} from "./src/publisher.mjs";
+import { buildDiscoveryDocument } from "./src/well-known-routes.mjs";
 import {
   SETTLEMENT_DISCLOSURE_PATH,
   createSettlementDisclosurePage,
@@ -356,33 +353,6 @@ app.all("/api/*path", async (req, res) => {
     }
 
     await proxyControlPlaneRequest(req, res);
-  } catch (error) {
-    res.status(502).json({
-      error: "bad_gateway",
-      message: error instanceof Error ? error.message : String(error),
-      status: 502,
-    });
-  }
-});
-
-// Hosted OpenAPI spec for a published x402 route (generate_openapi_spec
-// returns this URL). Built live from the gateway database, so it always
-// reflects the current listing. Accepts /openapi/<route_id> and
-// /openapi/<route_id>.json.
-app.get("/openapi/:routeId", async (req, res) => {
-  try {
-    const document = await getOpenApiRouteDocument(req.params.routeId, {
-      env: process.env,
-    });
-    if (!document) {
-      return res.status(404).json({
-        error: "not_found",
-        message: "No published route matches this id.",
-        status: 404,
-      });
-    }
-    res.setHeader("cache-control", "public, max-age=60");
-    res.json(document);
   } catch (error) {
     res.status(502).json({
       error: "bad_gateway",
