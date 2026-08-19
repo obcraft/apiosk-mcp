@@ -1,7 +1,7 @@
 {
   "name": "apiosk-mcp",
   "version": "1.7.0",
-  "description": "The comparison layer for paid APIs. Discover what can do a job, compare the candidates on price and measured performance, then decide which to call. Pay per request in USDC over x402. No accounts, no API keys.",
+  "description": "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it in USDC under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.",
   "author": "Apiosk",
   "license": "MIT",
   "homepage": "https://apiosk.com",
@@ -22,36 +22,24 @@
   },
   "tools": [
     {
-      "name": "apiosk_explore",
-      "description": "Browse Apiosk listing groups before narrowing with search."
+      "name": "apiosk_connect",
+      "description": "Report whether this session can buy: connected, payable, which wallet, which policy, which limits. Returns the buy.apiosk.com link when there is no connection. Spends nothing."
     },
     {
-      "name": "apiosk_search",
-      "description": "Search the Apiosk catalog and discover API-specific dynamic tools."
+      "name": "apiosk_discover",
+      "description": "Describe a job in plain words and get the APIs that can do it, ranked, from the Apiosk catalogue and the wider x402 ecosystem. Spends nothing."
     },
     {
-      "name": "apiosk_payment_guide",
-      "description": "Guide for paying through the Apiosk gateway, buyer (how to settle a paid call) and provider (how to publish and get paid)."
-    },
-    {
-      "name": "apiosk_get_api",
-      "description": "Get full listing detail and agent metadata for a specific Apiosk slug."
+      "name": "apiosk_compare",
+      "description": "Put the candidates side by side on price, measured p95 latency, measured success rate and input fit, each offer carrying a stable offer_id to choose from. Spends nothing."
     },
     {
       "name": "apiosk_execute",
-      "description": "Fallback execute tool for any Apiosk API slug."
+      "description": "Run the offer the user chose, under the price ceiling they saw, and return the result. This is the one tool that spends money."
     },
     {
-      "name": "apiosk_wallet_create",
-      "description": "Create or import a local wallet for autonomous pay and publish flows."
-    },
-    {
-      "name": "apiosk_configure",
-      "description": "Show a structured wallet funding and Apiosk management menu, including QR output when available."
-    },
-    {
-      "name": "apiosk_publish_api",
-      "description": "Publish an API directly to Apiosk with signed wallet auth."
+      "name": "apiosk_approval_status",
+      "description": "Read the state of a purchase the buyer's rules put on hold: pending, approved, denied or expired. Spends nothing."
     }
   ]
 }

@@ -5,14 +5,14 @@
 # rather than a language-specific runtime.
 #
 # ON CONFIG: there are no required connection parameters, which is deliberate
-# rather than an omission. The three tools this server exists for —
-# apiosk_discover, apiosk_compare, apiosk_decide — are read-only, spend nothing,
-# and are served pre-auth, so a user can install this and get an answer without
-# handing over anything. Credentials are only needed to SPEND (apiosk_execute,
-# apiosk_fetch_paid) or to PUBLISH (publish_x402_route), and those authenticate
-# per call through the hosted OAuth flow or an Apiosk connect token rather than
-# through install-time config. Requiring a key up front to run a free comparison
-# would be a worse first run and a false claim about what the tool needs.
+# rather than an omission. Three of the five tools — apiosk_connect,
+# apiosk_discover and apiosk_compare — spend nothing and are served pre-auth, so
+# someone can install this and get a real answer without handing over anything.
+# A credential is only needed to SPEND (apiosk_execute) or to read a held
+# purchase (apiosk_approval_status), and that arrives per call through the
+# hosted OAuth flow or an Apiosk connect token rather than through install-time
+# config. Requiring a key up front to run a free comparison would be a worse
+# first run and a false claim about what the tool needs.
 
 runtime: container
 
@@ -22,8 +22,8 @@ build:
 
 startCommand:
   type: http
-  # Every field is optional; a user who supplies nothing gets the full
-  # discovery + comparison surface and read-only x402 inspection.
+  # Every field is optional; a user who supplies nothing gets connect, discover
+  # and compare, which is enough to find out whether Apiosk is worth connecting.
   configSchema:
     type: object
     required: []
@@ -32,22 +32,14 @@ startCommand:
         type: string
         title: Apiosk connect token
         description: >-
-          Optional. An aw_ token minted in the Apiosk buyer dashboard. Lets the
-          server settle paid calls from your managed wallet, which is what
-          apiosk_execute and apiosk_fetch_paid need. Discovery, comparison and
-          decisions work without it.
-      APIOSK_GATEWAY:
+          Optional. A token minted at buy.apiosk.com, naming the wallet and the
+          spending policy this server may buy under. apiosk_execute and
+          apiosk_approval_status need one; discovery and comparison do not.
+      APIOSK_GATEWAY_URL:
         type: string
         title: Gateway base URL
         default: https://gateway.apiosk.com
         description: >-
-          Optional. Point the comparison layer at a different Apiosk gateway.
-          Leave unset unless you are testing against staging.
-      APIOSK_MCP_FULL_TOOLS:
-        type: string
-        title: Expose the full tool surface
-        description: >-
-          Optional, "true" to list every tool instead of the lean buyer surface.
-          The default surface leads with discover, compare and decide because
-          those are what this server is for; the rest stay callable by name.
+          Optional. Point the server at a different Apiosk gateway. Leave unset
+          unless you are testing against staging.
   exampleConfig: {}
