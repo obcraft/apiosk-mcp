@@ -234,7 +234,9 @@ test("wallet sign-in mints a connect token that survives refresh and reaches the
       { slug: "demo-api", input: { live: true } },
       authInfo
     );
-    assert.equal(JSON.parse(result.content[0].text).ok, true);
+    const payload = JSON.parse(result.content[0].text);
+    assert.equal(payload.status, "ok");
+    assert.equal(payload.result.ok, true);
     assert.equal(capturedClientOptions.connectToken, mintedToken);
   } finally {
     restoreFetch();

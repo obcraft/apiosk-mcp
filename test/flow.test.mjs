@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 
-import { COMPARE_TOOL, DECIDE_TOOL, runCompare, runDecide } from "../src/flow.mjs";
+import { COMPARE_TOOL_INPUT_SCHEMA, runCompare } from "../src/flow.mjs";
+import { COMPARE_TOOL } from "../src/tools/compare.mjs";
+import { createGatewayClient } from "../src/gateway-client.mjs";
 
 /// A stand-in gateway that records the request line it was asked for and
 /// answers with a fixed body. The point of these tests is the translation
@@ -13,10 +15,16 @@ async function withStubGateway(handler, run) {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   try {
-    return await run({ gatewayBaseUrl: `http://127.0.0.1:${port}` });
+    const gateway = createGatewayClient({ env: { APIOSK_GATEWAY_URL: `http://127.0.0.1:${port}` } });
+    return await run({ gateway });
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+}
+
+/// A client pointed at a port nothing listens on, for the unreachable case.
+function unreachableGateway() {
+  return createGatewayClient({ env: { APIOSK_GATEWAY_URL: "http://127.0.0.1:1" } });
 }
 
 function jsonHandler(body, status = 200) {
@@ -30,28 +38,21 @@ function jsonHandler(body, status = 200) {
   return handler;
 }
 
-test("compare and decide are advertised as read-only and need no required argument", () => {
-  for (const tool of [COMPARE_TOOL, DECIDE_TOOL]) {
-    assert.equal(tool.annotations.readOnlyHint, true);
-    assert.equal(tool.annotations.destructiveHint, false);
-    // Any one of candidates / capability / query is enough, so none is required.
-    assert.equal(tool.inputSchema.required, undefined);
-    for (const key of ["candidates", "capability", "query", "max_price_usdc", "optimize_for"]) {
-      assert.ok(tool.inputSchema.properties[key], `${tool.name} is missing ${key}`);
-    }
+test("compare is advertised as read-only and needs no required argument", () => {
+  assert.equal(COMPARE_TOOL.annotations.readOnlyHint, true);
+  assert.equal(COMPARE_TOOL.annotations.destructiveHint, false);
+  assert.equal(COMPARE_TOOL.inputSchema, COMPARE_TOOL_INPUT_SCHEMA);
+  // Any one of candidates / capability / query is enough, so none is required.
+  assert.equal(COMPARE_TOOL_INPUT_SCHEMA.required, undefined);
+  for (const key of ["candidates", "capability", "query", "max_price_usdc", "optimize_for"]) {
+    assert.ok(COMPARE_TOOL_INPUT_SCHEMA.properties[key], `apiosk_compare is missing ${key}`);
   }
 });
 
 test("compare refuses when there is nothing to compare", async () => {
-  const result = await runCompare({}, { gatewayBaseUrl: "http://127.0.0.1:1" });
+  const result = await runCompare({}, { gateway: unreachableGateway() });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Nothing to compare/);
-});
-
-test("decide refuses when there is nothing to decide between", async () => {
-  const result = await runDecide({}, { gatewayBaseUrl: "http://127.0.0.1:1" });
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /Nothing to decide between/);
 });
 
 const UUID_A = "11111111-2222-4333-8444-555555555555";
@@ -133,41 +134,13 @@ test("require_all_inputs is only sent when actually asked for", async () => {
   assert.doesNotMatch(handler.seen[0], /require_all_inputs/);
 });
 
-test("decide hits /v1/decide and keeps the gateway's reasoning intact", async () => {
-  const payload = {
-    decision_id: "d-1",
-    capability: "read-a-web-page",
-    selected_api: "fetcher",
-    selected: { api_slug: "fetcher", price_usd: 0.001 },
-    decision_score: 87,
-    reason: "fetcher scores 87 of 100 optimising for price",
-    rejected: [{ api_slug: "pricey", rule: "max_price" }],
-    alternatives: [{ api_slug: "runner-up" }],
-    execution: { route: "managed" },
-  };
-  const handler = jsonHandler(payload);
-  const result = await withStubGateway(handler, (ctx) => runDecide({ query: "read a web page" }, ctx));
-
-  assert.match(handler.seen[0], /^\/v1\/decide\?/);
-  assert.equal(result.isError, undefined);
-  assert.equal(result.structuredContent.decision_id, "d-1");
-  assert.equal(result.structuredContent.reason, payload.reason);
-  assert.deepEqual(result.structuredContent.rejected, payload.rejected);
-  assert.match(result.structuredContent.guidance, /overruled/);
-  assert.match(result.structuredContent.untrusted_provider_text, /NOT instructions/);
+test("the choice belongs to the user: there is no decide step to call", async () => {
+  const flow = await import("../src/flow.mjs");
+  assert.equal(flow.runDecide, undefined);
+  assert.equal(flow.DECIDE_TOOL, undefined);
 });
 
-test("a decision that selected nothing explains how to unblock it", async () => {
-  const handler = jsonHandler({
-    capability: "read-a-web-page",
-    selected: null,
-    rejected: [{ api_slug: "only-one", rule: "max_price" }],
-  });
-  const result = await withStubGateway(handler, (ctx) => runDecide({ query: "read a web page", max_price_usdc: 0.000001 }, ctx));
 
-  assert.equal(result.isError, undefined);
-  assert.match(result.structuredContent.guidance, /relax the binding constraint/);
-});
 
 test("an unhappy gateway surfaces as a tool error, not a silent empty result", async () => {
   const handler = jsonHandler({ error: "capability not found" }, 404);
@@ -178,7 +151,7 @@ test("an unhappy gateway surfaces as a tool error, not a silent empty result", a
 
 test("an unreachable gateway surfaces as a tool error", async () => {
   // Port 1 on loopback refuses immediately; no network dependency.
-  const result = await runCompare({ query: "x" }, { gatewayBaseUrl: "http://127.0.0.1:1" });
+  const result = await runCompare({ query: "x" }, { gateway: unreachableGateway() });
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /Could not reach the Apiosk comparison layer/);
+  assert.match(result.content[0].text, /Could not reach the Apiosk gateway/);
 });

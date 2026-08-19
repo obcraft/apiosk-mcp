@@ -8,8 +8,8 @@ import {
   scoreItem,
   clearDiscoveryCache,
   clearDiscoveryCircuit,
-  DISCOVER_TOOL,
 } from "../src/discovery.mjs";
+import { DISCOVER_TOOL } from "../src/tools/discover.mjs";
 
 const FX_CATALOG = [
   {
@@ -119,7 +119,7 @@ test("discover ranks FX endpoints first and excludes unrelated weather", async (
   assert.equal(payload.results[0].trust_tier, "apiosk_verified");
 });
 
-test("discover normalizes federated externals with url + payTo + fetch_paid routing", async () => {
+test("discover normalizes federated externals with url + payTo, and marks them unpayable here", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
     { query: "exchange rate oracle", sources: ["apiosk"] },
@@ -129,7 +129,8 @@ test("discover normalizes federated externals with url + payTo + fetch_paid rout
   const ext = payload.results.find((r) => r.listing_slug === "ext-fx-oracle");
   assert.ok(ext, "federated listing surfaced");
   assert.equal(ext.external, true);
-  assert.equal(ext.executable_via, "apiosk_fetch_paid");
+  assert.equal(ext.executable_via, null);
+  assert.match(ext.execution_note, /cannot settle it from this surface/);
   assert.equal(ext.trust_tier, "apiosk_federated");
   assert.equal(ext.url, "https://fx.example.com/usd");
   assert.equal(ext.pay_to, "0xProviderWallet");
@@ -162,32 +163,28 @@ test("discover enforces max_price_usdc ceiling", async () => {
 test("discover flags only genuinely unimplemented sources without failing", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "exchange rate", sources: ["x402scan", "x402list"] },
+    { query: "exchange rate", sources: ["x402-list", "x402list"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
   assert.deepEqual(payload.sources_unavailable, ["x402list"]);
-  assert.ok(payload.sources_queried.includes("x402scan"), "paid x402scan source is now wired");
+  assert.ok(payload.sources_queried.includes("x402-list"), "the real source name is wired");
   assert.ok(payload.sources_queried.includes("apiosk"), "apiosk always queried");
   assert.ok(payload.results.length > 0, "still returns catalog results");
 });
 
-test("source-name discovery returns direct source metadata and a paid x402scan search pointer", async () => {
+test("discovery never returns something to pay for in order to discover more", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "x402scan", sources: ["x402scan"], max_results: 5 },
-    { listApis: makeListApis([]), gatewayBaseUrl: "https://gateway.apiosk.com" }
+    { query: "exchange rate", sources: ["all"], max_results: 25 },
+    { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com", fetchImpl: async () => { throw new Error("offline"); } }
   );
   const payload = JSON.parse(res.content[0].text);
-  assert.equal(payload.sources_unavailable.length, 0);
-  assert.equal(payload.source_matches[0].id, "x402scan");
-  const paid = payload.results.find((result) => result.source === "x402scan");
-  assert.ok(paid, "paid search endpoint is returned even without a catalog listing");
-  assert.equal(paid.result_kind, "paid_source_endpoint");
-  assert.equal(paid.price_usdc, 0.02);
-  assert.match(paid.url, /resources\/search\?q=x402scan/);
-  assert.equal(paid.executable_via, "apiosk_fetch_paid");
-  assert.equal(paid.price_must_be_inspected_live, true);
+  // The paid-source pointers went with src/source-registry.mjs: a discovery
+  // call that hands back a payable endpoint for more discovery is a second way
+  // to spend, in the one tool that is supposed to spend nothing.
+  assert.ok(payload.results.every((r) => r.result_kind !== "paid_source_endpoint"));
+  assert.equal(payload.source_matches, undefined);
 });
 
 test("discover directly normalizes thirdweb, PayAI, x402engine, and anchor manifests", async () => {
@@ -290,7 +287,8 @@ test("discover queries the Bazaar live source and merges external results", asyn
   const b = payload.results.find((r) => r.source === "bazaar");
   assert.ok(b, "bazaar result merged in");
   assert.equal(b.trust_tier, "bazaar");
-  assert.equal(b.executable_via, "apiosk_fetch_paid");
+  assert.equal(b.executable_via, null);
+  assert.match(b.execution_note, /cannot settle it from this surface/);
   assert.equal(b.url, "https://bazaar-fx.example.com/usd");
   assert.equal(b.pay_to, "0xBazaarProv");
   assert.equal(b.price_usdc, 0.01);
@@ -341,7 +339,7 @@ test("sources:['all'] fans out to the free directory sources and normalizes each
   assert.equal(bySource["x402-direct"].url, "https://d.example.com/w");
   assert.equal(bySource["x402-direct"].price_usdc, 0.006);
   assert.equal(bySource["agentic-market"].url, "https://a.example.com/w");
-  assert.ok(payload.results.every((r) => !r.external || r.executable_via === "apiosk_fetch_paid"));
+  assert.ok(payload.results.every((r) => !r.external || r.executable_via === null));
 });
 
 test("wellknown source needs probe_hosts and probes only named hosts", async () => {

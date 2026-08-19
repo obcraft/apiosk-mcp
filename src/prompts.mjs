@@ -8,9 +8,9 @@
 //    half-implemented server rather than a deliberate omission.
 //
 // 2. More importantly: a tool list tells an agent what CAN be called; a prompt
-//    tells a person what is worth calling. The three tools chain, and the chain
-//    is the product — but nothing in a flat tool list says "run these three in
-//    order". These do.
+//    tells a person what is worth calling. The tools chain, and the chain is
+//    the product — but nothing in a flat tool list says "run these in order,
+//    and stop to ask me before the one that spends". These do.
 //
 // Each prompt returns a user message, not an assistant one: the point is to
 // hand the model a well-posed task and let it choose the calls, rather than to
@@ -33,7 +33,7 @@ export const PROMPTS = [
     name: "find_and_choose_an_api",
     title: "Find and choose an API for a job",
     description:
-      "Run the full comparison layer for a job: discover what can do it, compare the candidates on price and measured performance, and decide which to call — with the reasoning shown. Nothing is paid.",
+      "Run the comparison layer for a job: discover what can do it, compare the candidates on price and measured performance, and put the offers in front of you to choose from. Nothing is paid until you pick one.",
     arguments: [NEED, BUDGET],
   },
   {
@@ -81,26 +81,25 @@ const BODIES = {
   find_and_choose_an_api: (a) =>
     `I need an API that can: ${need(a)}.${constraintLine(a)}
 
-Use the Apiosk comparison layer, in order, and do not pay for anything:
+Use the Apiosk comparison layer, in order, and do not pay for anything yet:
 1. apiosk_discover with that need, to see what can perform it.
 2. apiosk_compare with the SAME plain-words query, to put the candidates on one axis.
-3. apiosk_decide with the same query and constraints, to get one provider back.
 
-Then tell me: which provider you would call and what it costs per call, the rule that selected it, which candidates were rejected and the exact constraint each one failed, and the runners-up in case I disagree. If a score rests on dimensions Apiosk has not measured, say so rather than presenting it as complete.`,
+Then show me the offers: what each one costs per call, its measured latency and success rate, and which dimensions Apiosk has not measured — say so rather than presenting a partial score as complete. Recommend one and say why, but do not call apiosk_execute until I have told you which offer to buy.`,
 
   compare_providers: (a) =>
     `Compare every provider that can: ${need(a)}.${constraintLine(a)}
 
-Call apiosk_discover, then apiosk_compare with the same plain-words query. Do not decide and do not pay.
+Call apiosk_discover, then apiosk_compare with the same plain-words query. Do not choose and do not pay.
 
 Show me a table of the candidates with price per call, measured latency, measured success rate and whether each accepts the inputs the capability defines. State the weights the score used, and mark clearly which providers have no measurements — those are unknown, not zero.`,
 
   cheapest_that_meets_my_bar: (a) =>
     `Find me the cheapest API that can: ${need(a)} — but only among providers that actually clear my quality bar.${constraintLine(a)}
 
-Call apiosk_decide with optimize_for="price" and those hard constraints. Nothing is paid.
+Call apiosk_discover, then apiosk_compare with optimize_for="price" and those hard constraints. Nothing is paid.
 
-A provider Apiosk has never measured cannot be shown to meet a latency or reliability floor, so I expect those to be rejected rather than assumed to pass — confirm that is what happened. Show me the winner, its price, and every rejection with the constraint that removed it. If nothing survives, tell me which constraint is binding so I can relax the right one.`,
+A provider Apiosk has never measured cannot be shown to meet a latency or reliability floor, so I expect those to be rejected rather than assumed to pass — confirm that is what happened. Show me the cheapest offer that survives, its price, and every rejection with the constraint that removed it. If nothing survives, tell me which constraint is binding so I can relax the right one. Wait for my go-ahead before buying anything.`,
 };
 
 export function getPrompt(name, args = {}) {
