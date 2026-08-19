@@ -22,8 +22,8 @@ def _print_help() -> None:
                 "",
                 "Environment:",
                 "  APIOSK_MCP_NPM_PACKAGE  Override the npm package spec to execute.",
-                "  APIOSK_PRIVATE_KEY       Optional wallet key for automatic x402 payments.",
-                "  APIOSK_CONNECT_TOKEN     Optional dashboard-managed access token.",
+                "  APIOSK_CONNECT_TOKEN    Connect token from buy.apiosk.com. Without one",
+                "                          the server can discover and compare, but not buy.",
             ]
         )
     )
