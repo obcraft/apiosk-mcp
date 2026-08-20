@@ -1,35 +1,13 @@
-// The primitives discovery shares with its sources.
+// The text primitives discovery needs to present someone else's words safely.
 //
-// Text sanitising, tokenising and price parsing are used by both halves of
-// discovery: the Apiosk catalogue reader and the external x402 sources. They
-// live here so neither half owns them, and so a change to how provider text is
-// sanitised applies to every source at once.
+// This file used to also hold a tokeniser, a stopword list and a per-term
+// search cache, because discovery used to build its own catalogue queries here.
+// The gateway builds them now — it reads the job with a parser before it
+// searches anything — so what is left is the part that is still this repo's
+// job: making provider-supplied text safe to show, and naming a network the way
+// Apiosk names it.
 
-
-export const CACHE_MAX_ENTRIES = 256;
 export const DESCRIPTION_MAX_CHARS = 300;
-
-// Common words that add ILIKE noise without narrowing a catalog search. The
-// gateway search is a single `ILIKE %term%` over slug/name/description/category/
-// tags, so a raw natural-language phrase ("realtime USD exchange rate") matches
-// nothing — we tokenize and search per keyword, dropping these.
-export const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "with", "by",
-  "at", "from", "into", "as", "is", "are", "be", "get", "give", "show", "me",
-  "my", "please", "real", "realtime", "live", "current", "latest", "data",
-  "api", "apis", "endpoint", "endpoints", "paid", "using", "use", "want",
-  "need", "build", "make", "create", "that", "this", "some", "any", "about",
-  "detailed", "detail", "info", "information",
-]);
-
-// Per-(source, term) response cache. The catalog is public so caching across
-// requests/users is safe; a short TTL keeps a burst of per-segment searches off
-// the gateway. Exported clear() keeps tests deterministic.
-export const searchCache = new Map();
-
-export function clearDiscoveryCache() {
-  searchCache.clear();
-}
 
 export function trimString(value) {
   return String(value ?? "").trim();
@@ -49,16 +27,8 @@ export function sanitizeText(value, max = DESCRIPTION_MAX_CHARS) {
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned;
 }
 
-export function tokenize(text) {
-  return String(text ?? "")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2 && !STOPWORDS.has(token));
-}
-
-// Normalize the network identifier from an external accepts[] entry (may be
-// CAIP-2 like "eip155:8453" or a plain name) to the plain name Apiosk uses.
+// Normalize the network identifier from an external offer (may be CAIP-2 like
+// "eip155:8453" or a plain name) to the plain name Apiosk uses.
 export function normalizeNetworkName(network) {
   const value = trimString(network).toLowerCase();
   const map = {
@@ -72,28 +42,13 @@ export function normalizeNetworkName(network) {
   return map[value] || value || null;
 }
 
-// Best-effort atomic->USDC (6-decimal) conversion; every listed x402 asset is
-// USDC. Returns null when unparseable so callers fall back to the catalog price.
-export function atomicToUsdc(raw) {
-  if (raw === null || raw === undefined) return null;
-  const n = typeof raw === "number" ? raw : Number(String(raw).trim());
-  if (!Number.isFinite(n)) return null;
-  return n / 1_000_000;
-}
-
-// Parse a USD price that may be a number, "$0.01", or "10000" (already USD).
-export function parseUsdPrice(value) {
-  if (value === null || value === undefined) return null;
-  const n = Number(String(value).replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? n : null;
-}
-
 /**
  * What an agent may do with a result the Apiosk gateway does not proxy.
  *
  * Discovery sweeps the whole x402 ecosystem, which means it surfaces endpoints
  * this MCP cannot settle. Saying so on the result is the honest alternative to
  * either hiding them or handing the agent a second, unpoliced way to spend.
+ * Used only when the gateway sent no note of its own.
  */
 export const EXTERNAL_EXECUTION_NOTE =
-  "External to the Apiosk catalogue: the gateway cannot settle it from this surface, so it is listed as evidence of what exists, not as something to call. Prefer an Apiosk result, or ask the provider to list with Apiosk.";
+  "Unreviewed and external to the Apiosk catalogue: Apiosk has not measured it and cannot settle it from this surface. It is listed because it exists and may do the job — call it on the provider's own host and pay its 402 directly.";
