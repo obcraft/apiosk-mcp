@@ -27,22 +27,36 @@ export const SERVER_DESCRIPTION =
 // Base version, kept in step with the published manifests (package.json etc.).
 export const SERVER_BASE_VERSION = "1.7.0";
 
-// The version a client reads on `initialize`. Fly injects a monotonic
-// FLY_RELEASE_VERSION that bumps on every `fly deploy`, so the reported version
-// moves each deploy without a manual edit — a client that caches tool
-// definitions can tell it is looking at a new build after a redeploy or
-// reconnect. Falls back to the base version for local/stdio runs. An explicit
-// APIOSK_MCP_VERSION overrides both, for a pinned build.
+// The millisecond timestamp encoded in the first 10 chars of a ULID (Crockford
+// base32). Fly's FLY_MACHINE_VERSION is a ULID that changes on every deploy, and
+// its timestamp is monotonically increasing, which is exactly the "counter"
+// property a version needs. Returns null for anything that is not a ULID.
+function ulidTimestampMs(ulid) {
+  const B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  const head = String(ulid || "").toUpperCase().slice(0, 10);
+  if (head.length < 10) return null;
+  let ms = 0;
+  for (const ch of head) {
+    const v = B32.indexOf(ch);
+    if (v < 0) return null;
+    ms = ms * 32 + v;
+  }
+  return ms;
+}
+
+// The version a client reads on `initialize`. It must move on every `fly deploy`
+// so a client that caches tool definitions can tell it is looking at a new build
+// after a redeploy or reconnect. Fly provides no plain release counter, but it
+// does set FLY_MACHINE_VERSION (a ULID) which changes each deploy; its timestamp
+// (in seconds) becomes the patch, so each deploy reads as a strictly newer
+// semver (the patch is respected where build metadata after '+' would be
+// ignored). Falls back to the base version locally; APIOSK_MCP_VERSION pins it.
 export function resolveServerVersion(env = process.env) {
   const explicit = typeof env.APIOSK_MCP_VERSION === "string" ? env.APIOSK_MCP_VERSION.trim() : "";
   if (explicit) return explicit;
-  const release = typeof env.FLY_RELEASE_VERSION === "string" ? env.FLY_RELEASE_VERSION.trim() : "";
-  // The release number becomes the patch (e.g. 1.7.42), not build metadata,
-  // because semver comparators ignore anything after '+' — a client would then
-  // never see the version move. The patch is respected, so each deploy reads as
-  // a strictly newer version.
   const [major = "1", minor = "7"] = SERVER_BASE_VERSION.split(".");
-  return /^\d+$/.test(release) ? `${major}.${minor}.${release}` : SERVER_BASE_VERSION;
+  const ms = ulidTimestampMs(env.FLY_MACHINE_VERSION || env.FLY_IMAGE_REF?.split("deployment-")?.[1]);
+  return ms ? `${major}.${minor}.${Math.floor(ms / 1000)}` : SERVER_BASE_VERSION;
 }
 
 export const SERVER_INFO = {
