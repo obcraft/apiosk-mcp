@@ -63,31 +63,69 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
     throw error;
   }
 
-  const extra = authInfo?.extra || {};
-  const limits = me?.limits || extra.apiosk_limits || null;
-  const payable = me?.payable !== false && Boolean(me?.wallet_id || extra.apiosk_connect_wallet_address);
+  // /v1/me reports wallets as an ARRAY, each with its own on-chain USDC
+  // balance and caps (gateway src/v1_routes/me.rs). There is no top-level
+  // wallet_id / balance / limits / payable field — reading those returned
+  // undefined and made every connection look unpayable.
+  const wallets = Array.isArray(me?.wallets) ? me.wallets : [];
+
+  // Mirror the gateway's own selection: the first authorized wallet that
+  // passes its caps and can settle on-chain (me.wallet_selection_strategy). A
+  // wallet can pay when it is attached, still has daily budget, and either
+  // holds USDC or the gateway could not read its balance this call — a null
+  // balance is an RPC blip, not an empty wallet, and the authoritative check
+  // runs again at settlement, so it must not read as "unpayable" here.
+  const walletCanPay = (w) => {
+    if (!w) return false;
+    const dailyCap = Number.isFinite(w.cap_per_day_usdc) ? w.cap_per_day_usdc : null;
+    const spentToday = Number(w.spent_today_usdc) || 0;
+    if (dailyCap !== null && dailyCap - spentToday <= 0) return false;
+    if (typeof w.balance_usdc === "number") return w.balance_usdc > 0;
+    return true;
+  };
+
+  const payableWallet = wallets.find(walletCanPay) || null;
+  const wallet = payableWallet || wallets[0] || null;
+  const payable = Boolean(payableWallet);
+  const policy = me?.policy || null;
+
+  // Say WHY it cannot pay, so the user fixes the right thing rather than
+  // re-funding a wallet that is fine and hitting the daily cap again.
+  let notPayableReason = "no wallet is attached to this connection";
+  if (wallet) {
+    const spentToday = Number(wallet.spent_today_usdc) || 0;
+    const dailyCap = Number.isFinite(wallet.cap_per_day_usdc) ? wallet.cap_per_day_usdc : null;
+    if (typeof wallet.balance_usdc === "number" && wallet.balance_usdc <= 0) {
+      notPayableReason = "the wallet holds no USDC on Base";
+    } else if (dailyCap !== null && dailyCap - spentToday <= 0) {
+      notPayableReason = "today's spending limit is used up";
+    }
+  }
 
   return content({
     status: "connected",
     payable,
-    wallet: {
-      id: me?.wallet_id ?? null,
-      address: me?.wallet_address ?? extra.apiosk_connect_wallet_address ?? null,
-      balance_usdc: me?.balance_usdc ?? null,
-    },
-    policy: { id: me?.policy_id ?? null, name: me?.policy_name ?? null },
-    limits: limits
+    wallet: wallet
       ? {
-          per_tx_limit_usdc: limits.per_tx_limit_usdc ?? null,
-          daily_limit_usdc: limits.daily_limit_usdc ?? null,
-          spent_today_usdc: limits.spent_today_usdc ?? null,
-          allowed_domains: limits.allowed_domains ?? null,
+          address: wallet.address ?? null,
+          status: wallet.status ?? null,
+          balance_usdc: wallet.balance_usdc ?? null,
         }
       : null,
+    policy: policy ? { id: policy.id ?? null, name: policy.name ?? null } : null,
+    limits: wallet
+      ? {
+          per_tx_limit_usdc: wallet.cap_per_tx_usdc ?? null,
+          daily_limit_usdc: wallet.cap_per_day_usdc ?? null,
+          spent_today_usdc: wallet.spent_today_usdc ?? null,
+          allowed_domains: me?.allowed_domains ?? null,
+        }
+      : null,
+    rails: Array.isArray(me?.rails) ? me.rails : [],
     portal_url: BUYER_PORTAL_URL,
     message: payable
       ? "Connected and able to pay. State the price before every purchase, and stay inside the limits above."
-      : "Connected, but not able to pay yet: the wallet holds no USDC or no wallet is attached.",
+      : `Connected, but not able to pay yet: ${notPayableReason}.`,
     next_steps: payable
       ? ["Call apiosk_discover with the job in plain words."]
       : [`Fund the wallet with USDC on Base at ${BUYER_PORTAL_URL}, then call apiosk_connect again.`],
