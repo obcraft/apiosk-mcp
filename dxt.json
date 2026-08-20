@@ -35,7 +35,7 @@
     },
     {
       "name": "apiosk_execute",
-      "description": "Run the offer the user chose, under the price ceiling they saw, and return the result. This is the one tool that spends money."
+      "description": "Run the offer the user chose, under the price ceiling they saw, and return the result. This is the one tool that settles a call, from the balance the buyer funded and capped."
     },
     {
       "name": "apiosk_approval_status",

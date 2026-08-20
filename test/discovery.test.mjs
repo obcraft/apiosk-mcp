@@ -105,6 +105,20 @@ const FULL_PAYLOAD = {
     { capability: "news.search", name: "News search", input_contract: { query: "string" } },
   ],
   interpretation: INTERPRETATION,
+  extension: {
+    source: "enriched",
+    model: "claude-haiku-4-5",
+    enrich_ms: 5515,
+    needs: [
+      {
+        need: "Get Bloomberg consensus revenue estimate for ASML",
+        tags: ["analyst consensus", "equity research"],
+        categories: ["finance"],
+        sectors: ["finance", "technology"],
+        extra_terms: ["analyst revenue projections"],
+      },
+    ],
+  },
   candidates: CANDIDATES,
   external_candidates: {
     searched: true,
@@ -155,9 +169,86 @@ test("both halves come back in one numbered list, reviewed first", async () => {
     data.results.filter((r) => r.external).map((r) => r.host),
     ["www.x402financialdata.com", "earnings.lonestaroracle.xyz"]
   );
-  assert.deepEqual(data.sources_swept, ["coinbase-x402-bazaar", "thirdweb"]);
-  // How the gateway read the job travels with the answer.
-  assert.equal(data.interpretation.tasks[0].keywords[0], "consensus estimate");
+  assert.deepEqual(data.pipeline.step_3_search.sources_searched, [
+    "coinbase-x402-bazaar",
+    "thirdweb",
+  ]);
+});
+
+test("the three substeps come back with the results, in the order they ran", async () => {
+  const data = parse(
+    await runDiscover({ query: "asml estimates" }, { requestJson: stubGateway(FULL_PAYLOAD) })
+  );
+  const { step_1_read: read, step_2_extend: extend, step_3_search: search } = data.pipeline;
+
+  assert.equal(read.status, "parsed");
+  assert.equal(read.needs[0].need, "Get Bloomberg consensus revenue estimate for ASML");
+  assert.deepEqual(read.needs[0].keywords, [
+    "consensus estimate",
+    "revenue forecast",
+    "analyst estimates",
+  ]);
+
+  // Step 2 is why the search used words the user never wrote. Without it, an
+  // answer built on "equity research" looks like it came from nowhere.
+  assert.equal(extend.status, "enriched");
+  assert.deepEqual(extend.needs[0].tags, ["analyst consensus", "equity research"]);
+  assert.deepEqual(extend.needs[0].categories, ["finance"]);
+
+  assert.equal(search.reviewed_found, 2);
+  assert.equal(search.external_found, 2);
+});
+
+test("the answer is rendered here, not described to the model", async () => {
+  // Prose guidance lost to the model's own instincts: handed five reviewed and
+  // twenty-five external rows, one printed five providers and dropped the rest.
+  // So the table is built here and the model is left one job.
+  const data = parse(
+    await runDiscover({ query: "asml estimates" }, { requestJson: stubGateway(FULL_PAYLOAD) })
+  );
+  const lines = data.presentation.split("\n");
+
+  assert.match(lines[0], /^\*\*Read as:\*\* Get Bloomberg consensus revenue estimate for ASML/);
+  assert.match(lines[1], /^\*\*Extended with:\*\* tags: analyst consensus/);
+  assert.match(lines[2], /^\*\*Searched:\*\* 2 sources → 2 via Apiosk, 2 external$/);
+
+  // Every row is in the table, and each says how it would be paid for.
+  assert.equal(data.presentation.match(/^\| \d+ \|/gm).length, 4);
+  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\*.*\| via Apiosk \| 0\.033 \(incl\. 10% fee\) \|/);
+  assert.match(
+    data.presentation,
+    /\| 3 \| \*\*www\.x402financialdata\.com\*\*.*\| pay provider directly \| 0\.005 \|/
+  );
+  assert.match(data.guidance, /`presentation` IS THE ANSWER/);
+});
+
+test("a long external tail is trimmed in the table and still reachable in the data", async () => {
+  const many = Array.from({ length: 14 }, (_, i) => ({
+    ...EXTERNAL_OFFERS[0],
+    resource: `https://example-${i}.dev/news`,
+    host: `example-${i}.dev`,
+  }));
+  const payload = {
+    ...FULL_PAYLOAD,
+    external_candidates: { ...FULL_PAYLOAD.external_candidates, count: many.length, offers: many },
+  };
+  const data = parse(await runDiscover({ query: "news" }, { requestJson: stubGateway(payload) }));
+
+  assert.equal(data.external_count, 14);
+  assert.equal(data.results.filter((r) => r.external).length, 14);
+  // Two reviewed rows plus the first eight external ones.
+  assert.equal(data.presentation.match(/^\| \d+ \|/gm).length, 10);
+  assert.match(data.presentation, /6 further external endpoints were found and are in `results`/);
+});
+
+test("a step that did not run says so, rather than looking empty", async () => {
+  // A keyword query never reaches the parser, so there is no reading to
+  // extend. "not_run" and "produced nothing" are different facts.
+  const payload = { ...FULL_PAYLOAD, interpretation: { source: "verbatim" }, extension: undefined };
+  const data = parse(await runDiscover({ query: "fx" }, { requestJson: stubGateway(payload) }));
+  assert.equal(data.pipeline.step_1_read.status, "verbatim");
+  assert.equal(data.pipeline.step_2_extend.status, "not_run");
+  assert.deepEqual(data.pipeline.step_2_extend.needs, []);
 });
 
 test("an empty catalogue with a full sweep is an answer, not an error", async () => {

@@ -32,6 +32,7 @@ import {
   sanitizeText,
   trimString,
 } from "./discovery-text.mjs";
+import { pipelineOf, renderPresentation } from "./discovery-presentation.mjs";
 
 const DEFAULT_MAX_RESULTS = 8;
 const MAX_RESULTS_CEILING = 25;
@@ -40,6 +41,9 @@ const MAX_RESULTS_CEILING = 25;
 // rather than the only one — worth honouring, worth capping, because each one
 // is a separate round trip and a separate parse.
 const MAX_SEGMENT_QUERIES = 3;
+// External rows the rendered table carries. The rest stay in `results` and are
+// one question away — see the note where the table is built.
+const EXTERNAL_ROWS_IN_TABLE = 8;
 
 // Fallback mirror of the gateway's BUYER_MARKUP_BPS = 1000 (10%, gateway
 // src/fees.rs). `/v1/discover` quotes each candidate at the provider's list
@@ -288,8 +292,24 @@ export async function runDiscover(args = {}, ctx = {}) {
   const reviewedCount = reviewed.length;
   const externalCount = results.length - reviewedCount;
 
+  // Every reviewed row goes in the table; the external half is long by nature,
+  // so the table takes the best of it and the rest stays one sentence away in
+  // `results`. A table nobody scrolls to the end of gets summarised, and a
+  // summarised table is where the external rows quietly went missing before.
+  const shownExternal = Math.min(externalCount, EXTERNAL_ROWS_IN_TABLE);
+  const tableRows = [...reviewed, ...results.filter((item) => item.external).slice(0, shownExternal)];
+  const pipeline = pipelineOf(primary, {
+    reviewed: reviewedCount,
+    external: externalCount,
+    sources: Array.from(sourcesSwept).filter(Boolean),
+  });
+  const presentation = renderPresentation(pipeline, tableRows, {
+    totalExternal: externalCount,
+    shownExternal,
+  });
+
   const guidance = [
-    "PRESENT EVERY ROW BELOW AS ONE MARKDOWN TABLE — reviewed and external together, never only the Apiosk ones. Columns in this order: (1) `#` — the `index` the user quotes back to choose; (2) `Provider` — `**name**<br><small>description</small>`; (3) `Source` — the `source` field; (4) `Buy` — 'via Apiosk' when `external` is false, 'pay provider directly' when it is true; (5) `Price` — `price_usdc`, with ' (incl. 10% fee)' on the Apiosk rows only. After the table, ask the user which number they want.",
+    "`presentation` IS THE ANSWER, already written and already formatted. Print it verbatim as your reply — every line, every row — then ask which number the user wants. Do not rebuild the table, do not re-order it, do not drop the external rows, and do not shorten it to the few you find most interesting. A user who is shown five of twenty-five rows has been told something false about what exists.",
     "The names in the question — a company, a ticker, a brand, a data vendor — are PARAMETERS for one of these endpoints, not providers to go looking for. Nobody resells a named terminal's own feed here; an endpoint that serves analyst estimates answers a question about a specific company's estimates with that company as its argument. `input_params` and `capabilities[].input_contract` say which argument.",
     "Rows with `external: false` are reviewed Apiosk listings: the gateway prices and settles them, and only these can go on to apiosk_compare and apiosk_execute.",
   ];
@@ -306,19 +326,26 @@ export async function runDiscover(args = {}, ctx = {}) {
   );
 
   return content({
+    // First key on purpose: it is what the model is meant to do with all of
+    // this, and it reads it top down.
+    presentation,
+    guidance_for_presentation:
+      "Print `presentation` verbatim as your reply, then ask which number. Do not rebuild it and do not drop rows.",
     query,
     segments,
-    // How the gateway read the job before it searched anything: the needs it
-    // split the request into and the words it searched for each. Published
-    // rather than applied silently, because a misread question and an empty
-    // catalogue produce the same short answer and only this tells them apart.
-    interpretation: primary?.interpretation ?? null,
+    // The three substeps of the discovery pipeline, in the order they ran, so
+    // the conversation can show the work rather than only its conclusion. A
+    // misread question and an empty catalogue produce the same short answer;
+    // only step 1 tells them apart, and only step 2 explains why the search
+    // used words the user never wrote.
+    pipeline,
     capabilities,
     result_count: results.length,
     reviewed_count: reviewedCount,
     external_count: externalCount,
+    // The source list lives in `pipeline.step_3_search`; this says only whether
+    // the sweep ran at all, and in what words the gateway describes its reach.
     external_searched: sweptExternal,
-    sources_swept: Array.from(sourcesSwept).filter(Boolean),
     reach: sanitizeText(primary?.external_candidates?.source || "", 400) || null,
     results,
     max_price_usdc: maxPrice,

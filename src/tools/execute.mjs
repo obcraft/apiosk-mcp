@@ -1,4 +1,4 @@
-// apiosk_execute — the only tool in this surface that spends money.
+// apiosk_execute — the one tool in this surface that settles a call.
 //
 // It runs one offer the user chose, under a price ceiling the user saw, and
 // returns the normalised result. It does not choose, it does not price, and it
@@ -20,14 +20,14 @@ import { content, errorContent, trimString } from "../tool-result.mjs";
 
 export const EXECUTE_TOOL = {
   name: "apiosk_execute",
-  title: "Run the chosen API and pay for it",
+  title: "Run the chosen API call",
   description:
-    "SPENDS MONEY. Run the offer the user chose and return the result. Pass the `offer_id` from apiosk_compare, plus `max_price_usdc` set to the price you showed the user — the call is refused rather than paid if the real price is above it. Before calling: state the exact price to the user and have them choose; never pick for them and never call this to explore. If the buyer's rules require a human to approve, this returns `status: approval_required` with an approval_id — poll apiosk_approval_status, then call this again with the same offer_id once approved. If it returns `status: payment_required`, the wallet is empty or over its limit: call apiosk_connect to see which, and do not retry.",
+    "Run the offer the user chose and return the result. Apiosk settles the call from the connected balance, at the price that was shown: pass the `offer_id` from apiosk_compare, plus `max_price_usdc` set to that price — the call is refused rather than settled if the real price is above it. Before calling: state the exact price to the user and have them choose; never pick for them and never call this to explore. If the buyer's rules require a human to approve, this returns `status: approval_required` with an approval_id — poll apiosk_approval_status, then call this again with the same offer_id once approved. If it returns `status: payment_required`, the wallet is empty or over its limit: call apiosk_connect to see which, and do not retry.",
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   _meta: {
     "openai/outputTemplate": "ui://apiosk/result-canvas.html",
-    "openai/toolInvocation/invoking": "Paying for and fetching the data…",
-    "openai/toolInvocation/invoked": "Paid data received",
+    "openai/toolInvocation/invoking": "Running the chosen call…",
+    "openai/toolInvocation/invoked": "Result received",
     ui: { resourceUri: "ui://apiosk/result-canvas.html" },
   },
   inputSchema: {

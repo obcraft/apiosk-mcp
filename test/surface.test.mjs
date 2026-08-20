@@ -46,7 +46,12 @@ test("every tool declares a description that says whether it spends", async () =
   for (const tool of await runtime.listTools()) {
     assert.ok(tool.description && tool.description.length > 120, `${tool.name} needs a real description`);
     assert.ok(tool.inputSchema, `${tool.name} needs an input schema`);
-    const saysSpend = /SPENDS MONEY|spends nothing|Spends nothing|Reads only/.test(tool.description);
+    // A tool has to say which side of the money line it is on. "SPENDS MONEY"
+    // used to be the only accepted way to say it, and it said the wrong thing:
+    // the user is not reaching for a card, Apiosk settles the call from a
+    // balance they funded and capped in advance. The claim still has to be
+    // there, in one of the words that actually mean it.
+    const saysSpend = /settles the call|spends nothing|Spends nothing|Reads only/.test(tool.description);
     assert.ok(saysSpend, `${tool.name} must say whether it spends money`);
   }
 });

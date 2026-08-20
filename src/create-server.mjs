@@ -73,7 +73,7 @@ export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into a paid 
   apiosk_connect          -> can this session buy? Which wallet, which policy, which limits. Spends nothing.
   apiosk_discover         -> what can perform this job? Sweeps the reviewed Apiosk catalogue AND the wider ecosystem of paid APIs. Spends nothing.
   apiosk_compare          -> how do the candidates perform against MY requirements? Price, measured p95 latency, measured success rate and input fit, each scored with the weights that produced the number, and each offer carrying a stable offer_id. Spends nothing.
-  apiosk_execute          -> run the offer THE USER CHOSE, at the price you showed them. SPENDS MONEY.
+  apiosk_execute          -> run the offer THE USER CHOSE, at the price you showed them. Apiosk settles it from the connected balance.
   apiosk_approval_status  -> the state of a purchase the buyer's rules put on hold. Spends nothing.
 
 Run them in that order. The one rule that matters: apiosk_compare returns offers, and a PERSON picks one. State the exact price, show the alternatives, wait for a choice, then pass that offer_id and max_price_usdc to apiosk_execute. Never choose for the user, never call apiosk_execute to explore, and never fabricate or placeholder data — if nothing fits the budget, say so plainly.
