@@ -1,5 +1,9 @@
 # Apiosk MCP Marketplace Submission
 
+> **Superseded** by [marketplace-submission-2026-08-20.md](marketplace-submission-2026-08-20.md).
+> This version still describes the publisher and local-wallet tools removed
+> from the surface on 2026-08-19 — do not submit from this file.
+
 ## Name
 
 Apiosk MCP
