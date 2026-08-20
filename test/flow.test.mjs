@@ -6,10 +6,10 @@ import { COMPARE_TOOL_INPUT_SCHEMA, runCompare } from "../src/flow.mjs";
 import { COMPARE_TOOL } from "../src/tools/compare.mjs";
 import { createGatewayClient } from "../src/gateway-client.mjs";
 
-/// A stand-in gateway that records the request line it was asked for and
-/// answers with a fixed body. The point of these tests is the translation
-/// layer — argument shapes in, query string out, gateway payload back — not the
-/// ranking, which lives in the gateway and is tested there.
+/// A stand-in gateway that records the method, path and JSON body it was asked
+/// for and answers with a fixed payload. The point of these tests is the
+/// translation layer — argument shapes in, request out, gateway payload back —
+/// not the pricing or ranking, which live in the gateway and are tested there.
 async function withStubGateway(handler, run) {
   const server = http.createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -30,9 +30,19 @@ function unreachableGateway() {
 function jsonHandler(body, status = 200) {
   const seen = [];
   const handler = (req, res) => {
-    seen.push(req.url);
-    res.writeHead(status, { "content-type": "application/json" });
-    res.end(JSON.stringify(body));
+    let raw = "";
+    req.on("data", (chunk) => (raw += chunk));
+    req.on("end", () => {
+      let parsed = null;
+      try {
+        parsed = raw ? JSON.parse(raw) : null;
+      } catch {
+        parsed = raw;
+      }
+      seen.push({ method: req.method, url: req.url, body: parsed });
+      res.writeHead(status, { "content-type": "application/json" });
+      res.end(JSON.stringify(body));
+    });
   };
   handler.seen = seen;
   return handler;
@@ -42,66 +52,55 @@ test("compare is advertised as read-only and needs no required argument", () => 
   assert.equal(COMPARE_TOOL.annotations.readOnlyHint, true);
   assert.equal(COMPARE_TOOL.annotations.destructiveHint, false);
   assert.equal(COMPARE_TOOL.inputSchema, COMPARE_TOOL_INPUT_SCHEMA);
-  // Any one of candidates / capability / query is enough, so none is required.
+  // Either query or capability is enough, so neither is marked required.
   assert.equal(COMPARE_TOOL_INPUT_SCHEMA.required, undefined);
-  for (const key of ["candidates", "capability", "query", "max_price_usdc", "optimize_for"]) {
+  for (const key of ["query", "capability", "max_price_usdc", "optimize_for"]) {
     assert.ok(COMPARE_TOOL_INPUT_SCHEMA.properties[key], `apiosk_compare is missing ${key}`);
   }
 });
 
-test("compare refuses when there is nothing to compare", async () => {
+test("compare refuses when there is no subject to price", async () => {
   const result = await runCompare({}, { gateway: unreachableGateway() });
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Nothing to compare/);
 });
 
-const UUID_A = "11111111-2222-4333-8444-555555555555";
-const UUID_B = "66666666-7777-4888-8999-aaaaaaaaaaaa";
-
-test("gateway candidate ids survive as an array or a comma string", async () => {
-  const handler = jsonHandler({ capability: "read-a-web-page", ranked: [] });
-  await withStubGateway(handler, async (ctx) => {
-    await runCompare({ candidates: [UUID_A, ` ${UUID_B} `, ""] }, ctx);
-    await runCompare({ candidates: `${UUID_A}, ${UUID_B}` }, ctx);
+test("compare POSTs the job to /v1/quote and surfaces the offer_id an agent hands to execute", async () => {
+  const handler = jsonHandler({
+    quote_id: "q-1",
+    capability: "fx.convert",
+    expires_in_seconds: 900,
+    offers: [
+      { offer_id: "signed.token.abc", api_slug: "macropulse", price_usdc: 0.005, score: 100, p95_latency_ms: null, success_rate: null },
+    ],
+    rejected: [],
   });
-  assert.match(decodeURIComponent(handler.seen[0]), new RegExp(`candidates=${UUID_A},${UUID_B}`));
-  assert.match(decodeURIComponent(handler.seen[1]), new RegExp(`candidates=${UUID_A},${UUID_B}`));
-});
 
-/// The bug this guards: apiosk_discover is a cross-source search and mints its
-/// own ids (`apiosk:<slug>`, `bazaar:<url>`). Forwarding one reached the gateway
-/// as an unresolvable candidate and came back 404 "nothing performs that", which
-/// reads as "no such providers" rather than "wrong kind of id".
-test("apiosk_discover ids are refused with the fix, not forwarded into a 404", async () => {
-  const handler = jsonHandler({ ranked: [] });
   const result = await withStubGateway(handler, (ctx) =>
-    runCompare({ candidates: ["apiosk:apyhub-extract-links", "bazaar:https://x.example/y"] }, ctx),
+    runCompare({ query: "convert USD to EUR" }, ctx)
   );
 
-  assert.equal(handler.seen.length, 0, "must not reach the gateway at all");
-  assert.equal(result.isError, true);
-  const body = JSON.parse(result.content[0].text);
-  assert.equal(body.error, "unusable_candidates");
-  assert.deepEqual(body.rejected, ["apiosk:apyhub-extract-links", "bazaar:https://x.example/y"]);
-  // The message has to say what to do instead, or the agent just retries.
-  assert.match(body.message, /query/);
+  assert.equal(handler.seen.length, 1);
+  assert.equal(handler.seen[0].method, "POST");
+  assert.match(handler.seen[0].url, /\/v1\/quote$/);
+  assert.equal(handler.seen[0].body.job, "convert USD to EUR");
+
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.offers[0].offer_id, "signed.token.abc");
+  // The guidance must tell the agent to carry that id into apiosk_execute.
+  assert.match(payload.guidance, /offer_id/);
+  assert.match(payload.guidance, /apiosk_execute/);
 });
 
-test("a discover id alongside a query is dropped, and the query still runs", async () => {
-  const handler = jsonHandler({ ranked: [] });
-  await withStubGateway(handler, (ctx) =>
-    runCompare({ candidates: ["apiosk:something", UUID_A], query: "read a web page" }, ctx),
-  );
-  const seen = decodeURIComponent(handler.seen[0]);
-  // The UUID survives, the discover id does not, and the query goes along so
-  // the gateway can still resolve a capability.
-  assert.match(seen, new RegExp(`candidates=${UUID_A}`));
-  assert.doesNotMatch(seen, /apiosk:something/);
-  assert.match(seen, /q=read\+a\+web\+page/);
+test("a capability can be priced directly, skipping the search", async () => {
+  const handler = jsonHandler({ offers: [], rejected: [] });
+  await withStubGateway(handler, (ctx) => runCompare({ capability: "fx.convert" }, ctx));
+  assert.equal(handler.seen[0].body.capability, "fx.convert");
+  assert.equal(handler.seen[0].body.job, undefined);
 });
 
 test("requirements are passed through under the names the gateway expects", async () => {
-  const handler = jsonHandler({ capability: "read-a-web-page", ranked: [] });
+  const handler = jsonHandler({ offers: [], rejected: [] });
   await withStubGateway(handler, (ctx) =>
     runCompare(
       {
@@ -117,21 +116,21 @@ test("requirements are passed through under the names the gateway expects", asyn
     )
   );
 
-  const seen = handler.seen[0];
-  assert.match(seen, /\/v1\/compare\?/);
-  assert.match(seen, /q=read\+a\+web\+page/);
-  assert.match(seen, /max_price=0\.05/);
-  assert.match(seen, /max_latency_ms=800/);
-  assert.match(seen, /min_reliability=95/);
-  assert.match(seen, /settlement=apiosk/);
-  assert.match(seen, /require_all_inputs=true/);
-  assert.match(seen, /optimize_for=latency/);
+  const body = handler.seen[0].body;
+  assert.match(handler.seen[0].url, /\/v1\/quote$/);
+  assert.equal(body.job, "read a web page");
+  assert.equal(body.max_price, 0.05);
+  assert.equal(body.max_latency_ms, 800);
+  assert.equal(body.min_reliability, 95);
+  assert.equal(body.settlement, "apiosk");
+  assert.equal(body.require_all_inputs, true);
+  assert.equal(body.optimize_for, "latency");
 });
 
 test("require_all_inputs is only sent when actually asked for", async () => {
-  const handler = jsonHandler({ ranked: [] });
+  const handler = jsonHandler({ offers: [] });
   await withStubGateway(handler, (ctx) => runCompare({ query: "x", require_all_inputs: false }, ctx));
-  assert.doesNotMatch(handler.seen[0], /require_all_inputs/);
+  assert.equal(handler.seen[0].body.require_all_inputs, undefined);
 });
 
 test("the choice belongs to the user: there is no decide step to call", async () => {
@@ -140,13 +139,13 @@ test("the choice belongs to the user: there is no decide step to call", async ()
   assert.equal(flow.DECIDE_TOOL, undefined);
 });
 
-
-
 test("an unhappy gateway surfaces as a tool error, not a silent empty result", async () => {
-  const handler = jsonHandler({ error: "capability not found" }, 404);
+  const handler = jsonHandler({ error: "no_capability", message: "nothing serves this" }, 404);
   const result = await withStubGateway(handler, (ctx) => runCompare({ query: "nonsense" }, ctx));
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /HTTP 404/);
+  const body = JSON.parse(result.content[0].text);
+  assert.equal(body.status, 404);
+  assert.match(body.message, /nothing serves this/);
 });
 
 test("an unreachable gateway surfaces as a tool error", async () => {
