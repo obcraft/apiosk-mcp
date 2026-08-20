@@ -69,35 +69,34 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
   // undefined and made every connection look unpayable.
   const wallets = Array.isArray(me?.wallets) ? me.wallets : [];
 
-  // Mirror the gateway's own selection: the first authorized wallet that
-  // passes its caps and can settle on-chain (me.wallet_selection_strategy). A
-  // wallet can pay when it is attached, still has daily budget, and either
-  // holds USDC or the gateway could not read its balance this call — a null
-  // balance is an RPC blip, not an empty wallet, and the authoritative check
-  // runs again at settlement, so it must not read as "unpayable" here.
-  const walletCanPay = (w) => {
+  // A wallet is spendable when it is attached and still has daily budget left.
+  // Crucially, on-chain USDC balance is NOT a gate here: it is reported for the
+  // agent to reason about, but the gateway is the authority on whether funds
+  // suffice and refuses at settlement with the exact reason (apiosk_execute ->
+  // payment_required). A managed wallet funded through the buyer portal can read
+  // 0 on-chain here — the portal's "available to spend" is its own ledger, not
+  // this on-chain figure — so blocking on balance would wrongly refuse a funded
+  // buyer, which is exactly what it did.
+  const walletHasBudget = (w) => {
     if (!w) return false;
     const dailyCap = Number.isFinite(w.cap_per_day_usdc) ? w.cap_per_day_usdc : null;
     const spentToday = Number(w.spent_today_usdc) || 0;
-    if (dailyCap !== null && dailyCap - spentToday <= 0) return false;
-    if (typeof w.balance_usdc === "number") return w.balance_usdc > 0;
-    return true;
+    return dailyCap === null || dailyCap - spentToday > 0;
   };
 
-  const payableWallet = wallets.find(walletCanPay) || null;
+  const payableWallet = wallets.find(walletHasBudget) || null;
   const wallet = payableWallet || wallets[0] || null;
   const payable = Boolean(payableWallet);
   const policy = me?.policy || null;
 
-  // Say WHY it cannot pay, so the user fixes the right thing rather than
-  // re-funding a wallet that is fine and hitting the daily cap again.
+  // Only genuinely terminal cases here: no wallet at all, or a wallet whose
+  // daily cap is already spent. An empty on-chain balance is left to the
+  // gateway to report at settlement, not pre-judged as unpayable.
   let notPayableReason = "no wallet is attached to this connection";
   if (wallet) {
     const spentToday = Number(wallet.spent_today_usdc) || 0;
     const dailyCap = Number.isFinite(wallet.cap_per_day_usdc) ? wallet.cap_per_day_usdc : null;
-    if (typeof wallet.balance_usdc === "number" && wallet.balance_usdc <= 0) {
-      notPayableReason = "the wallet holds no USDC on Base";
-    } else if (dailyCap !== null && dailyCap - spentToday <= 0) {
+    if (dailyCap !== null && dailyCap - spentToday <= 0) {
       notPayableReason = "today's spending limit is used up";
     }
   }
