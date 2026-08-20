@@ -192,3 +192,61 @@ test("an unreachable gateway surfaces as a tool error", async () => {
   assert.equal(result.isError, true);
   assert.match(result.content[0].text, /Could not reach the Apiosk gateway/);
 });
+
+test("the offer table is rendered here, with a number the user can say back", async () => {
+  // Same reason discovery renders its own table: prose guidance about columns
+  // and prices is a suggestion, and this is the step where a rewritten price
+  // would be a rewritten invoice.
+  const handler = jsonHandler({
+    capability: "news.search",
+    expires_in_seconds: 900,
+    offers: [
+      {
+        offer_id: "signed-1",
+        provider: "CityFALCON",
+        api_slug: "cityfalcon-financial-api",
+        price_usdc: 0.03,
+        buyer_price_usdc: 0.033,
+        score: 100,
+        p95_latency_ms: null,
+        success_rate: null,
+      },
+      {
+        offer_id: "signed-2",
+        provider: "Apiosk Basics",
+        api_slug: "newsapi",
+        price_usdc: 0.06,
+        buyer_price_usdc: 0.066,
+        score: 60,
+        p95_latency_ms: 412.4,
+        success_rate: 0.97,
+        policy: { verdict: "require_approval", reason: "over the approval threshold you set" },
+      },
+    ],
+  });
+
+  const data = await withStubGateway(handler, async ({ gateway }) => {
+    const result = await runCompare({ query: "news about a company" }, { gateway });
+    return JSON.parse(result.content[0].text);
+  });
+
+  assert.match(data.presentation, /\*\*2 offers\*\* for `news\.search`/);
+  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\* \| 0\.033 \(incl\. 10% fee\) \| 100 \| not measured \| not measured \|/);
+  assert.match(data.presentation, /\| 2 \| \*\*Apiosk Basics\*\* `newsapi` \| 0\.066 \(incl\. 10% fee\) \| 60 \| 412 ms \| 97% \|/);
+  // The buyer's own rules travel with the offer they refuse, not in a footnote
+  // the model may drop.
+  assert.match(data.presentation, /⏸️ #2 would be held for your approval: over the approval threshold you set/);
+  assert.match(data.presentation, /pinned for 15 minutes/);
+  // The number in the table is the number in the data.
+  assert.deepEqual(data.offers.map((offer) => offer.index), [1, 2]);
+});
+
+test("an empty offer set says which way out there is, and never invents one", async () => {
+  const handler = jsonHandler({ capability: "news.search", offers: [], rejected: [] });
+  const data = await withStubGateway(handler, async ({ gateway }) => {
+    const result = await runCompare({ query: "news", max_price_usdc: 0.0001 }, { gateway });
+    return JSON.parse(result.content[0].text);
+  });
+  assert.match(data.presentation, /No provider survived the requirements you set/);
+  assert.ok(!/\| 1 \|/.test(data.presentation));
+});

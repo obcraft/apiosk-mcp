@@ -1,10 +1,16 @@
-// How a discovery result is put in front of a person.
+// How a result is put in front of a person.
 //
 // Serves the same rule as mcp/05: the user ends the flow reading a sentence,
 // not a json blob, and the agent should not have to infer the shape of the
-// answer from prose. It lives beside src/discovery.mjs rather than inside it
-// because that file passed the 20 KB line the surface test holds, and because
-// what is searched and how it is shown are two decisions, not one.
+// answer from prose. Both steps that show a list — discovery's candidates and
+// the comparison's priced offers — render here rather than in the module that
+// fetched them, because what is searched and how it is shown are two decisions,
+// and because src/discovery.mjs was already at the 20 KB line the surface test
+// holds.
+//
+// The rule for everything in this file: the model is handed finished text and
+// asked to relay it. Every time that job was described in prose instead, the
+// model did something else with it.
 
 import { sanitizeText, trimString } from "./discovery-text.mjs";
 
@@ -158,4 +164,62 @@ export function pipelineOf(payload, counts) {
       external_found: counts.external,
     },
   };
+}
+
+/**
+ * The priced offers, as a table with a number the user can say back.
+ *
+ * Four things have to survive the trip to the screen, and prose guidance was
+ * losing all four: the price is the buyer total and must be quoted as-is, an
+ * unmeasured dimension is unmeasured rather than zero, the quote expires, and
+ * the buyer's own rules may already refuse an offer that is otherwise the
+ * cheapest. Rendering them here is how they stop being optional.
+ */
+export function renderOffers(payload, offers) {
+  const lines = [];
+  const capability = trimString(payload?.capability);
+  const expires = Number(payload?.expires_in_seconds);
+
+  lines.push(
+    `**${offers.length} offer${offers.length === 1 ? "" : "s"}**${capability ? ` for \`${capability}\`` : ""} — nothing is paid until you pick one.`
+  );
+
+  if (!offers.length) {
+    lines.push("", "No provider survived the requirements you set. Relax the binding constraint, or ask what was rejected and why.");
+    return lines.join("\n");
+  }
+
+  lines.push(
+    "",
+    "| # | Provider | Price (USDC) | Score | p95 latency | Success rate |",
+    "| --- | --- | --- | --- | --- | --- |"
+  );
+  for (const offer of offers) {
+    const price = typeof offer.price_usdc === "number" ? `${offer.price_usdc} (incl. 10% fee)` : "not published";
+    // Never a plausible default: a provider Apiosk has not proxied is unmeasured,
+    // and a zero here would read as "instant" or "always fails".
+    const latency = Number.isFinite(offer.p95_latency_ms) ? `${Math.round(offer.p95_latency_ms)} ms` : "not measured";
+    const success = Number.isFinite(offer.success_rate)
+      ? `${Math.round(offer.success_rate * (offer.success_rate <= 1 ? 100 : 1))}%`
+      : "not measured";
+    const score = Number.isFinite(offer.score) ? String(Math.round(offer.score)) : "—";
+    lines.push(
+      `| ${offer.index} | ${rowName({ name: offer.provider, listing_slug: offer.api_slug })} | ${price} | ${score} | ${latency} | ${success} |`
+    );
+  }
+
+  const held = offers.filter((offer) => trimString(offer.policy?.verdict) === "require_approval");
+  const denied = offers.filter((offer) => trimString(offer.policy?.verdict) === "deny");
+  for (const offer of denied) {
+    lines.push("", `⚠️ #${offer.index} is refused by your own spending rules: ${sanitizeText(offer.policy?.reason || "no reason given", 160)}`);
+  }
+  for (const offer of held) {
+    lines.push("", `⏸️ #${offer.index} would be held for your approval: ${sanitizeText(offer.policy?.reason || "no reason given", 160)}`);
+  }
+
+  if (Number.isFinite(expires) && expires > 0) {
+    lines.push("", `These prices are pinned for ${Math.round(expires / 60)} minutes. After that, ask for a fresh comparison.`);
+  }
+  lines.push("", "Say the number you want. Nothing has been paid for.");
+  return lines.join("\n");
 }

@@ -32,7 +32,7 @@ import {
   sanitizeText,
   trimString,
 } from "./discovery-text.mjs";
-import { pipelineOf, renderPresentation } from "./discovery-presentation.mjs";
+import { pipelineOf, renderPresentation } from "./presentation.mjs";
 
 const DEFAULT_MAX_RESULTS = 8;
 const MAX_RESULTS_CEILING = 25;
