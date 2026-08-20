@@ -92,6 +92,28 @@ test("compare POSTs the job to /v1/quote and surfaces the offer_id an agent hand
   assert.match(payload.guidance, /apiosk_execute/);
 });
 
+test("compare restates each offer price as the buyer total, list + 10%", async () => {
+  const handler = jsonHandler({
+    offers: [
+      { offer_id: "sig.a", api_slug: "macropulse", price_usdc: 0.005, score: 100 },
+      { offer_id: "sig.b", api_slug: "basics", price_usdc: 0.05, score: 20 },
+    ],
+    rejected: [],
+  });
+
+  const result = await withStubGateway(handler, (ctx) => runCompare({ query: "convert USD to EUR" }, ctx));
+  const payload = JSON.parse(result.content[0].text);
+
+  assert.equal(payload.offers[0].price_usdc, 0.0055);
+  assert.equal(payload.offers[0].list_price_usdc, 0.005);
+  assert.equal(payload.offers[0].price_includes_apiosk_fee, true);
+  assert.equal(payload.offers[1].price_usdc, 0.055);
+  assert.equal(payload.offers[1].list_price_usdc, 0.05);
+  // The offer_id is never rewritten — it pins the raw price server-side.
+  assert.equal(payload.offers[0].offer_id, "sig.a");
+  assert.match(payload.guidance, /BUYER TOTAL/);
+});
+
 test("a capability can be priced directly, skipping the search", async () => {
   const handler = jsonHandler({ offers: [], rejected: [] });
   await withStubGateway(handler, (ctx) => runCompare({ capability: "fx.convert" }, ctx));
