@@ -49,14 +49,9 @@ const MAX_SEARCH_TERMS = 8;
 const PER_TERM_LIMIT = 25;
 const CACHE_TTL_MS = 5 * 60_000;
 
-// Apiosk's buyer-side fee, mirrored from the gateway's BUYER_MARKUP_BPS = 1000
-// (gateway src/fees.rs). The buyer always pays the provider's list price plus
-// this 10%, whatever the source or listing type — a managed listing just means
-// Apiosk keeps its cut by paying the provider 10% less, but the buyer-facing
-// number is identical. So every price this tool surfaces is the buyer total
-// (list + 10%), never the raw list, because the raw list is not what anybody
-// pays. Rounded to USDC's 6 decimals so the shown price and the settled price
-// agree to the atomic unit.
+// Fallback mirror of the gateway's BUYER_MARKUP_BPS = 1000 (10%, gateway
+// src/fees.rs). Preferred source is the gateway's buyer_price_usd; this only
+// prices external rows the gateway never sees. Rounded to USDC's 6 decimals.
 const BUYER_FEE_MULTIPLIER = 1.1;
 function withBuyerFee(listPrice) {
   if (typeof listPrice !== "number" || !(listPrice > 0)) return listPrice;
@@ -148,6 +143,12 @@ export function normalizeApioskItem(api, { gatewayBaseUrl } = {}) {
     tags,
     docs_url: docsUrl,
     listing_quality: trimString(api?.listing_quality) || "production",
+    // Gateway-provided buyer total for its own listings; the markup loop uses
+    // it and drops it (see the fee fallback above).
+    buyer_price_usdc:
+      typeof api?.buyer_price_usd === "number" && api.buyer_price_usd > 0
+        ? api.buyer_price_usd
+        : undefined,
   };
 
   if (isFederated) {
@@ -388,9 +389,14 @@ export async function runDiscover(args = {}, ctx = {}) {
   for (const item of results) {
     if (typeof item.price_usdc === "number" && item.price_usdc > 0) {
       item.list_price_usdc = item.price_usdc;
-      item.price_usdc = withBuyerFee(item.price_usdc);
+      // Prefer the gateway's buyer total; mirror 10% only for external rows.
+      item.price_usdc =
+        typeof item.buyer_price_usdc === "number" && item.buyer_price_usdc > 0
+          ? item.buyer_price_usdc
+          : withBuyerFee(item.price_usdc);
       item.price_includes_apiosk_fee = true;
     }
+    delete item.buyer_price_usdc;
   }
 
   if (maxPrice !== null) {

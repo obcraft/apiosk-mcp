@@ -184,6 +184,36 @@ test("every surfaced price is the buyer total, list + 10%, whatever the source",
   assert.equal(fed.price_usdc, 0.055);
 });
 
+test("discover prefers the gateway's buyer_price_usd when present, over the local mirror", async () => {
+  clearDiscoveryCache();
+  const catalog = [
+    {
+      slug: "frankfurter",
+      name: "Frankfurter FX",
+      description: "FX rates.",
+      category: "finance",
+      listing_type: "api",
+      price_usd: 0.02,
+      // Gateway's own buyer total — deliberately NOT exactly list * 1.1, so a
+      // pass-through can be told apart from the local mirror.
+      buyer_price_usd: 0.023,
+      gateway_url: "https://gateway.apiosk.com/frankfurter",
+      operations: [{ method: "GET", path: "/latest" }],
+      listing_metadata: { tags: ["fx"] },
+      hosted_externally: false,
+    },
+  ];
+  const res = await runDiscover(
+    { query: "exchange rate", sources: ["apiosk"] },
+    { listApis: makeListApis(catalog), gatewayBaseUrl: "https://gateway.apiosk.com" }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  const row = payload.results.find((r) => r.name === "Frankfurter FX");
+  assert.equal(row.price_usdc, 0.023, "uses the gateway buyer price verbatim");
+  assert.equal(row.list_price_usdc, 0.02);
+  assert.equal("buyer_price_usdc" in row, false, "intermediate field dropped");
+});
+
 test("discover flags only genuinely unimplemented sources without failing", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(

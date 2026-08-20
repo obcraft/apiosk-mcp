@@ -114,6 +114,22 @@ test("compare restates each offer price as the buyer total, list + 10%", async (
   assert.match(payload.guidance, /BUYER TOTAL/);
 });
 
+test("compare prefers the gateway's buyer_price_usdc over the local mirror", async () => {
+  const handler = jsonHandler({
+    offers: [
+      // Gateway buyer price present — use it verbatim, not list * 1.1.
+      { offer_id: "sig.a", api_slug: "m", price_usdc: 0.005, buyer_price_usdc: 0.0055, score: 100 },
+    ],
+    rejected: [],
+  });
+  const result = await withStubGateway(handler, (ctx) => runCompare({ query: "x" }, ctx));
+  const payload = JSON.parse(result.content[0].text);
+  assert.equal(payload.offers[0].price_usdc, 0.0055);
+  assert.equal(payload.offers[0].list_price_usdc, 0.005);
+  // The intermediate gateway field is dropped from the output.
+  assert.equal("buyer_price_usdc" in payload.offers[0], false);
+});
+
 test("a capability can be priced directly, skipping the search", async () => {
   const handler = jsonHandler({ offers: [], rejected: [] });
   await withStubGateway(handler, (ctx) => runCompare({ capability: "fx.convert" }, ctx));

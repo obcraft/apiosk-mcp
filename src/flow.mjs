@@ -125,9 +125,15 @@ export async function runCompare(args = {}, ctx = {}) {
     for (const offer of payload.offers) {
       if (offer && typeof offer.price_usdc === "number" && offer.price_usdc > 0) {
         offer.list_price_usdc = offer.price_usdc;
-        offer.price_usdc = withBuyerFee(offer.price_usdc);
+        // Prefer the gateway's buyer total (single source of truth); the ×1.10
+        // mirror is only a fallback for a gateway that predates the field.
+        offer.price_usdc =
+          typeof offer.buyer_price_usdc === "number" && offer.buyer_price_usdc > 0
+            ? offer.buyer_price_usdc
+            : withBuyerFee(offer.price_usdc);
         offer.price_includes_apiosk_fee = true;
       }
+      if (offer) delete offer.buyer_price_usdc;
     }
   }
 
