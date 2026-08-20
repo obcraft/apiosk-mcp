@@ -13,7 +13,6 @@ import { PROMPTS } from "./src/prompts.mjs";
 import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
 import {
   createHostedOAuthSupport,
-  createMcpWalletAuthNonce,
   resolveHostedMcpUrls,
 } from "./src/oauth.mjs";
 import { createApioskMcpRuntime } from "./src/runtime.mjs";
@@ -62,9 +61,9 @@ function normalizeControlPlanePath(pathname = "") {
 }
 
 function shouldProxyControlPlanePath(pathname = "") {
-  // Hosted sign-in is wallet-only now (see src/oauth.mjs); the email/password
-  // /api/auth/mcp-sign-in|sign-up routes never existed on the control plane, so
-  // they are no longer proxied.
+  // Hosted sign-in happens entirely at buy.apiosk.com now (see
+  // mcp/01-portal-handoff.md); this server neither renders a sign-in page nor
+  // proxies auth routes to the control plane.
   const normalizedPath = normalizeControlPlanePath(pathname);
   return (
     normalizedPath.startsWith("/api/credits/") ||
@@ -273,6 +272,8 @@ if (hostedOAuth.oauthMetadata.registration_endpoint) {
     hostedOAuth.registrationRouter
   );
 }
+// buy.apiosk.com's return leg for the portal handoff (mcp/01-portal-handoff.md).
+app.get("/authorize/callback", (req, res) => hostedOAuth.handlePortalCallback(req, res));
 
 app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
   return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
@@ -287,55 +288,6 @@ app.get(SETTLEMENT_DISCLOSURE_PATH, (_req, res) => {
     .setHeader("cache-control", "public, max-age=300")
     .type("html")
     .send(createSettlementDisclosurePage());
-});
-
-// Self-hosted browser bundles for the /authorize wallet flows. Served
-// same-origin because embedded mobile browsers can refuse cross-origin dynamic
-// module imports. Regenerate with scripts/build-wallet-lib.mjs after upgrades.
-const browserBundleFiles = new Map([
-  ["wallet-accounts.mjs", new URL("./src/assets/wallet-accounts.mjs", import.meta.url)],
-  ["walletconnect-provider.mjs", new URL("./src/assets/walletconnect-provider.mjs", import.meta.url)],
-]);
-const browserBundleCache = new Map();
-
-app.get("/assets/:bundle", async (req, res, next) => {
-  const bundleUrl = browserBundleFiles.get(req.params.bundle);
-  if (!bundleUrl) return next();
-
-  try {
-    let bundle = browserBundleCache.get(req.params.bundle);
-    if (!bundle) {
-      const { readFile } = await import("node:fs/promises");
-      bundle = await readFile(bundleUrl);
-      browserBundleCache.set(req.params.bundle, bundle);
-    }
-    res.setHeader("content-type", "text/javascript; charset=utf-8");
-    res.setHeader("cache-control", "public, max-age=3600");
-    res.send(bundle);
-  } catch (error) {
-    res.status(404).json({
-      error: "not_found",
-      message: "Wallet library bundle is not available on this deployment.",
-      status: 404,
-    });
-  }
-});
-
-app.post("/api/auth/mcp-wallet-nonce", async (req, res) => {
-  try {
-    const nonce = await createMcpWalletAuthNonce({ env: process.env });
-    res.status(200).json(nonce);
-  } catch (error) {
-    const status = Number.isFinite(error?.status) ? error.status : 502;
-    res.status(status).json({
-      error: "wallet_auth_unavailable",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Wallet sign-in is temporarily unavailable.",
-      status,
-    });
-  }
 });
 
 app.all("/api/*path", async (req, res) => {
