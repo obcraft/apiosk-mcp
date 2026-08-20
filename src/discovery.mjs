@@ -49,6 +49,20 @@ const MAX_SEARCH_TERMS = 8;
 const PER_TERM_LIMIT = 25;
 const CACHE_TTL_MS = 5 * 60_000;
 
+// Apiosk's buyer-side fee, mirrored from the gateway's BUYER_MARKUP_BPS = 1000
+// (gateway src/fees.rs). The buyer always pays the provider's list price plus
+// this 10%, whatever the source or listing type — a managed listing just means
+// Apiosk keeps its cut by paying the provider 10% less, but the buyer-facing
+// number is identical. So every price this tool surfaces is the buyer total
+// (list + 10%), never the raw list, because the raw list is not what anybody
+// pays. Rounded to USDC's 6 decimals so the shown price and the settled price
+// agree to the atomic unit.
+const BUYER_FEE_MULTIPLIER = 1.1;
+function withBuyerFee(listPrice) {
+  if (typeof listPrice !== "number" || !(listPrice > 0)) return listPrice;
+  return Math.round(listPrice * BUYER_FEE_MULTIPLIER * 1e6) / 1e6;
+}
+
 
 // Trust tiers, highest first. Weight breaks ranking ties AFTER keyword
 // relevance, so a verified catalog listing wins over an unverified well-known
@@ -366,6 +380,19 @@ export async function runDiscover(args = {}, ctx = {}) {
   }
   let results = Array.from(byKey.values());
 
+  // Apply the 10% buyer fee once, on the merged set, so every source and every
+  // listing type is treated identically and the fee is never double-counted.
+  // `list_price_usdc` keeps the provider's raw list price for reference; the
+  // headline `price_usdc` becomes the buyer total, which is what a max_price
+  // budget and the user's choice should both be measured against.
+  for (const item of results) {
+    if (typeof item.price_usdc === "number" && item.price_usdc > 0) {
+      item.list_price_usdc = item.price_usdc;
+      item.price_usdc = withBuyerFee(item.price_usdc);
+      item.price_includes_apiosk_fee = true;
+    }
+  }
+
   if (maxPrice !== null) {
     results = results.filter(
       (item) => item.price_usdc === null || item.price_usdc === undefined || item.price_usdc <= maxPrice
@@ -377,6 +404,7 @@ export async function runDiscover(args = {}, ctx = {}) {
 
   const hasExternal = results.some((item) => item.external);
   const guidanceParts = [
+    "Every `price_usdc` here is the BUYER TOTAL: the provider's list price plus Apiosk's 10% fee, already included. It is what the wallet is debited, so quote it to the user as-is — do not add anything on top. `list_price_usdc` is the raw provider price, for reference only.",
     "Results with external=false are Apiosk listings: the gateway prices and settles them, so they are the ones you can actually buy.",
   ];
   if (hasExternal) {

@@ -149,15 +149,39 @@ test("normalizeApioskItem builds gateway url from base when gateway_url is blank
 test("discover enforces max_price_usdc ceiling", async () => {
   clearDiscoveryCache();
   const res = await runDiscover(
-    { query: "exchange rate", max_price_usdc: 0.02, sources: ["apiosk"] },
+    { query: "exchange rate", max_price_usdc: 0.025, sources: ["apiosk"] },
     { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
   );
   const payload = JSON.parse(res.content[0].text);
   assert.ok(
-    payload.results.every((r) => r.price_usdc === null || r.price_usdc <= 0.02),
+    payload.results.every((r) => r.price_usdc === null || r.price_usdc <= 0.025),
     "no result above the price ceiling"
   );
   assert.ok(!payload.results.some((r) => r.listing_slug === "twelve-data"), "0.03 dropped");
+});
+
+test("every surfaced price is the buyer total, list + 10%, whatever the source", async () => {
+  clearDiscoveryCache();
+  const res = await runDiscover(
+    { query: "exchange rate", sources: ["apiosk"] },
+    { listApis: makeListApis(FX_CATALOG), gatewayBaseUrl: "https://gateway.apiosk.com" }
+  );
+  const payload = JSON.parse(res.content[0].text);
+  const priced = payload.results.filter((r) => typeof r.price_usdc === "number");
+  assert.ok(priced.length > 0, "at least one priced result");
+  for (const r of priced) {
+    // headline price is the raw list plus 10%, rounded to USDC precision
+    assert.equal(r.price_usdc, Math.round(r.list_price_usdc * 1.1 * 1e6) / 1e6);
+    assert.equal(r.price_includes_apiosk_fee, true);
+    assert.ok(r.price_usdc > r.list_price_usdc, "buyer total exceeds the raw list");
+  }
+  // A managed 0.02 listing is quoted at 0.022, not 0.02.
+  const frank = payload.results.find((r) => r.listing_slug === "frankfurter" || r.name === "Frankfurter FX");
+  assert.equal(frank.price_usdc, 0.022);
+  assert.equal(frank.list_price_usdc, 0.02);
+  // And a federated one follows the exact same rule — how it is listed does not matter.
+  const fed = payload.results.find((r) => r.name === "External FX Oracle");
+  assert.equal(fed.price_usdc, 0.055);
 });
 
 test("discover flags only genuinely unimplemented sources without failing", async () => {
@@ -222,7 +246,7 @@ test("discover directly normalizes thirdweb, PayAI, x402engine, and anchor manif
   for (const source of ["thirdweb", "payai", "x402engine", "anchor-x402"]) {
     assert.ok(payload.results.some((result) => result.source === source), `${source} result present`);
   }
-  assert.equal(payload.results.find((result) => result.source === "anchor-x402").price_usdc, 0.007);
+  assert.equal(payload.results.find((result) => result.source === "anchor-x402").price_usdc, 0.0077);
 });
 
 test("discover queries the Bazaar by default (no sources needed)", async () => {
@@ -291,7 +315,7 @@ test("discover queries the Bazaar live source and merges external results", asyn
   assert.match(b.execution_note, /cannot settle it from this surface/);
   assert.equal(b.url, "https://bazaar-fx.example.com/usd");
   assert.equal(b.pay_to, "0xBazaarProv");
-  assert.equal(b.price_usdc, 0.01);
+  assert.equal(b.price_usdc, 0.011);
 });
 
 test("discover isolates a failing Bazaar source (catalog still returned)", async () => {
@@ -335,9 +359,9 @@ test("sources:['all'] fans out to the free directory sources and normalizes each
   }
   const bySource = Object.fromEntries(payload.results.map((r) => [r.source, r]));
   assert.equal(bySource["x402-list"].url, "https://wx.example.com");
-  assert.equal(bySource["x402-list"].price_usdc, 0.004);
+  assert.equal(bySource["x402-list"].price_usdc, 0.0044);
   assert.equal(bySource["x402-direct"].url, "https://d.example.com/w");
-  assert.equal(bySource["x402-direct"].price_usdc, 0.006);
+  assert.equal(bySource["x402-direct"].price_usdc, 0.0066);
   assert.equal(bySource["agentic-market"].url, "https://a.example.com/w");
   assert.ok(payload.results.every((r) => !r.external || r.executable_via === null));
 });
