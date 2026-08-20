@@ -39,7 +39,7 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
       message:
         "This session is not connected to an Apiosk account, so nothing can be paid for yet. Discovery and comparison still work.",
       next_steps: [
-        `Open ${connectUrl(env)} to sign in, fund a wallet in USDC and set the spending limits.`,
+        `Open ${connectUrl(env)} to sign in, top up your balance and set the spending limits.`,
         "Come back and call apiosk_connect again to confirm the connection is payable.",
       ],
     });
@@ -127,6 +127,6 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
       : `Connected, but not able to pay yet: ${notPayableReason}.`,
     next_steps: payable
       ? ["Call apiosk_discover with the job in plain words."]
-      : [`Fund the wallet with USDC on Base at ${BUYER_PORTAL_URL}, then call apiosk_connect again.`],
+      : [`Top up your balance at ${BUYER_PORTAL_URL}, then call apiosk_connect again.`],
   });
 }

@@ -1,7 +1,7 @@
 {
   "name": "@apiosk/mcp",
   "version": "1.7.0",
-  "description": "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it in USDC under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.",
+  "description": "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "exports": {

@@ -415,7 +415,7 @@ export async function runDiscover(args = {}, ctx = {}) {
 
   const hasExternal = results.some((item) => item.external);
   const guidanceParts = [
-    "PRESENT THESE AS A MARKDOWN TABLE, one row per result, columns in this exact order: (1) `#` — the result's `index`, the number the user quotes back to choose; (2) `Provider` — the `name` in bold with the short `description` on the line below it in smaller text (use `**name**<br><small>description</small>`); (3) `Source` — the `source` field (apiosk, bazaar, …); (4) `Type` — the `category`, or 'external' when it is empty; (5) `Price` — `price_usdc` followed by ' USDC (incl. 10% fee)'. After the table, ask the user which number they want.",
+    "PRESENT THESE AS A MARKDOWN TABLE, one row per result, columns in this exact order: (1) `#` — the result's `index`, the number the user quotes back to choose; (2) `Provider` — the `name` in bold with the short `description` on the line below it in smaller text (use `**name**<br><small>description</small>`); (3) `Source` — the `source` field (apiosk, bazaar, …); (4) `Type` — the `category`, or 'external' when it is empty; (5) `Price` — `price_usdc` followed by ' (incl. 10% fee)'. After the table, ask the user which number they want.",
     "Every `price_usdc` here is the BUYER TOTAL: the provider's list price plus Apiosk's 10% fee, already included. It is what the wallet is debited, so quote it as-is — never add anything on top. `list_price_usdc` is the raw provider price, for reference only.",
     "Results with external=false are Apiosk listings: the gateway prices and settles them, so they are the ones you can actually buy.",
   ];
@@ -483,17 +483,17 @@ export const DISCOVER_TOOL_INPUT_SCHEMA = {
         ],
       },
       description:
-        "Discovery sources to sweep. Defaults to ['apiosk','bazaar']. Use ['all'] for every wired index. Add 'wellknown' together with probe_hosts to read one named host's /.well-known/x402. Discovery never spends anything, whichever sources you name.",
+        "Discovery sources to sweep. Defaults to ['apiosk','bazaar']. Use ['all'] for every wired index. Add 'wellknown' together with probe_hosts to read one named host's published payment manifest. Discovery never spends anything, whichever sources you name.",
     },
     probe_hosts: {
       type: "array",
       items: { type: "string" },
       description:
-        "For the 'wellknown' source: explicit hostnames to probe for a /.well-known/x402 document (e.g. 'x402.example.com'). Only hosts named here are probed — there is no speculative crawling.",
+        "For the 'wellknown' source: explicit hostnames to probe for a published payment manifest (e.g. 'api.example.com'). Only hosts named here are probed — there is no speculative crawling.",
     },
     max_price_usdc: {
       type: "number",
-      description: "Optional per-call price ceiling in USDC. Results above this are dropped.",
+      description: "Optional per-call price ceiling. Results above this are dropped.",
     },
   },
 };

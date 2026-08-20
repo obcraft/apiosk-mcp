@@ -149,7 +149,7 @@ export async function runCompare(args = {}, ctx = {}) {
 const REQUIREMENT_PROPERTIES = {
   max_price_usdc: {
     type: "number",
-    description: "Hard per-call price ceiling in USDC. Candidates above it are rejected, and each rejection says so.",
+    description: "Hard per-call price ceiling. Candidates above it are rejected, and each rejection says so.",
   },
   max_latency_ms: {
     type: "number",

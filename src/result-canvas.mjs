@@ -1,5 +1,20 @@
 export const APIO_RESULT_CANVAS_URI = "ui://apiosk/result-canvas.html";
 
+// Widget metadata OpenAI's app submission requires on a UI resource: a Content
+// Security Policy and a unique widget domain. This canvas is fully
+// self-contained — it reads window.openai.toolOutput and renders inline HTML
+// with no external fetch, script, style, font or image — so both CSP domain
+// lists are intentionally empty (the policy is SET, and it permits nothing
+// outward). The domain is this app's own origin, unique to Apiosk.
+export const APIO_RESULT_CANVAS_META = {
+  "openai/widgetCSP": {
+    connect_domains: [],
+    resource_domains: [],
+  },
+  "openai/widgetDomain": "https://mcp.apiosk.com",
+  "openai/widgetPrefersBorder": true,
+};
+
 // Generic, credential-free result renderer. Paid data is fetched server-side by
 // apiosk_execute; only structuredContent reaches this sandboxed UI.
 export const APIO_RESULT_CANVAS_HTML = `<!doctype html>

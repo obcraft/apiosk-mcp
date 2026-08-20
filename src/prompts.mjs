@@ -24,7 +24,7 @@ const NEED = {
 
 const BUDGET = {
   name: "max_price_usdc",
-  description: "Optional per-call ceiling in USDC, e.g. 0.05.",
+  description: "Optional per-call ceiling, e.g. 0.05.",
   required: false,
 };
 

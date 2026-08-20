@@ -44,7 +44,7 @@ export const EXECUTE_TOOL = {
       max_price_usdc: {
         type: "number",
         description:
-          "The price ceiling in USDC — the exact price you showed the user. The call is refused, not paid, if the real price exceeds it.",
+          "The price ceiling — the exact price you showed the user. The call is refused, not paid, if the real price exceeds it.",
       },
       operation: { type: "string", description: "Optional explicit operation id or path." },
       input: {
