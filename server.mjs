@@ -171,21 +171,18 @@ function renderMcpWelcomeHtml(mcpUrl) {
     <span class="badge">Model Context Protocol</span>
     <h1>Welcome to Apiosk Connect</h1>
     <p class="lead">
-      This is the Apiosk MCP server endpoint &mdash; it lets AI agents discover, pay for,
-      execute, and publish APIs through the Apiosk gateway. It is a machine endpoint, not a
+      This is the Apiosk MCP server endpoint &mdash; it lets AI agents discover, compare,
+      and pay for APIs through the Apiosk gateway. It is a machine endpoint, not a
       website, so connect it from an MCP client (Claude, Cursor, ChatGPT, and others) rather
       than browsing it here.
     </p>
 
     <h2>What you can do with it</h2>
     <ul>
-      <li><strong>Discover</strong> APIs, datasets, and services in the Apiosk catalog.</li>
-      <li><strong>Pay</strong> per call automatically in USDC (x402 on Base).</li>
-      <li><strong>Execute</strong> any listing through a uniform contract or its API-specific tool.</li>
-      <li><strong>Publish &amp; manage</strong> your own APIs so other agents can find and pay for them.</li>
-      <li><strong>Ship paid x402 routes from a coding agent</strong> &mdash; connect with
-        <code>Authorization: Bearer sk_live_&hellip;</code> (a provider API key) and use
-        <code>publish_x402_route</code>, <code>test_x402_route</code>, and friends.</li>
+      <li><strong>Discover</strong> APIs across the reviewed Apiosk catalog and the wider x402 ecosystem.</li>
+      <li><strong>Compare</strong> candidates on price, measured latency, measured success rate and input fit.</li>
+      <li><strong>Execute</strong> the offer you chose, paid per call in USDC (x402 on Base).</li>
+      <li><strong>Check approvals</strong> on a purchase your spending rules put on hold.</li>
     </ul>
 
     <h2>Endpoint</h2>
@@ -228,7 +225,7 @@ function sendMcpWelcome(req, res) {
     name: "Apiosk Connect",
     server: SERVER_INFO,
     description:
-      "Apiosk Connect lets MCP clients discover, pay for, execute, and publish APIs through the Apiosk gateway.",
+      "Apiosk Connect lets MCP clients discover, compare, and pay for APIs through the Apiosk gateway.",
     transport: "streamable-http",
     endpoint: mcpUrl,
     legacy_sse_endpoint: mcpUrl.replace(/\/mcp$/, "/sse"),
