@@ -11,7 +11,7 @@
 
 import { createHash } from "node:crypto";
 
-const DEFAULT_SUPABASE_URL = "https://jgjoiyqdyypouskftzeq.supabase.co";
+const DEFAULT_SUPABASE_URL = "https://api.apiosk.com";
 
 function resolveConfig(env = {}) {
   const raw =
