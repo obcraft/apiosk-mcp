@@ -4,6 +4,7 @@ import http from "node:http";
 
 import { COMPARE_TOOL_INPUT_SCHEMA, runCompare } from "../src/flow.mjs";
 import { COMPARE_TOOL } from "../src/tools/compare.mjs";
+import { runExecute } from "../src/tools/execute.mjs";
 import { createGatewayClient } from "../src/gateway-client.mjs";
 
 /// A stand-in gateway that records the method, path and JSON body it was asked
@@ -39,7 +40,7 @@ function jsonHandler(body, status = 200) {
       } catch {
         parsed = raw;
       }
-      seen.push({ method: req.method, url: req.url, body: parsed });
+      seen.push({ method: req.method, url: req.url, body: parsed, headers: req.headers });
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(body));
     });
@@ -231,14 +232,98 @@ test("the offer table is rendered here, with a number the user can say back", as
   });
 
   assert.match(data.presentation, /\*\*2 offers\*\* for `news\.search`/);
-  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\* \| 0\.033 \(incl\. 10% fee\) \| 100 \| not measured \| not measured \|/);
-  assert.match(data.presentation, /\| 2 \| \*\*Apiosk Basics\*\* `newsapi` \| 0\.066 \(incl\. 10% fee\) \| 60 \| 412 ms \| 97% \|/);
+  // A price is written as a price, and what it includes is said once under the
+  // table rather than in every cell.
+  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\* \| Apiosk catalogue \| \$0\.033 \|/);
+  assert.match(data.presentation, /\| 2 \| \*\*Apiosk Basics\*\* `newsapi` \| Apiosk catalogue \| \$0\.066 \|/);
+  assert.match(data.presentation, /Apiosk's 10% fee included/);
+  // The measured columns are gone from the table, not from the data: they said
+  // "not measured" on nearly every row and taught the reader to skip the table.
+  assert.ok(!/p95 latency/.test(data.presentation));
+  assert.equal(data.offers[1].p95_latency_ms, 412.4);
   // The buyer's own rules travel with the offer they refuse, not in a footnote
   // the model may drop.
   assert.match(data.presentation, /⏸️ #2 would be held for your approval: over the approval threshold you set/);
   assert.match(data.presentation, /pinned for 15 minutes/);
   // The number in the table is the number in the data.
   assert.deepEqual(data.offers.map((offer) => offer.index), [1, 2]);
+});
+
+
+test("the wider ecosystem is in the comparison table too, priced and settled by Apiosk", async () => {
+  // The complaint this answers: five rows, all Apiosk, on a screen whose whole
+  // job is "what are my options?". An external endpoint is not unbuyable — the
+  // gateway fronts its 402 and bills list + 10% — so it belongs in the same
+  // table, at the price the buyer's wallet will actually be debited.
+  const handler = jsonHandler({
+    capability: "news.search",
+    expires_in_seconds: 900,
+    offers: [
+      {
+        offer_id: "signed-1",
+        provider: "CityFALCON",
+        api_slug: "cityfalcon-financial-api",
+        price_usdc: 0.03,
+        buyer_price_usdc: 0.033,
+        score: 100,
+      },
+    ],
+    external_offers: {
+      count: 3,
+      settleable_by_apiosk: 1,
+      offers: [
+        {
+          resource: "https://www.x402financialdata.com/news",
+          host: "www.x402financialdata.com",
+          description: "Headlines by ticker.",
+          price_usd: 0.005,
+          buyer_price_usd: 0.0055,
+          settlement: "apiosk",
+          network: "eip155:8453",
+          method: "GET",
+          source: "coinbase-x402-bazaar",
+        },
+        {
+          resource: "https://earnings.lonestaroracle.xyz/calendar",
+          host: "earnings.lonestaroracle.xyz",
+          price_usd: 0.03,
+          settlement: "direct",
+          settlement_reason: "This host is not on the gateway's external-payment allowlist yet.",
+          source: "thirdweb",
+        },
+        // No resource URL: nothing to call, so nothing to show.
+        { host: "ghost.example", price_usd: 0.001, source: "thirdweb" },
+      ],
+    },
+  });
+
+  const data = await withStubGateway(handler, async ({ gateway }) => {
+    const result = await runCompare({ query: "news about a company" }, { gateway });
+    return JSON.parse(result.content[0].text);
+  });
+
+  assert.match(data.presentation, /\*\*3 offers\*\*/);
+  // A host is named the way a person would say it, and the index it came from
+  // is a name rather than a slug.
+  assert.match(data.presentation, /\| 2 \| \*\*x402 Financial Data\*\*.*\| Coinbase Bazaar \| \$0\.0055 \|/);
+  // The row Apiosk will not pay for says so, at the provider's own price.
+  assert.match(data.presentation, /\| 3 \| \*\*Lone Star Oracle\*\*.*pay the provider yourself \| \$0\.03 \|/);
+  assert.match(data.presentation, /#3 is one Apiosk cannot pay for you/);
+
+  const [settled, direct] = data.external_offers.offers;
+  // Numbering runs on from the reviewed offers, so "the second one" means one thing.
+  assert.deepEqual(data.external_offers.offers.map((o) => o.index), [2, 3]);
+  // The buyer total is shown; the provider's own price travels with it, because
+  // that is what apiosk_execute confirms against the live 402.
+  assert.equal(settled.price_usdc, 0.0055);
+  assert.equal(settled.list_price_usdc, 0.005);
+  assert.equal(settled.executable_via, "apiosk_execute");
+  // No fee is invented on a transaction Apiosk is not in.
+  assert.equal(direct.price_usdc, 0.03);
+  assert.equal(direct.price_includes_apiosk_fee, false);
+  assert.equal(direct.executable_via, null);
+  assert.equal(settled.offer_id, null);
+  assert.match(data.guidance_for_external, /pays the provider's own 402/);
 });
 
 test("an empty offer set says which way out there is, and never invents one", async () => {
@@ -250,3 +335,47 @@ test("an empty offer set says which way out there is, and never invents one", as
   assert.match(data.presentation, /No provider survived the requirements you set/);
   assert.ok(!/\| 1 \|/.test(data.presentation));
 });
+
+test("an external row is executed through the gateway's payer, at the price shown", async () => {
+  // The row has no offer_id — nobody reviewed the endpoint and no price was
+  // signed — so the price the user was shown travels with the call, and the
+  // gateway refuses rather than pays if the live 402 asks for more.
+  const handler = jsonHandler({ data: { headlines: [] }, receipt: { total_usdc: "0.0055" } });
+  const result = await withStubGateway(handler, ({ gateway }) =>
+    runExecute(
+      {
+        url: "https://www.x402financialdata.com/news",
+        confirmed_price_usdc: 0.005,
+        max_price_usdc: 0.0055,
+        query: { ticker: "ASML" },
+      },
+      { gateway, env: {} }
+    )
+  );
+
+  const sent = handler.seen[0];
+  assert.equal(sent.method, "POST");
+  assert.equal(sent.url, "/v1/x402/fetch");
+  assert.equal(sent.body.confirmed_price_usdc, 0.005);
+  // The ceiling the user saw is the TOTAL, fee included, so it bounds the total.
+  assert.equal(sent.body.max_total_usdc, 0.0055);
+  assert.deepEqual(sent.body.query, { ticker: "ASML" });
+  // A retry after a timeout must not pay twice.
+  assert.match(sent.headers["idempotency-key"], /^[0-9a-f-]{36}$/);
+
+  const body = JSON.parse(result.content[0].text);
+  assert.equal(body.status, "ok");
+  assert.equal(body.settlement, "apiosk");
+});
+
+test("an external endpoint without a confirmed price is refused before it is called", async () => {
+  const handler = jsonHandler({});
+  const result = await withStubGateway(handler, ({ gateway }) =>
+    runExecute({ url: "https://www.x402financialdata.com/news" }, { gateway, env: {} })
+  );
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /confirmed_price_usdc/);
+  // Nothing was sent: there was no ceiling to refuse against.
+  assert.equal(handler.seen.length, 0);
+});
+

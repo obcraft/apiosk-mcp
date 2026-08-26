@@ -43,6 +43,117 @@ function rowDescription(row) {
 }
 
 /**
+ * A host name, as a person would say it.
+ *
+ * `www.x402financialdata.com` is a URL, not a supplier, and a table that names
+ * its rows that way is asking the reader to parse DNS. Worse, a bare domain in
+ * bold is auto-linked by most chat clients, which is how a provider column ends
+ * up rendering as broken markdown.
+ *
+ * So the domain is read as words: the registrable label, split on the
+ * separators a domain actually uses and then on the dictionary below, and
+ * title-cased. The split is only accepted when EVERY piece is a word we know —
+ * anything else keeps the label whole rather than guessing at where the seams
+ * are and inventing a name nobody chose.
+ */
+const HOST_WORDS = [
+  "x402", "api", "apis", "ai", "data", "financial", "finance", "news", "market",
+  "markets", "price", "prices", "pricing", "search", "crypto", "chain", "block",
+  "weather", "earnings", "stock", "stocks", "equity", "oracle", "index", "feed",
+  "feeds", "quote", "quotes", "trade", "trading", "token", "tokens", "wallet",
+  "pay", "payments", "agent", "agents", "cloud", "labs", "lab", "hub", "net",
+  "web", "dev", "tools", "tool", "info", "live", "star", "lone", "sports",
+  "image", "images", "vision", "text", "translate", "geo", "maps", "map",
+];
+const HOST_ACRONYMS = { ai: "AI", api: "API", apis: "APIs", x402: "x402", nft: "NFT", llm: "LLM" };
+/** Domains where the registrable label is the platform, not the supplier. */
+const PAAS_SUFFIXES = [
+  "vercel.app", "netlify.app", "herokuapp.com", "fly.dev", "onrender.com",
+  "workers.dev", "pages.dev", "railway.app", "replit.dev", "run.app",
+  "azurewebsites.net", "amazonaws.com", "cloudfunctions.net", "ngrok.app",
+];
+const SOURCE_LABELS = {
+  apiosk: "Apiosk",
+  "coinbase-x402-bazaar": "Coinbase Bazaar",
+  "x402-bazaar": "x402 Bazaar",
+  bazaar: "x402 Bazaar",
+  payai: "PayAI",
+  thirdweb: "thirdweb",
+  external: "x402 index",
+};
+
+/** Split a run of letters into known words, longest first. Null if any part is unknown. */
+function splitWords(label) {
+  if (!label) return null;
+  const words = [...HOST_WORDS].sort((a, b) => b.length - a.length);
+  const out = [];
+  let rest = label;
+  while (rest) {
+    const match = words.find((word) => rest.startsWith(word));
+    if (!match) return null;
+    out.push(match);
+    rest = rest.slice(match.length);
+  }
+  return out.length ? out : null;
+}
+
+function titleCase(word) {
+  return HOST_ACRONYMS[word] || word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** `www.x402financialdata.com` → `x402 Financial Data`. */
+export function prettyHost(host) {
+  const clean = trimString(host)
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .replace(/^www\./, "");
+  if (!clean) return "";
+  // The label that names the thing: normally the registrable one
+  // (`api.marketdata.app` is Market Data), but the first one when the domain
+  // belongs to a hosting platform, where the registrable label names the host
+  // rather than the supplier (`x402-news.vercel.app` is not Vercel).
+  const parts = clean.split(".").filter(Boolean);
+  const onPlatform = PAAS_SUFFIXES.some((suffix) => clean.endsWith(`.${suffix}`));
+  const label = onPlatform ? parts[0] : parts[parts.length - 2] || parts[0];
+  const pieces = label.split(/[-_]/).filter(Boolean);
+  const named = pieces
+    .map((piece) => {
+      const split = splitWords(piece);
+      return split ? split.map(titleCase).join(" ") : titleCase(piece);
+    })
+    .join(" ");
+  return named || clean;
+}
+
+/** Which index a row came from, in words rather than a slug. */
+export function prettySource(source) {
+  const key = trimString(source).toLowerCase();
+  if (!key) return "x402 index";
+  if (SOURCE_LABELS[key]) return SOURCE_LABELS[key];
+  return key
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => HOST_ACRONYMS[word] || word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * A price, as a person reads one.
+ *
+ * A bare `0.033` with a currency in the column header is a number a reader has
+ * to decode; `$0.033` is a price. What the number INCLUDES is said once under
+ * the table instead of repeated in every cell — a fee note glued to each row
+ * makes the column unreadable at exactly the width where the decision is made.
+ * Rounded to USDC's six decimals so float arithmetic never puts fifteen digits
+ * on the screen.
+ */
+function money(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "not published";
+  return `$${Math.round(value * 1e6) / 1e6}`;
+}
+
+/**
  * The answer, rendered here rather than described to the model.
  *
  * Guidance that says "present these as a table with these five columns" is a
@@ -91,15 +202,16 @@ export function renderPresentation(pipeline, rows, { totalExternal, shownExterna
     return lines.join("\n");
   }
 
-  lines.push("", "| # | Provider | Source | Buy | Price (USDC) |", "| --- | --- | --- | --- | --- |");
+  lines.push("", "| # | Provider | Source | Buy | Price |", "| --- | --- | --- | --- | --- |");
   for (const row of rows) {
-    const buy = row.external ? "pay provider directly" : "via Apiosk";
-    const price =
-      typeof row.price_usdc === "number"
-        ? `${row.price_usdc}${row.price_includes_apiosk_fee ? " (incl. 10% fee)" : ""}`
-        : "not published";
+    // An external endpoint is not automatically unbuyable: the gateway fronts
+    // the provider's own 402 and bills list + 10%, so most of these rows are
+    // bought exactly like a catalogue one. The gateway said which; this only
+    // prints it.
+    const buy = row.settlement === "direct" ? "pay provider directly" : "via Apiosk";
+    const name = row.external ? rowName({ ...row, name: prettyHost(row.name) }) : rowName(row);
     lines.push(
-      `| ${row.index} | ${rowName(row)}${rowDescription(row)} | ${row.source} | ${buy} | ${price} |`
+      `| ${row.index} | ${name}${rowDescription(row)} | ${prettySource(row.source)} | ${buy} | ${money(row.price_usdc)} |`
     );
   }
 
@@ -109,7 +221,7 @@ export function renderPresentation(pipeline, rows, { totalExternal, shownExterna
   }
   lines.push(
     "",
-    "Rows marked *via Apiosk* are reviewed listings the gateway prices and settles. Rows marked *pay provider directly* are live x402 endpoints Apiosk found but has not reviewed or measured, and cannot settle from here. Nothing has been paid for."
+    "Every price is what leaves your wallet. Rows marked *via Apiosk* are settled by the gateway with Apiosk's 10% already in the price — the ones from the Apiosk catalogue are reviewed listings, the ones from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf. Rows marked *pay provider directly* are ones Apiosk will not settle: their price is the provider's own and you would call the URL and pay its 402 yourself. Nothing has been paid for."
   );
   return lines.join("\n");
 }
@@ -175,36 +287,46 @@ export function pipelineOf(payload, counts) {
  * the buyer's own rules may already refuse an offer that is otherwise the
  * cheapest. Rendering them here is how they stop being optional.
  */
-export function renderOffers(payload, offers) {
+export function renderOffers(payload, offers, external = []) {
   const lines = [];
   const capability = trimString(payload?.capability);
   const expires = Number(payload?.expires_in_seconds);
+  const rows = [...offers, ...external];
+  const direct = external.filter((offer) => offer.settlement !== "apiosk");
 
   lines.push(
-    `**${offers.length} offer${offers.length === 1 ? "" : "s"}**${capability ? ` for \`${capability}\`` : ""} — nothing is paid until you pick one.`
+    `**${rows.length} offer${rows.length === 1 ? "" : "s"}**${capability ? ` for \`${capability}\`` : ""} — nothing is paid until you pick one.`
   );
 
-  if (!offers.length) {
+  if (!rows.length) {
     lines.push("", "No provider survived the requirements you set. Relax the binding constraint, or ask what was rejected and why.");
     return lines.join("\n");
   }
 
-  lines.push(
-    "",
-    "| # | Provider | Price (USDC) | Score | p95 latency | Success rate |",
-    "| --- | --- | --- | --- | --- | --- |"
-  );
-  for (const offer of offers) {
-    const price = typeof offer.price_usdc === "number" ? `${offer.price_usdc} (incl. 10% fee)` : "not published";
-    // Never a plausible default: a provider Apiosk has not proxied is unmeasured,
-    // and a zero here would read as "instant" or "always fails".
-    const latency = Number.isFinite(offer.p95_latency_ms) ? `${Math.round(offer.p95_latency_ms)} ms` : "not measured";
-    const success = Number.isFinite(offer.success_rate)
-      ? `${Math.round(offer.success_rate * (offer.success_rate <= 1 ? 100 : 1))}%`
-      : "not measured";
-    const score = Number.isFinite(offer.score) ? String(Math.round(offer.score)) : "—";
+  if (!offers.length) {
     lines.push(
-      `| ${offer.index} | ${rowName({ name: offer.provider, listing_slug: offer.api_slug })} | ${price} | ${score} | ${latency} | ${success} |`
+      "",
+      "Nothing in the reviewed Apiosk catalogue serves this job. Everything below was found in the wider x402 ecosystem and has not been reviewed."
+    );
+  }
+
+  // Four columns, because a person choosing between suppliers is choosing on
+  // who, where it came from, and what it costs. The measured columns used to
+  // sit here too and were the same two words on every row — "not measured" —
+  // which is a table teaching the reader to skip it. What Apiosk has measured
+  // is still in `offers`; it earns a column again when there is something in it.
+  lines.push("", "| # | Provider | Source | Price |", "| --- | --- | --- | --- |");
+  for (const offer of offers) {
+    lines.push(
+      `| ${offer.index} | ${rowName({ name: offer.provider, listing_slug: offer.api_slug })} | Apiosk catalogue | ${money(offer.price_usdc)} |`
+    );
+  }
+  for (const offer of external) {
+    // Where it came from, and — when Apiosk cannot pay it for you — that fact,
+    // because it changes what picking the row means.
+    const source = `${prettySource(offer.source)}${offer.settlement === "apiosk" ? "" : " · pay the provider yourself"}`;
+    lines.push(
+      `| ${offer.index} | ${rowName({ name: prettyHost(offer.provider) })}${rowDescription(offer)} | ${source} | ${money(offer.price_usdc)} |`
     );
   }
 
@@ -217,9 +339,28 @@ export function renderOffers(payload, offers) {
     lines.push("", `⏸️ #${offer.index} would be held for your approval: ${sanitizeText(offer.policy?.reason || "no reason given", 160)}`);
   }
 
-  if (Number.isFinite(expires) && expires > 0) {
+  if (Number.isFinite(expires) && expires > 0 && offers.length) {
     lines.push("", `These prices are pinned for ${Math.round(expires / 60)} minutes. After that, ask for a fresh comparison.`);
   }
+
+  // One sentence about the price, under the table rather than inside every
+  // cell: the number in the column is what leaves the wallet, whichever half of
+  // the market the row came from.
+  lines.push(
+    "",
+    direct.length
+      ? "Every price is what leaves your wallet. Apiosk settles every row except the ones marked below, and its 10% is already in those prices. Rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
+      : "Every price is what you pay, Apiosk's 10% fee included. Apiosk settles the call either way: rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
+  );
+
+  if (direct.length) {
+    const numbers = direct.map((offer) => `#${offer.index}`).join(", ");
+    lines.push(
+      "",
+      `${numbers} ${direct.length === 1 ? "is one Apiosk cannot pay for you" : "are ones Apiosk cannot pay for you"} — ${sanitizeText(direct[0].settlement_reason || "the gateway will not settle this host", 200)} The price shown is the provider's own; you would call ${direct.length === 1 ? "its URL" : "their URLs"} and pay the 402 yourself.`
+    );
+  }
+
   lines.push("", "Say the number you want. Nothing has been paid for.");
   return lines.join("\n");
 }

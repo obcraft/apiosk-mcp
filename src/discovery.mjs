@@ -130,19 +130,29 @@ function normalizeCandidate(candidate) {
 /**
  * One external x402 offer, in the same shape.
  *
- * No Apiosk fee is added, and that is not an oversight: Apiosk is not in this
- * transaction. The buyer pays the provider's own 402 at the provider's own
- * price, so quoting a marked-up number would invent a fee nobody collects.
+ * Whether Apiosk can settle it is the gateway's answer, not this file's: the
+ * gateway owns the payer wallet, the price ceiling and the host policy, and it
+ * is the thing that will actually be charged. When it says "apiosk", the price
+ * here is the buyer total it quoted — the provider's asking price plus the same
+ * 10% every Apiosk purchase carries, with the provider paid their full price.
+ * When it says "direct", no fee is added, and that is not an oversight: Apiosk
+ * is not in that transaction, so a marked-up number would invent a fee nobody
+ * collects.
  */
 function normalizeExternalOffer(offer) {
   const url = trimString(offer?.resource);
   if (!url) return null;
   const params = inputParamNames(offer?.input_schema);
-  return {
+  const listPrice = finiteNumber(offer?.price_usd);
+  const viaApiosk = trimString(offer?.settlement) === "apiosk";
+  const buyerPrice = finiteNumber(offer?.buyer_price_usd);
+  const item = {
     id: `${trimString(offer?.source) || "external"}:${url}`,
     source: trimString(offer?.source) || "external",
     external: true,
-    executable_via: null,
+    settlement: viaApiosk ? "apiosk" : "direct",
+    settlement_reason: sanitizeText(offer?.settlement_reason || "", 200) || null,
+    executable_via: viaApiosk ? "apiosk_execute" : null,
     execution_note: sanitizeText(offer?.note || EXTERNAL_EXECUTION_NOTE, 400),
     name: sanitizeText(offer?.host || url, 120),
     description: sanitizeText(offer?.description || ""),
@@ -153,11 +163,16 @@ function normalizeExternalOffer(offer) {
     host: sanitizeText(offer?.host || "", 120) || null,
     input_params: params.length ? params : null,
     measured: false,
-    price_usdc: finiteNumber(offer?.price_usd),
+    price_usdc: viaApiosk ? (buyerPrice ?? listPrice) : listPrice,
     asset: "USDC",
     network: normalizeNetworkName(offer?.network) || null,
     pay_to: offer?.pay_to ? sanitizeText(offer.pay_to, 80) : null,
   };
+  if (viaApiosk && listPrice !== null) {
+    item.list_price_usdc = listPrice;
+    item.price_includes_apiosk_fee = buyerPrice !== null;
+  }
+  return item;
 }
 
 /**
@@ -315,7 +330,7 @@ export async function runDiscover(args = {}, ctx = {}) {
   ];
   if (externalCount > 0) {
     guidance.push(
-      "Rows with `external: true` are live x402 endpoints Apiosk found in the wider ecosystem and has not reviewed. Apiosk cannot settle them and adds no fee to them — their price is the provider's own, paid to the provider's own 402. Show them anyway: an unreviewed endpoint that does the job is worth more to the user than a clean 'nothing found'."
+      "Rows with `external: true` are live x402 endpoints Apiosk found in the wider ecosystem and has never reviewed or measured. Most are still bought here: `settlement: \"apiosk\"` means the gateway pays the provider's own 402 and charges the buyer the `price_usdc` shown, which already includes Apiosk's 10% (`list_price_usdc` is the provider's own price). `settlement: \"direct\"` means Apiosk will not settle that one — `settlement_reason` says why — and its price is the provider's own, paid by the user to the provider. Show them all: an unreviewed endpoint that does the job is worth more to the user than a clean 'nothing found'."
     );
   }
   guidance.push(

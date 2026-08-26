@@ -51,11 +51,13 @@ const EXTERNAL_OFFERS = [
     source: "coinbase-x402-bazaar",
     description: "Next earnings date with EPS/revenue estimates and estimate revisions.",
     price_usd: 0.005,
+    buyer_price_usd: 0.0055,
+    settlement: "apiosk",
     network: "eip155:8453",
     pay_to: "0xProviderWallet",
     method: "GET",
     verified: false,
-    note: "Unverified. Apiosk has not reviewed this endpoint and cannot settle it.",
+    note: "Unreviewed: Apiosk has not checked or measured this endpoint. Apiosk CAN settle it.",
     input_schema: {
       type: "object",
       properties: {
@@ -73,6 +75,8 @@ const EXTERNAL_OFFERS = [
     source: "thirdweb",
     description: "Earnings calendar — upcoming report dates, EPS and revenue estimates.",
     price_usd: 0.03,
+    settlement: "direct",
+    settlement_reason: "This host is not on the gateway's external-payment allowlist yet.",
     network: "eip155:8453",
     pay_to: "0xOther",
   },
@@ -214,10 +218,19 @@ test("the answer is rendered here, not described to the model", async () => {
 
   // Every row is in the table, and each says how it would be paid for.
   assert.equal(data.presentation.match(/^\| \d+ \|/gm).length, 4);
-  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\*.*\| via Apiosk \| 0\.033 \(incl\. 10% fee\) \|/);
+  // A price is written as a price. What it includes is said once under the
+  // table, not glued to every cell.
+  assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\*.*\| Apiosk \| via Apiosk \| \$0\.033 \|/);
+  // A host reads as a supplier, the index it came from reads as a name, and an
+  // external endpoint the gateway will pay for is bought like any other row —
+  // at the buyer total, fee included.
   assert.match(
     data.presentation,
-    /\| 3 \| \*\*www\.x402financialdata\.com\*\*.*\| pay provider directly \| 0\.005 \|/
+    /\| 3 \| \*\*x402 Financial Data\*\*.*\| Coinbase Bazaar \| via Apiosk \| \$0\.0055 \|/
+  );
+  assert.match(
+    data.presentation,
+    /\| 4 \| \*\*Lone Star Oracle\*\*.*\| thirdweb \| pay provider directly \| \$0\.03 \|/
   );
   assert.match(data.guidance, /`presentation` IS THE ANSWER/);
 });
@@ -301,13 +314,22 @@ test("the Apiosk fee is on the Apiosk rows and on no others", async () => {
   assert.equal(reviewed.price_usdc, 0.033);
   assert.equal(reviewed.price_includes_apiosk_fee, true);
 
-  // Apiosk is not in an external transaction, so marking one up would invent a
-  // fee nobody collects.
-  const external = data.results.find((r) => r.external);
-  assert.equal(external.price_usdc, 0.005);
-  assert.equal(external.price_includes_apiosk_fee, undefined);
-  assert.equal(external.executable_via, null);
-  assert.match(external.execution_note, /cannot settle/i);
+  // An external endpoint the gateway settles carries the same 10%, and the
+  // provider's own price travels beside it — that is what execute confirms
+  // against the live 402.
+  const settled = data.results.find((r) => r.external && r.settlement === "apiosk");
+  assert.equal(settled.list_price_usdc, 0.005);
+  assert.equal(settled.price_usdc, 0.0055);
+  assert.equal(settled.price_includes_apiosk_fee, true);
+  assert.equal(settled.executable_via, "apiosk_execute");
+
+  // Apiosk is not in a transaction it will not settle, so marking that one up
+  // would invent a fee nobody collects.
+  const direct = data.results.find((r) => r.external && r.settlement === "direct");
+  assert.equal(direct.price_usdc, 0.03);
+  assert.equal(direct.price_includes_apiosk_fee, undefined);
+  assert.equal(direct.executable_via, null);
+  assert.match(direct.settlement_reason, /allowlist/i);
 });
 
 test("a price ceiling is measured against the buyer total, and sent as the list price", async () => {

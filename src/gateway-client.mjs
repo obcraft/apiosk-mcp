@@ -88,7 +88,10 @@ export function createGatewayClient({
   }
 
   /** GET/POST JSON against the gateway. Throws GatewayError; never returns a half-decoded body. */
-  async function requestJson(path, { method = "GET", query = null, body = null, timeout = timeoutMs } = {}) {
+  async function requestJson(
+    path,
+    { method = "GET", query = null, body = null, timeout = timeoutMs, extraHeaders = null } = {}
+  ) {
     const url = new URL(path, `${baseUrl}/`);
     if (query) {
       const params = query instanceof URLSearchParams ? query : new URLSearchParams(query);
@@ -101,7 +104,12 @@ export function createGatewayClient({
     try {
       response = await fetchImpl(url.href, {
         method,
-        headers: headers(body ? { "content-type": "application/json" } : {}),
+        headers: headers({
+          ...(body ? { "content-type": "application/json" } : {}),
+          // Callers that need a per-request header — an Idempotency-Key, say,
+          // which is the difference between a retried payment and a double one.
+          ...(extraHeaders || {}),
+        }),
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
