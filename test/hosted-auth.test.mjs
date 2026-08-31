@@ -46,7 +46,12 @@ function createMockResponse(req, query = {}) {
 const TEST_ENV = {
   NODE_ENV: "test",
   APIOSK_MCP_OAUTH_SECRET: "shared-hosted-oauth-secret",
-  APIOSK_BUYER_PORTAL_URL: "https://buy.apiosk.test",
+  // The agent gateway. It is BOTH legs now - the browser is sent to its
+  // /v1/oauth/authorize and the code is redeemed at its /v1/oauth/token - which
+  // is why there is one variable here where there used to be a portal and a
+  // gateway. `APIOSK_BUYER_PORTAL_URL` is gone on purpose; see
+  // `resolveAuthorizeBaseUrl`.
+  APIOSK_GATEWAY_URL: "https://api.apiosk.test/functions/v1/agent-gateway",
 };
 
 function createTestSupport(overrides = {}) {
@@ -61,9 +66,9 @@ function createTestSupport(overrides = {}) {
 }
 
 // The tool surface itself is asserted in test/surface.test.mjs. What is left
-// here is the OAuth issuer: the handoff to buy.apiosk.com, token minting and
-// refresh, resource metadata, and the challenge on a tool that spends.
-test("authorize() redirects to the buyer portal, never renders a local sign-in page", async () => {
+// here is the OAuth issuer: the handoff to the agent gateway, token minting
+// and refresh, resource metadata, and the challenge on a tool that spends.
+test("authorize() hands off to the agent gateway, never renders a local sign-in page", async () => {
   const support = createTestSupport();
 
   const client = await support.provider.clientsStore.registerClient({
@@ -86,12 +91,20 @@ test("authorize() redirects to the buyer portal, never renders a local sign-in p
 
   assert.equal(res.statusCode, 302);
   const location = new URL(res.redirectedTo);
-  assert.equal(`${location.protocol}//${location.host}`, "https://buy.apiosk.test");
-  assert.equal(location.pathname, "/connect");
+  assert.equal(`${location.protocol}//${location.host}`, "https://api.apiosk.test");
+  /* THE GATEWAY IS MOUNTED UNDER A PATH, and a root-relative `new URL("/v1/…",
+     base)` would throw that path away and address the project root. The whole
+     handoff would then 404 on a host that exists, which is the failure that
+     looks least like its cause. */
+  assert.equal(location.pathname, "/functions/v1/agent-gateway/v1/oauth/authorize");
   assert.equal(location.searchParams.get("client_id"), "apiosk-mcp");
   assert.equal(location.searchParams.get("redirect_uri"), "https://mcp.apiosk.test/authorize/callback");
   assert.equal(location.searchParams.get("response_type"), "code");
-  assert.equal(location.searchParams.get("app_name"), "ChatGPT");
+  // `name`, not `app_name`: that is what the gateway's `startAuthorization`
+  // reads and carries to the approval screen as the suggested connection name.
+  assert.equal(location.searchParams.get("name"), "ChatGPT");
+  // Required by the gateway, which refuses `plain` rather than downgrading.
+  assert.equal(location.searchParams.get("code_challenge_method"), "S256");
   // A fresh, 43-char S256 PKCE challenge for the OUTER (portal-facing) leg —
   // distinct from the ORIGINAL client's own codeChallenge, which travels
   // inside the opaque, signed `state` instead of being forwarded verbatim.
@@ -168,6 +181,91 @@ test("full round trip: authorize -> portal callback -> exchange -> verify", asyn
   assert.equal(authInfo.extra.apiosk_connect_token, "aw_test_minted_token");
   assert.equal(authInfo.resource.href, "https://mcp.apiosk.test/mcp");
   assert.ok(authInfo.scopes.includes("mcp:tools"));
+});
+
+test("a connection survives the upstream access token expiring", async () => {
+  /* THE SECOND DAY. The agent gateway's access tokens live 24 hours and this
+     server's live one, so a client refreshing hourly eventually holds a token
+     carrying a dead upstream credential — and every tool call then fails with
+     a 401 the person can only fix by approving a connection they approved
+     yesterday. Holding the rotating refresh token is what makes that this
+     server's problem instead of theirs. */
+  const refreshCalls = [];
+  const support = createTestSupport({
+    exchangePortalCode: async () => ({
+      connectToken: "apk_live_day_one",
+      refreshToken: "apk_refresh_day_one",
+      // Already spent, so the very next refresh has to renew it.
+      expiresInSeconds: 1,
+    }),
+    refreshPortalToken: async (env, args) => {
+      refreshCalls.push(args.refreshToken);
+      return {
+        connectToken: "apk_live_day_two",
+        refreshToken: "apk_refresh_day_two",
+        expiresInSeconds: 24 * 60 * 60,
+      };
+    },
+  });
+
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "cursor-renewal",
+    client_name: "Cursor",
+    redirect_uris: ["https://cursor.sh/callback"],
+    token_endpoint_auth_method: "none",
+  });
+  const oauthParams = {
+    state: "state_renewal",
+    scopes: ["mcp:tools", "offline_access"],
+    codeChallenge: "original_client_challenge",
+    redirectUri: "https://cursor.sh/callback",
+    resource: new URL("https://mcp.apiosk.test/mcp"),
+  };
+
+  const authorizeRes = createMockResponse({ method: "GET" });
+  await support.provider.authorize(client, oauthParams, authorizeRes);
+  const callbackRes = createMockResponse({ method: "GET" });
+  await support.provider.completePortalCallback(
+    {
+      query: {
+        code: "code_renewal",
+        state: new URL(authorizeRes.redirectedTo).searchParams.get("state"),
+      },
+    },
+    callbackRes
+  );
+  const finalUrl = new URL(
+    JSON.parse(callbackRes.body.match(/window\.location\.replace\((".*?")\)/)[1])
+  );
+
+  const first = await support.provider.exchangeAuthorizationCode(
+    client,
+    finalUrl.searchParams.get("code"),
+    undefined,
+    "https://cursor.sh/callback",
+    new URL("https://mcp.apiosk.test/mcp")
+  );
+  assert.equal(refreshCalls.length, 0, "nothing to renew before the first refresh");
+
+  const renewed = await support.provider.exchangeRefreshToken(client, first.refresh_token, [
+    "mcp:tools",
+    "offline_access",
+  ]);
+
+  assert.deepEqual(refreshCalls, ["apk_refresh_day_one"]);
+  const authInfo = await support.provider.verifyAccessToken(renewed.access_token);
+  assert.equal(authInfo.extra.apiosk_connect_token, "apk_live_day_two");
+
+  /* The refresh token must be REISSUED, not echoed. Handing back the one that
+     came in would hand back the upstream refresh token that was just rotated
+     away, and the refresh after this one would fail. */
+  assert.notEqual(renewed.refresh_token, first.refresh_token);
+  const again = await support.provider.exchangeRefreshToken(client, renewed.refresh_token, [
+    "mcp:tools",
+    "offline_access",
+  ]);
+  assert.ok(again.access_token);
+  assert.equal(refreshCalls.length, 1, "a token with life left in it is not renewed again");
 });
 
 test("portal callback rejects a tampered or unknown state rather than redirecting blindly", async () => {

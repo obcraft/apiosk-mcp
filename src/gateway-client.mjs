@@ -12,7 +12,25 @@
 
 import { ApioskClient, ApioskPaymentRequiredError } from "@apiosk/sdk";
 
-export const DEFAULT_GATEWAY_BASE_URL = "https://gateway.apiosk.com";
+/**
+ * The agent gateway, not the settlement gateway.
+ *
+ * THIS MOVED, and the move is the point. It used to be
+ * `https://gateway.apiosk.com` and it was reached with the buyer's own connect
+ * token, which meant this server could ask that gateway to spend the buyer's
+ * wallet directly. Apiosk has one payment path - the treasury pays and the
+ * balance drops, recorded by `reserve_balance_for_call` and
+ * `settle_balance_charge` - and a connect token pointed at `/v1/do` was a
+ * second one beside it.
+ *
+ * Everything now goes through the agent gateway, which is the same door the
+ * pasted-invitation flow uses. It holds the identity, checks the limits the
+ * buyer set on the approval screen, and forwards to the settlement gateway
+ * under the PLATFORM's service key. This server never again holds a credential
+ * that can move money on its own.
+ */
+export const DEFAULT_GATEWAY_BASE_URL =
+  "https://api.apiosk.com/functions/v1/agent-gateway";
 export const DEFAULT_TIMEOUT_MS = 12_000;
 const MAX_BODY_BYTES = 512 * 1024;
 
@@ -81,7 +99,10 @@ export function createGatewayClient({
   function headers(extra = {}) {
     const merged = new Headers({ accept: "application/json", ...extra });
     if (connectToken) {
-      merged.set("x-apiosk-connect-token", connectToken);
+      // One header now. `x-apiosk-connect-token` went with the settlement
+      // gateway: the agent gateway authenticates a bearer and nothing else,
+      // and a second credential header that no reader consumes is a second
+      // place for a token to leak into a log.
       merged.set("authorization", `Bearer ${connectToken}`);
     }
     return merged;

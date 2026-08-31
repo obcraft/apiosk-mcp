@@ -45,16 +45,14 @@ const MAX_SEGMENT_QUERIES = 3;
 // one question away — see the note where the table is built.
 const EXTERNAL_ROWS_IN_TABLE = 8;
 
-// Fallback mirror of the gateway's BUYER_MARKUP_BPS = 1000 (10%, gateway
-// src/fees.rs). `/v1/discover` quotes each candidate at the provider's list
-// price; the buyer is debited that plus 10%, so the headline price here has to
-// be the buyer total or the menu and the bill disagree. Rounded to USDC's six
-// decimals.
-const BUYER_FEE_MULTIPLIER = 1.1;
-function withBuyerFee(listPrice) {
-  if (typeof listPrice !== "number" || !(listPrice > 0)) return listPrice;
-  return Math.round(listPrice * BUYER_FEE_MULTIPLIER * 1e6) / 1e6;
-}
+/* THE FEE USED TO BE COMPUTED HERE, and it is gone.
+   `BUYER_FEE_MULTIPLIER = 1.1` mirrored the gateway's BUYER_MARKUP_BPS because
+   `/v1/discover` quoted the provider's list price and the buyer is debited that
+   plus 10% — so this file marked every price up itself, or the menu and the
+   bill disagreed. A mirrored constant is a copy of somebody else's decision
+   that goes stale silently, and a price computed in two places is two prices.
+   `/v1/ask` returns the one number there is. Nothing in this module prices
+   anything any more. */
 
 function finiteNumber(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -63,120 +61,87 @@ function finiteNumber(value) {
 }
 
 /**
- * The parameter names an external endpoint publishes, flattened to a list.
+ * One `/v1/ask` result, in the unified result shape.
  *
- * The index listings put them under `input_schema.properties.queryParams`, or
- * occasionally at the top level. They matter more here than anywhere else in
- * the result: the entities in the question — a ticker, a company, a topic — are
- * almost never a provider to go looking for, they are the arguments to one of
- * these endpoints. An agent that can see `ticker` stops hunting for a
- * Bloomberg-branded API and starts asking for ASML.
+ * ONE FUNCTION WHERE THERE WERE TWO, because the agent gateway hands back one
+ * shape where the settlement gateway handed back two — `candidates` priced at
+ * the provider's list price and `external_candidates.offers` priced at the
+ * buyer's. Reading both was why this file computed a fee at all.
+ *
+ * NOTHING HERE PRICES ANYTHING ANY MORE, and that is the point of the move.
+ * `price_usd` arrives as the one number there is: what the call takes off the
+ * balance, fee included, computed where the fee is decided. `withBuyerFee` is
+ * gone with the multiplication it did — a second opinion about a price is a
+ * second price, and the buyer only ever has one.
+ *
+ * `offer` IS CARRIED VERBATIM and is the reason the chain works. It is what
+ * `POST /v1/select` takes, so an agent that discovered something here can act
+ * on it without this file reconstructing a candidate id, a resource URL or a
+ * pair of micro-USD amounts it has no business deciding.
  */
-function inputParamNames(schema) {
-  const properties =
-    schema?.properties?.queryParams?.properties ||
-    schema?.properties?.body?.properties ||
-    schema?.properties ||
-    null;
-  if (!properties || typeof properties !== "object") return [];
-  const required = new Set(
-    Array.isArray(schema?.properties?.queryParams?.required)
-      ? schema.properties.queryParams.required
-      : Array.isArray(schema?.required)
-        ? schema.required
-        : []
-  );
-  return Object.keys(properties)
-    .slice(0, 12)
-    .map((name) => (required.has(name) ? `${sanitizeText(name, 40)}*` : sanitizeText(name, 40)))
-    .filter(Boolean);
-}
+function normalizeResult(result) {
+  const offer = result?.offer;
+  if (!offer || typeof offer !== "object") return null;
 
-/** One reviewed catalogue candidate, in the unified result shape. */
-function normalizeCandidate(candidate) {
-  const listPrice = finiteNumber(candidate?.indicative_price_usd);
+  const reviewed = offer.kind === "reviewed";
+  const url = trimString(offer.resource_url);
+  const slug = trimString(offer.api_slug);
+  const id = reviewed ? `apiosk:${slug}` : `${trimString(offer.source) || "external"}:${url}`;
+  if (id === "apiosk:" || id.endsWith(":")) return null;
+
   const item = {
-    id: `apiosk:${trimString(candidate?.api_slug)}`,
-    source: "apiosk",
-    external: false,
+    id,
+    source: trimString(offer.source) || (reviewed ? "apiosk" : "external"),
+    external: !reviewed,
     executable_via: "apiosk_execute",
-    // The id `/v1/compare` and `/v1/quote` know this offer by. Carried so the
-    // chain has something exact to hold, even though the tools chain on the
-    // query text.
-    candidate_id: trimString(candidate?.candidate_id) || null,
-    capability: trimString(candidate?.capability) || null,
-    listing_slug: trimString(candidate?.api_slug) || null,
-    name: sanitizeText(candidate?.provider || candidate?.api_slug || "", 120),
-    description: sanitizeText(candidate?.description || ""),
-    category: trimString(candidate?.capability) || null,
-    trust_tier: "apiosk_verified",
-    settlement: trimString(candidate?.settlement) || "apiosk-proxied",
-    availability: trimString(candidate?.availability) || null,
-    // Whether Apiosk has ever proxied this provider. Not a score and not a
-    // default: false means unmeasured, which is a different thing from slow.
-    measured: candidate?.measured === true,
-    price_usdc: listPrice,
-    asset: "USDC",
-    network: "base",
-  };
-  if (typeof item.price_usdc === "number" && item.price_usdc > 0) {
-    item.list_price_usdc = listPrice;
-    item.price_usdc = withBuyerFee(listPrice);
-    item.price_includes_apiosk_fee = true;
-  }
-  return item;
-}
-
-/**
- * One external x402 offer, in the same shape.
- *
- * Whether Apiosk can settle it is the gateway's answer, not this file's: the
- * gateway owns the payer wallet, the price ceiling and the host policy, and it
- * is the thing that will actually be charged. When it says "apiosk", the price
- * here is the buyer total it quoted — the provider's asking price plus the same
- * 10% every Apiosk purchase carries, with the provider paid their full price.
- * When it says "direct", no fee is added, and that is not an oversight: Apiosk
- * is not in that transaction, so a marked-up number would invent a fee nobody
- * collects.
- */
-function normalizeExternalOffer(offer) {
-  const url = trimString(offer?.resource);
-  if (!url) return null;
-  const params = inputParamNames(offer?.input_schema);
-  const listPrice = finiteNumber(offer?.price_usd);
-  const viaApiosk = trimString(offer?.settlement) === "apiosk";
-  const buyerPrice = finiteNumber(offer?.buyer_price_usd);
-  const item = {
-    id: `${trimString(offer?.source) || "external"}:${url}`,
-    source: trimString(offer?.source) || "external",
-    external: true,
-    settlement: viaApiosk ? "apiosk" : "direct",
-    settlement_reason: sanitizeText(offer?.settlement_reason || "", 200) || null,
-    executable_via: viaApiosk ? "apiosk_execute" : null,
-    execution_note: sanitizeText(offer?.note || EXTERNAL_EXECUTION_NOTE, 400),
-    name: sanitizeText(offer?.host || url, 120),
-    description: sanitizeText(offer?.description || ""),
-    category: null,
-    trust_tier: "external_unreviewed",
-    url,
-    method: trimString(offer?.method) || "GET",
-    host: sanitizeText(offer?.host || "", 120) || null,
-    input_params: params.length ? params : null,
+    /**
+     * Always Apiosk, and never a choice.
+     *
+     * `/v1/ask` does not return an offer the treasury will not pay for: a
+     * direct-settled x402 endpoint is dropped upstream, in `agentResults`,
+     * because there is no path here that would let a buyer settle it
+     * themselves. The `settlement: "direct"` row this file used to render, and
+     * the paragraph of guidance explaining that Apiosk would not sell it, were
+     * describing something an agent reading this could never act on.
+     */
+    settlement: "apiosk",
+    candidate_id: trimString(offer.candidate_id) || null,
+    capability: trimString(offer.capability) || null,
+    listing_slug: slug || null,
+    name: sanitizeText(result.name || offer.name || slug || url || "", 120),
+    description: sanitizeText(result.description || offer.description || ""),
+    category: trimString(offer.capability) || null,
+    trust_tier: reviewed ? "apiosk_verified" : "external_unreviewed",
+    // Whether Apiosk has ever proxied this provider. `/v1/ask` does not report
+    // it, and false means unmeasured, which is what is true of every row here
+    // — a different thing from slow.
     measured: false,
-    price_usdc: viaApiosk ? (buyerPrice ?? listPrice) : listPrice,
+    price_usdc: finiteNumber(result.price_usd),
     asset: "USDC",
-    network: normalizeNetworkName(offer?.network) || null,
-    pay_to: offer?.pay_to ? sanitizeText(offer.pay_to, 80) : null,
+    network: normalizeNetworkName(offer.network) || (reviewed ? "base" : null),
+    // What `POST /v1/select` takes. See above.
+    offer,
   };
-  if (viaApiosk && listPrice !== null) {
-    item.list_price_usdc = listPrice;
-    item.price_includes_apiosk_fee = buyerPrice !== null;
+
+  if (!reviewed) {
+    item.url = url || null;
+    item.method = trimString(offer.method) || "GET";
+    item.host = sanitizeText(offer.host || "", 120) || null;
+    item.execution_note = EXTERNAL_EXECUTION_NOTE;
   }
+  const params = Array.isArray(result.inputs) ? result.inputs.filter(Boolean) : [];
+  if (params.length) item.input_params = params;
+
   return item;
 }
 
 /**
- * One `/v1/discover` call.
+ * One `/v1/ask` call.
+ *
+ * `/v1/ask` on the agent gateway, not `/v1/discover` on the settlement one.
+ * Same sweep underneath — the agent gateway runs it, twice, widening on the
+ * terms its own reading produced — but priced, filtered to what the treasury
+ * will pay for, and carrying the `offer` object `/v1/select` takes.
  *
  * A 404 is not an error to propagate here. `no_capability` means the reviewed
  * catalogue matched nothing, and it arrives carrying the interpretation and,
@@ -186,7 +151,7 @@ function normalizeExternalOffer(offer) {
  */
 async function discoverOnce(requestJson, params) {
   try {
-    return { payload: await requestJson("/v1/discover", { query: params }), warning: null };
+    return { payload: await requestJson("/v1/ask", { query: params }), warning: null };
   } catch (error) {
     if (error instanceof GatewayError && error.status === 404 && error.body) {
       return { payload: error.body, warning: null };
@@ -226,10 +191,11 @@ export async function runDiscover(args = {}, ctx = {}) {
     include_external: "true",
     max_candidates: String(maxResults),
   };
-  // The ceiling goes to the gateway as the provider's list price, because that
-  // is what it filters on — the buyer's ceiling is 10% higher than the list
-  // price it has to clear.
-  if (maxPrice !== null) baseParams.max_price = String(maxPrice / BUYER_FEE_MULTIPLIER);
+  // Sent as the buyer's ceiling, undivided. `/v1/ask` filters on the ONE price
+  // there is — what the call takes off the balance — so the division by the
+  // fee multiplier that used to happen here is not just unnecessary now, it
+  // would ask for a ceiling 10% under the one the caller set.
+  if (maxPrice !== null) baseParams.max_price = String(maxPrice);
   if (trimString(args.optimize_for)) baseParams.optimize_for = trimString(args.optimize_for);
 
   const queries = [query, ...segments];
@@ -257,21 +223,23 @@ export async function runDiscover(args = {}, ctx = {}) {
   const sourcesSwept = new Set();
   let sweptExternal = false;
 
+  // One flat `results` array per payload where there used to be two lists to
+  // merge, and the reviewed/external split now rides on each row's own `kind`.
+  // Everything the presentation needs that is not a result — the reading of the
+  // job, the vocabulary added to it, the indexes swept — arrives under `search`.
   for (const payload of payloads) {
-    for (const candidate of Array.isArray(payload?.candidates) ? payload.candidates : []) {
-      const item = normalizeCandidate(candidate);
-      if (item.id && !byId.has(item.id)) byId.set(item.id, item);
+    for (const result of Array.isArray(payload?.results) ? payload.results : []) {
+      const item = normalizeResult(result);
+      if (item && !byId.has(item.id)) byId.set(item.id, item);
     }
-    const external = payload?.external_candidates || {};
+    const external = payload?.search?.external || {};
     if (external.searched) sweptExternal = true;
     for (const source of Array.isArray(external.sources_swept) ? external.sources_swept : []) {
       sourcesSwept.add(trimString(source));
     }
-    for (const offer of Array.isArray(external.offers) ? external.offers : []) {
-      const item = normalizeExternalOffer(offer);
-      if (item && !byId.has(item.id)) byId.set(item.id, item);
-    }
-    for (const capability of Array.isArray(payload?.capabilities) ? payload.capabilities : []) {
+    for (const capability of Array.isArray(payload?.search?.capabilities)
+      ? payload.search.capabilities
+      : []) {
       const slug = trimString(capability?.capability);
       if (slug && !capabilities.some((c) => c.capability === slug)) {
         capabilities.push({
@@ -313,7 +281,9 @@ export async function runDiscover(args = {}, ctx = {}) {
   // summarised table is where the external rows quietly went missing before.
   const shownExternal = Math.min(externalCount, EXTERNAL_ROWS_IN_TABLE);
   const tableRows = [...reviewed, ...results.filter((item) => item.external).slice(0, shownExternal)];
-  const pipeline = pipelineOf(primary, {
+  // `search` carries what `pipelineOf` reads — the gateway's own reading of the
+  // job and the vocabulary it added — under the two keys it already expects.
+  const pipeline = pipelineOf(primary?.search ?? {}, {
     reviewed: reviewedCount,
     external: externalCount,
     sources: Array.from(sourcesSwept).filter(Boolean),
@@ -330,7 +300,7 @@ export async function runDiscover(args = {}, ctx = {}) {
   ];
   if (externalCount > 0) {
     guidance.push(
-      "Rows with `external: true` are live x402 endpoints Apiosk found in the wider ecosystem and has never reviewed or measured. Most are still bought here: `settlement: \"apiosk\"` means the gateway pays the provider's own 402 and charges the buyer the `price_usdc` shown, which already includes Apiosk's 10% (`list_price_usdc` is the provider's own price). `settlement: \"direct\"` means Apiosk will not settle that one — `settlement_reason` says why — and its price is the provider's own, paid by the user to the provider. Show them all: an unreviewed endpoint that does the job is worth more to the user than a clean 'nothing found'."
+      "Rows with `external: true` are live x402 endpoints Apiosk found in the wider ecosystem and has never reviewed or measured. Every one of them is bought the same way as a reviewed row and from the same balance: Apiosk pays the provider and takes `price_usdc` off the buyer's balance. Show them all: an unreviewed endpoint that does the job is worth more to the user than a clean 'nothing found'."
     );
   }
   guidance.push(
@@ -361,7 +331,7 @@ export async function runDiscover(args = {}, ctx = {}) {
     // The source list lives in `pipeline.step_3_search`; this says only whether
     // the sweep ran at all, and in what words the gateway describes its reach.
     external_searched: sweptExternal,
-    reach: sanitizeText(primary?.external_candidates?.source || "", 400) || null,
+    reach: sanitizeText(primary?.search?.external?.reach || "", 400) || null,
     results,
     max_price_usdc: maxPrice,
     guidance: guidance.join(" "),

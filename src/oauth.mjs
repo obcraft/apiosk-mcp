@@ -25,15 +25,38 @@ const TRANSPORT_RESOURCE_PATHS = ["/mcp", "/sse", "/messages"];
 const UUID_LIKE_CLIENT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-// The client_id the buyer portal has registered for this server (migration
-// 082, connect_oauth_clients). One client for Claude, ChatGPT and Cursor
-// alike — they arrive with an optional app_name shown beside it.
+// The client_id this server authorizes as. One client for Claude, ChatGPT and
+// Cursor alike — they arrive with an optional app_name shown beside it, which
+// the agent gateway passes to the approval screen as `name`.
+//
+// It matches `^[a-z][a-z0-9-]{0,63}$`, which is what `startAuthorization` in
+// the agent gateway's oauth.ts requires of a client_id.
 const PORTAL_CLIENT_ID = "apiosk-mcp";
-const DEFAULT_BUYER_PORTAL_URL = "https://buy.apiosk.com";
-const DEFAULT_GATEWAY_URL = "https://gateway.apiosk.com";
+/**
+ * The agent gateway. ONE approval screen, and this is how this server reaches
+ * it.
+ *
+ * It used to send the browser to `https://buy.apiosk.com/connect` and redeem
+ * the resulting code at `https://gateway.apiosk.com/v1/connect/oauth/token`.
+ * That was a second approval screen, in a second frontend, backed by a second
+ * token system — beside the one the pasted-invitation flow already used, which
+ * approves at `app.apiosk.com/connect`.
+ *
+ * Now this server starts an ordinary authorization request at the agent
+ * gateway, which validates it and redirects to that same screen. The person
+ * approving a connection from Claude sees the page they see approving one from
+ * a pasted prompt, and sets the limits in the same place.
+ */
+const DEFAULT_GATEWAY_URL = "https://api.apiosk.com/functions/v1/agent-gateway";
 // Same window as the authorization code it feeds into — the round trip to the
 // portal and back happens in one browser session, not across a coffee break.
 const PORTAL_HANDOFF_TTL_SECONDS = AUTHORIZATION_CODE_TTL_SECONDS;
+/**
+ * How close to expiry an upstream access token is renewed rather than passed
+ * on. Comfortably longer than this server's own access token life, so a token
+ * minted here never carries an upstream credential that dies before it does.
+ */
+const UPSTREAM_RENEWAL_MARGIN_SECONDS = 2 * ACCESS_TOKEN_TTL_SECONDS;
 
 function trimString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -263,37 +286,49 @@ function resolveGatewayBaseUrl(env = process.env) {
   );
 }
 
-function resolveBuyerPortalUrl(env = process.env) {
-  return normalizeBaseUrl(env?.APIOSK_BUYER_PORTAL_URL, DEFAULT_BUYER_PORTAL_URL);
+/**
+ * Where the browser is sent to approve: the agent gateway's own authorize
+ * endpoint, which validates the request and redirects on to
+ * `app.apiosk.com/connect`.
+ *
+ * IT IS THE GATEWAY BASE AND NOTHING ELSE. `APIOSK_BUYER_PORTAL_URL` used to
+ * name a frontend here and is deliberately no longer read: a deploy that still
+ * sets it to `buy.apiosk.com` would otherwise be sent to
+ * `buy.apiosk.com/v1/oauth/authorize`, which is not a page, and a wrong host
+ * that answers 404 is worse than one that was never consulted. A deploy that
+ * needs to move this moves `APIOSK_GATEWAY_URL`, which moves the token
+ * endpoint with it - and those two must agree or the code will not redeem.
+ */
+function resolveAuthorizeBaseUrl(env = process.env) {
+  return resolveGatewayBaseUrl(env);
 }
 
 /**
- * Redeem a one-time portal code for a connect token, server side.
+ * One request to the agent gateway's token endpoint, and the reading of its
+ * answer.
  *
- * This is the ONLY place this repository talks money: it calls the gateway's
- * `POST /v1/connect/oauth/token` (gateway/src/connect/oauth.rs) with the code
- * and the PKCE verifier this server generated for its own handoff to
- * buy.apiosk.com. No wallet key, no on-chain transaction, and no x402 payload
- * are ever constructed here — settlement is the gateway's job, not this
- * server's. Injectable so tests can bypass the network call.
+ * The endpoint takes a form or JSON (`readForm` in the gateway's oauth.ts
+ * accepts both), and answers the same shape for both grants this server uses.
+ * No wallet key, no on-chain transaction and no x402 payload is ever
+ * constructed here — settlement belongs to the gateway.
+ *
+ * THE REFRESH TOKEN IS THE PART THAT IS NEW AND THE PART THAT MATTERS. The
+ * agent gateway's access tokens live 24 hours; this server's own live one.
+ * Kept only the access token, a connection would work for a day and then ask
+ * the person to approve something they had already approved. The refresh token
+ * rotates on every use, so what is held is at most a day old.
  */
-async function defaultExchangePortalCode(env, { code, codeVerifier, redirectUri }) {
-  const url = new URL("/v1/connect/oauth/token", `${resolveGatewayBaseUrl(env)}/`).href;
+async function requestUpstreamToken(env, grant, failureMessage) {
+  const url = `${resolveGatewayBaseUrl(env)}/v1/oauth/token`;
   const response = await fetchJsonWithBody(url, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "authorization_code",
-      code,
-      code_verifier: codeVerifier,
-      redirect_uri: redirectUri,
-      client_id: PORTAL_CLIENT_ID,
-    }),
+    body: JSON.stringify({ ...grant, client_id: PORTAL_CLIENT_ID }),
   });
 
   if (!response.ok) {
     throw statusError(
-      responseMessage(response.body, "Could not exchange the portal code for a connect token."),
+      responseMessage(response.body, failureMessage),
       response.status >= 400 ? response.status : 502
     );
   }
@@ -301,13 +336,41 @@ async function defaultExchangePortalCode(env, { code, codeVerifier, redirectUri 
   const body = response.body && typeof response.body === "object" ? response.body : {};
   const connectToken = trimString(body.access_token);
   if (!connectToken) {
-    throw statusError("The gateway did not return a connect token.", 502);
+    throw statusError("The gateway did not return an access token.", 502);
   }
 
   return {
     connectToken,
+    refreshToken: trimString(body.refresh_token) || null,
     expiresInSeconds: Number.isFinite(Number(body.expires_in)) ? Number(body.expires_in) : null,
   };
+}
+
+/**
+ * Redeem the one-time code the approval screen produced, server side.
+ *
+ * Injectable so tests can bypass the network call.
+ */
+async function defaultExchangePortalCode(env, { code, codeVerifier, redirectUri }) {
+  return await requestUpstreamToken(
+    env,
+    {
+      grant_type: "authorization_code",
+      code,
+      code_verifier: codeVerifier,
+      redirect_uri: redirectUri,
+    },
+    "Could not exchange the approval code for an access token."
+  );
+}
+
+/** Trade a rotating upstream refresh token for a fresh pair. */
+async function defaultRefreshPortalToken(env, { refreshToken }) {
+  return await requestUpstreamToken(
+    env,
+    { grant_type: "refresh_token", refresh_token: refreshToken },
+    "Could not refresh the Apiosk connection."
+  );
 }
 
 class ApioskOAuthClientsStore {
@@ -412,6 +475,7 @@ class ApioskHostedOAuthProvider {
     appName,
     resourceName,
     exchangePortalCode,
+    refreshPortalToken,
   }) {
     this.env = env;
     this.secret = secret;
@@ -421,6 +485,7 @@ class ApioskHostedOAuthProvider {
     this.resourceName = resourceName;
     // Injectable so tests can bypass the network call to the gateway.
     this.exchangePortalCode = exchangePortalCode || defaultExchangePortalCode;
+    this.refreshPortalToken = refreshPortalToken || defaultRefreshPortalToken;
     this.clientsStore = new ApioskOAuthClientsStore(secret);
     this.callbackUrl = new URL("/authorize/callback", this.issuerUrl).href;
     // Audiences we honour on an access token. A client that connected via
@@ -442,15 +507,19 @@ class ApioskHostedOAuthProvider {
   }
 
   /**
-   * Start the handoff to buy.apiosk.com.
+   * Start the handoff to the agent gateway, which approves at
+   * `app.apiosk.com/connect`.
    *
-   * Identity, wallet funding and spending limits all live at the buyer
-   * portal (mcp/01-portal-handoff.md) — this server never renders a sign-in
-   * page and never sees a wallet key. It starts an OAuth 2.0 authorization
-   * code request with PKCE of its own, addressed to the portal, and stashes
-   * the ORIGINAL request (from Claude, ChatGPT, ...) in a signed `state` so
-   * `completePortalCallback` can pick the flow back up when the portal sends
-   * the browser back.
+   * Identity, funding and spending limits all live there — this server never
+   * renders a sign-in page and never sees a wallet key. It starts an OAuth 2.0
+   * authorization code request with PKCE of its own and stashes the ORIGINAL
+   * request (from Claude, ChatGPT, ...) in a signed `state` so
+   * `completePortalCallback` can pick the flow back up when the browser comes
+   * back.
+   *
+   * `name` rather than `app_name`: that is what `startAuthorization` reads and
+   * carries to the approval screen as the suggested connection name, which the
+   * person can edit there.
    */
   async authorize(client, params, res) {
     const verifier = crypto.randomBytes(48).toString("base64url");
@@ -471,15 +540,21 @@ class ApioskHostedOAuthProvider {
       PORTAL_HANDOFF_TTL_SECONDS
     ).token;
 
+    // Appended, not resolved as a root-relative path: the agent gateway lives
+    // UNDER a path (`/functions/v1/agent-gateway`), and `new URL("/v1/...",
+    // base)` would throw that path away and address the project root.
     const portalUrl = buildRedirectUri(
-      new URL("/connect", resolveBuyerPortalUrl(this.env)).href,
+      `${resolveAuthorizeBaseUrl(this.env)}/v1/oauth/authorize`,
       {
         client_id: PORTAL_CLIENT_ID,
         redirect_uri: this.callbackUrl,
         response_type: "code",
         code_challenge: challenge,
+        // Required, and refused rather than assumed: `startAuthorization`
+        // answers `plain` with an error instead of downgrading.
+        code_challenge_method: "S256",
         state: handoffState,
-        app_name: trimString(client.client_name) || undefined,
+        name: trimString(client.client_name) || undefined,
       }
     );
 
@@ -564,9 +639,22 @@ class ApioskHostedOAuthProvider {
 
   async finishAuthorization(res, client, params, exchange) {
     const connectToken = trimString(exchange.connectToken);
-    const maxExpiry = Number.isFinite(exchange.expiresInSeconds)
+    const upstreamRefresh = trimString(exchange.refreshToken);
+    const upstreamExpiresAt = Number.isFinite(exchange.expiresInSeconds)
       ? getIssuedAtSeconds() + exchange.expiresInSeconds
       : null;
+
+    /**
+     * The cap, and when there is not one.
+     *
+     * This server's tokens may never outlive what they carry, so an upstream
+     * access token with no way to renew it caps everything issued from it.
+     * HOLDING A REFRESH TOKEN REMOVES THE CAP: the upstream access token
+     * expiring is then a thing this server fixes on the next refresh rather
+     * than a thing the person fixes by approving again. Without this the whole
+     * connection died every 24 hours, which is the agent gateway's access TTL.
+     */
+    const maxExpiry = upstreamRefresh ? null : upstreamExpiresAt;
 
     const authorizationCode = buildIssuedToken(
       this.secret,
@@ -578,7 +666,8 @@ class ApioskHostedOAuthProvider {
         scopes: params.scopes?.length ? params.scopes : [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE],
         resource: params.resource ? params.resource.href : this.mcpServerUrl.href,
         apioskConnectToken: connectToken || undefined,
-        apioskConnectTokenExpiresAt: maxExpiry || undefined,
+        apioskConnectTokenExpiresAt: upstreamExpiresAt || undefined,
+        apioskRefreshToken: upstreamRefresh || undefined,
       },
       AUTHORIZATION_CODE_TTL_SECONDS,
       maxExpiry
@@ -625,9 +714,11 @@ class ApioskHostedOAuthProvider {
     }
 
     const requestedResource = resource ? resource.href : payload.resource || this.mcpServerUrl.href;
-    const maxExpiry = Number.isFinite(payload.apioskConnectTokenExpiresAt)
-      ? payload.apioskConnectTokenExpiresAt
-      : null;
+    // Uncapped when a refresh token came with it. See `finishAuthorization`.
+    const maxExpiry =
+      !payload.apioskRefreshToken && Number.isFinite(payload.apioskConnectTokenExpiresAt)
+        ? payload.apioskConnectTokenExpiresAt
+        : null;
     const tokenPayload = {
       clientId: client.client_id,
       scopes:
@@ -637,6 +728,7 @@ class ApioskHostedOAuthProvider {
       resource: requestedResource,
       apioskConnectToken: payload.apioskConnectToken,
       apioskConnectTokenExpiresAt: payload.apioskConnectTokenExpiresAt,
+      apioskRefreshToken: payload.apioskRefreshToken,
     };
 
     const accessToken = buildIssuedToken(
@@ -677,26 +769,80 @@ class ApioskHostedOAuthProvider {
         scopes.filter((scope) => Array.isArray(payload.scopes) && payload.scopes.includes(scope)) :
         payload.scopes;
     const requestedResource = resource ? resource.href : payload.resource || this.mcpServerUrl.href;
-    const maxExpiry = Number.isFinite(payload.apioskConnectTokenExpiresAt)
-      ? payload.apioskConnectTokenExpiresAt
-      : null;
+
+    /**
+     * Renew the upstream token when it is spent, before minting one that
+     * carries it.
+     *
+     * THIS IS WHERE A CONNECTION SURVIVES ITS SECOND DAY. The agent gateway's
+     * access tokens live 24 hours and this server's live one, so a client that
+     * refreshes hourly reaches a point where every token it is handed carries
+     * an upstream credential that is already dead — and every tool call fails
+     * with a 401 the person can do nothing about except approve again.
+     *
+     * Renewed a little BEFORE expiry, not at it: a token that dies between
+     * being minted here and being used by the next tool call is the same
+     * failure arriving less often, which is worse to diagnose than one that
+     * arrives reliably.
+     *
+     * A refusal upstream is not fatal here. The old token may still have life
+     * in it, and if it does not, the tool call is where that is reported - with
+     * the gateway's own words, to a caller that is asking for something rather
+     * than to one that is only renewing.
+     */
+    let upstreamToken = payload.apioskConnectToken;
+    let upstreamRefresh = payload.apioskRefreshToken;
+    let upstreamExpiresAt = payload.apioskConnectTokenExpiresAt;
+    const spent =
+      Number.isFinite(upstreamExpiresAt) &&
+      upstreamExpiresAt - getIssuedAtSeconds() < UPSTREAM_RENEWAL_MARGIN_SECONDS;
+
+    if (upstreamRefresh && spent) {
+      try {
+        const renewed = await this.refreshPortalToken(this.env, { refreshToken: upstreamRefresh });
+        upstreamToken = trimString(renewed.connectToken) || upstreamToken;
+        // Rotating: the one just spent is dead, so keeping it would guarantee
+        // the next renewal fails.
+        upstreamRefresh = trimString(renewed.refreshToken) || null;
+        upstreamExpiresAt = Number.isFinite(renewed.expiresInSeconds)
+          ? getIssuedAtSeconds() + renewed.expiresInSeconds
+          : null;
+      } catch {
+        // Left as it was. See above.
+      }
+    }
+
+    const tokenPayload = {
+      clientId: client.client_id,
+      scopes: grantedScopes,
+      resource: requestedResource,
+      apioskConnectToken: upstreamToken,
+      apioskConnectTokenExpiresAt: upstreamExpiresAt,
+      apioskRefreshToken: upstreamRefresh,
+    };
+    // Uncapped when a refresh token remains. See `finishAuthorization`.
+    const maxExpiry =
+      !upstreamRefresh && Number.isFinite(upstreamExpiresAt) ? upstreamExpiresAt : null;
     const accessToken = buildIssuedToken(
       this.secret,
       "access",
-      {
-        clientId: client.client_id,
-        scopes: grantedScopes,
-        resource: requestedResource,
-        apioskConnectToken: payload.apioskConnectToken,
-        apioskConnectTokenExpiresAt: payload.apioskConnectTokenExpiresAt,
-      },
+      tokenPayload,
       ACCESS_TOKEN_TTL_SECONDS,
       maxExpiry
     );
 
     return {
       access_token: accessToken.token,
-      refresh_token: refreshToken,
+      // Reissued rather than returned, because the upstream token it carries
+      // may have just changed. Handing back the one that came in would hand
+      // back a rotated-away upstream refresh token with it.
+      refresh_token: buildIssuedToken(
+        this.secret,
+        "refresh",
+        tokenPayload,
+        REFRESH_TOKEN_TTL_SECONDS,
+        maxExpiry
+      ).token,
       token_type: "bearer",
       expires_in: Math.max(1, accessToken.expiresAt - getIssuedAtSeconds()),
       scope: Array.isArray(grantedScopes) ? grantedScopes.join(" ") : DEFAULT_SCOPE,
@@ -923,6 +1069,7 @@ export function createHostedOAuthSupport({
   appName = "Apiosk",
   resourceName = "Apiosk MCP",
   exchangePortalCode,
+  refreshPortalToken,
 } = {}) {
   const secret = resolveOAuthSecret(env);
   const provider = new ApioskHostedOAuthProvider({
@@ -933,6 +1080,7 @@ export function createHostedOAuthSupport({
     appName,
     resourceName,
     exchangePortalCode,
+    refreshPortalToken,
   });
 
   const oauthMetadata = createOAuthMetadata({
