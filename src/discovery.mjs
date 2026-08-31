@@ -119,8 +119,17 @@ function normalizeResult(result) {
     price_usdc: finiteNumber(result.price_usd),
     asset: "USDC",
     network: normalizeNetworkName(offer.network) || (reviewed ? "base" : null),
-    // What `POST /v1/select` takes. See above.
-    offer,
+    /**
+     * What `POST /v1/select` takes, and the only part of the offer that leaves
+     * this module.
+     *
+     * The offer OBJECT is deliberately not carried through. It holds the two
+     * micro-USD legs, and an agent that can hand those back is an agent that
+     * can hand back different ones — so the gateway signs what it priced and
+     * this is that signature. Opaque here, refused there if altered, dead after
+     * an hour.
+     */
+    offer_token: trimString(result.offer_token) || null,
   };
 
   if (!reviewed) {

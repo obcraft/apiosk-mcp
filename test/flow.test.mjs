@@ -40,9 +40,12 @@ function jsonHandler(body, status = 200) {
       } catch {
         parsed = raw;
       }
-      seen.push({ method: req.method, url: req.url, body: parsed, headers: req.headers });
+      const request = { method: req.method, url: req.url, body: parsed, headers: req.headers };
+      seen.push(request);
       res.writeHead(status, { "content-type": "application/json" });
-      res.end(JSON.stringify(body));
+      // A FUNCTION when one stub has to answer two routes differently — which
+      // it does now that a purchase is `/v1/select` then `/v1/run`.
+      res.end(JSON.stringify(typeof body === "function" ? body(request) : body));
     });
   };
   handler.seen = seen;
@@ -88,9 +91,16 @@ test("compare POSTs the job to /v1/quote and surfaces the offer_id an agent hand
 
   const payload = JSON.parse(result.content[0].text);
   assert.equal(payload.offers[0].offer_id, "signed.token.abc");
-  // The guidance must tell the agent to carry that id into apiosk_execute.
-  assert.match(payload.guidance, /offer_id/);
+  /* THE ID IS STILL THERE AND IS NO LONGER THE THING YOU BUY WITH.
+     `offer_id` pins a quote on the settlement gateway, which is what compare
+     talks to. A purchase goes through the agent gateway now — `/v1/select`
+     then `/v1/run` — against the signed `offer_token` apiosk_discover minted.
+     So the guidance has to send the agent back to the discovery row, or it
+     would send it to apiosk_execute with an argument that is refused. */
+  assert.match(payload.guidance, /offer_token/);
+  assert.match(payload.guidance, /apiosk_discover/);
   assert.match(payload.guidance, /apiosk_execute/);
+  assert.doesNotMatch(payload.guidance, /THAT offer's `offer_id`/);
 });
 
 test("compare restates each offer price as the buyer total, list + 10%", async () => {
@@ -323,7 +333,9 @@ test("the wider ecosystem is in the comparison table too, priced and settled by 
   assert.equal(direct.price_includes_apiosk_fee, false);
   assert.equal(direct.executable_via, null);
   assert.equal(settled.offer_id, null);
-  assert.match(data.guidance_for_external, /pays the provider's own 402/);
+  // Same balance, same way in, whichever half of the sweep a row came from.
+  assert.match(data.guidance_for_external, /from the same balance/);
+  assert.match(data.guidance_for_external, /offer_token/);
 });
 
 test("an empty offer set says which way out there is, and never invents one", async () => {
@@ -336,16 +348,25 @@ test("an empty offer set says which way out there is, and never invents one", as
   assert.ok(!/\| 1 \|/.test(data.presentation));
 });
 
-test("an external row is executed through the gateway's payer, at the price shown", async () => {
-  // The row has no offer_id — nobody reviewed the endpoint and no price was
-  // signed — so the price the user was shown travels with the call, and the
-  // gateway refuses rather than pays if the live 402 asks for more.
-  const handler = jsonHandler({ data: { headlines: [] }, receipt: { total_usdc: "0.0055" } });
+test("a purchase goes select then run, through the one payment path", async () => {
+  /* WHAT THIS REPLACED. There were two tests here, one for `POST /v1/do` and
+     one for `POST /v1/x402/fetch`, both on the settlement gateway and both
+     reached with the buyer's own connect token — this server asking that
+     gateway to spend a buyer's wallet directly, beside the path the app uses.
+
+     Both of those still happen, one layer down: `/v1/run` picks between them
+     from the selection's own kind. What changed is who is asked, and what it
+     does first — reserve against the BALANCE, and settle or refund. */
+  const handler = jsonHandler(({ url }) =>
+    url === "/v1/select"
+      ? { selection_id: "sel-1" }
+      : { data: { headlines: [] }, receipt: { total_usdc: "0.0055" } }
+  );
   const result = await withStubGateway(handler, ({ gateway }) =>
     runExecute(
       {
-        url: "https://www.x402financialdata.com/news",
-        confirmed_price_usdc: 0.005,
+        offer_token: "tok_x402financialdata",
+        prompt: "latest ASML headlines",
         max_price_usdc: 0.0055,
         query: { ticker: "ASML" },
       },
@@ -353,29 +374,37 @@ test("an external row is executed through the gateway's payer, at the price show
     )
   );
 
-  const sent = handler.seen[0];
-  assert.equal(sent.method, "POST");
-  assert.equal(sent.url, "/v1/x402/fetch");
-  assert.equal(sent.body.confirmed_price_usdc, 0.005);
-  // The ceiling the user saw is the TOTAL, fee included, so it bounds the total.
-  assert.equal(sent.body.max_total_usdc, 0.0055);
-  assert.deepEqual(sent.body.query, { ticker: "ASML" });
+  const [select, run] = handler.seen;
+  assert.equal(select.url, "/v1/select");
+  assert.equal(select.body.offer_token, "tok_x402financialdata");
+  // The job is recorded with the pick, so the charge reads back as an answer to
+  // a question rather than a bare line in a ledger.
+  assert.equal(select.body.prompt, "latest ASML headlines");
+  // THE PRICE IS NOT IN THIS REQUEST. It is inside the signed token, which this
+  // server cannot read and could not alter if it could.
+  assert.equal(select.body.offer, undefined);
+
+  assert.equal(run.url, "/v1/run");
+  assert.equal(run.body.selection_id, "sel-1");
+  assert.equal(run.body.max_price_usdc, 0.0055);
+  assert.deepEqual(run.body.query, { ticker: "ASML" });
   // A retry after a timeout must not pay twice.
-  assert.match(sent.headers["idempotency-key"], /^[0-9a-f-]{36}$/);
+  assert.match(run.body.idempotency_key, /^[0-9a-f-]{36}$/);
 
   const body = JSON.parse(result.content[0].text);
   assert.equal(body.status, "ok");
-  assert.equal(body.settlement, "apiosk");
+  assert.equal(body.selection_id, "sel-1");
 });
 
-test("an external endpoint without a confirmed price is refused before it is called", async () => {
+test("a purchase without an offer token is refused before anything is sent", async () => {
   const handler = jsonHandler({});
   const result = await withStubGateway(handler, ({ gateway }) =>
-    runExecute({ url: "https://www.x402financialdata.com/news" }, { gateway, env: {} })
+    runExecute({ prompt: "latest ASML headlines" }, { gateway, env: {} })
   );
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /confirmed_price_usdc/);
-  // Nothing was sent: there was no ceiling to refuse against.
+  assert.match(result.content[0].text, /offer_token/);
+  // Nothing was recorded and nothing was run: there was no signed price to run
+  // against, and inventing one is the whole thing the token prevents.
   assert.equal(handler.seen.length, 0);
 });
 

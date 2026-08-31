@@ -5,21 +5,29 @@
 // asking whether it can spend should not have to pick between four candidates
 // and get a different half of the answer from each.
 //
-// Nothing here signs anybody in. Identity, wallets, funding and limits belong to
-// the buyer portal; this tool reports what the current connection can do and,
-// when there is nothing to report, hands back the link.
+// Nothing here signs anybody in. Identity, funding and limits belong to Apiosk;
+// this tool reports what the current connection can do and, when there is
+// nothing to report, hands back the link.
 
 import { GatewayError } from "../gateway-client.mjs";
 import { content, trimString } from "../tool-result.mjs";
 
-export const BUYER_PORTAL_URL = "https://buy.apiosk.com";
+/**
+ * Where a person tops up and sets limits — app.apiosk.com, the same screen the
+ * approval happens on.
+ *
+ * It was `buy.apiosk.com`, which was a second frontend with a second connect
+ * page. Sending somebody there to fix a limit they had set here would have
+ * shown them a different account view of the same money.
+ */
+export const BUYER_PORTAL_URL = "https://app.apiosk.com";
 const CONNECT_PATH = "/connect";
 
 export const CONNECT_TOOL = {
   name: "apiosk_connect",
   title: "Check the Apiosk connection",
   description:
-    "Report whether this session can buy: connected or not, payable or not, which wallet, which spending policy, and the exact per-transaction and daily limits. Call it first in any conversation that might end in a paid API call, and again whenever a purchase is refused, so you can tell the user what to fix. When there is no connection it returns the buy.apiosk.com link to set one up — signing in, funding a wallet and setting limits all happen there, never here. Reads only; spends nothing.",
+    "Report whether this session can buy: connected or not, payable or not, the balance left, and the exact per-call and daily limits with how much of today's allowance is gone. Call it first in any conversation that might end in a paid API call, and again whenever a purchase is refused, so you can tell the user what to fix. When there is no connection it returns the link to set one up — signing in, topping up and setting limits all happen there, never here. Reads only; spends nothing.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
 };
@@ -45,9 +53,9 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
     });
   }
 
-  let me;
+  let account;
   try {
-    me = await gateway.requestJson("/v1/me");
+    account = await gateway.requestJson("/v1/balance");
   } catch (error) {
     if (error instanceof GatewayError && (error.status === 401 || error.status === 403)) {
       return content({
@@ -56,77 +64,57 @@ export async function runConnect(_args = {}, { env = process.env, authInfo = nul
         connect_url: connectUrl(env),
         error_code: error.code,
         message:
-          "The connection is no longer valid — it expired, or it was revoked in the buyer portal. Do not retry the call that failed.",
+          "The connection is no longer valid — it expired, or it was revoked in Apiosk. Do not retry the call that failed.",
         next_steps: [`Reconnect at ${connectUrl(env)}, then call apiosk_connect again.`],
       });
     }
     throw error;
   }
 
-  // /v1/me reports wallets as an ARRAY, each with its own on-chain USDC
-  // balance and caps (gateway src/v1_routes/me.rs). There is no top-level
-  // wallet_id / balance / limits / payable field — reading those returned
-  // undefined and made every connection look unpayable.
-  const wallets = Array.isArray(me?.wallets) ? me.wallets : [];
+  /**
+   * A BALANCE, NOT A WALLET, and that is the whole of this rewrite.
+   *
+   * `/v1/me` on the settlement gateway reported an ARRAY of on-chain wallets
+   * with their own caps, and this file reasoned about which of them could pay.
+   * None of that was ever the buyer's view: what a person tops up in Apiosk and
+   * watches go down is one balance, and the wallet behind it is the treasury's,
+   * not theirs. Reporting an on-chain figure here also meant reporting 0 for a
+   * perfectly funded buyer, because a managed balance is a ledger and not a
+   * chain address.
+   *
+   * So there is one number now, it is the same number the app shows, and the
+   * limits beside it are the ones the person set on the approval screen.
+   */
+  const balance = Number(account?.balance_usdc ?? account?.balance_usd) || 0;
+  const limits = account?.limits || {};
+  const dailyRemaining = Number.isFinite(Number(limits.daily_remaining_usd))
+    ? Number(limits.daily_remaining_usd)
+    : null;
 
-  // A wallet is spendable when it is attached and still has daily budget left.
-  // Crucially, on-chain USDC balance is NOT a gate here: it is reported for the
-  // agent to reason about, but the gateway is the authority on whether funds
-  // suffice and refuses at settlement with the exact reason (apiosk_execute ->
-  // payment_required). A managed wallet funded through the buyer portal can read
-  // 0 on-chain here — the portal's "available to spend" is its own ledger, not
-  // this on-chain figure — so blocking on balance would wrongly refuse a funded
-  // buyer, which is exactly what it did.
-  const walletHasBudget = (w) => {
-    if (!w) return false;
-    const dailyCap = Number.isFinite(w.cap_per_day_usdc) ? w.cap_per_day_usdc : null;
-    const spentToday = Number(w.spent_today_usdc) || 0;
-    return dailyCap === null || dailyCap - spentToday > 0;
-  };
-
-  const payableWallet = wallets.find(walletHasBudget) || null;
-  const wallet = payableWallet || wallets[0] || null;
-  const payable = Boolean(payableWallet);
-  const policy = me?.policy || null;
-
-  // Only genuinely terminal cases here: no wallet at all, or a wallet whose
-  // daily cap is already spent. An empty on-chain balance is left to the
-  // gateway to report at settlement, not pre-judged as unpayable.
-  let notPayableReason = "no wallet is attached to this connection";
-  if (wallet) {
-    const spentToday = Number(wallet.spent_today_usdc) || 0;
-    const dailyCap = Number.isFinite(wallet.cap_per_day_usdc) ? wallet.cap_per_day_usdc : null;
-    if (dailyCap !== null && dailyCap - spentToday <= 0) {
-      notPayableReason = "today's spending limit is used up";
-    }
-  }
+  // Spendable when there is money AND today's allowance is not used up. The
+  // gateway is still the authority and refuses at settlement with the exact
+  // reason (apiosk_execute -> payment_required); this only avoids sending an
+  // agent shopping with nothing to spend.
+  const payable = balance > 0 && (dailyRemaining === null || dailyRemaining > 0);
+  const notPayableReason =
+    balance <= 0 ? "the balance is empty" : "today's spending limit is used up";
 
   return content({
     status: "connected",
     payable,
-    wallet: wallet
-      ? {
-          address: wallet.address ?? null,
-          status: wallet.status ?? null,
-          balance_usdc: wallet.balance_usdc ?? null,
-        }
-      : null,
-    policy: policy ? { id: policy.id ?? null, name: policy.name ?? null } : null,
-    limits: wallet
-      ? {
-          per_tx_limit_usdc: wallet.cap_per_tx_usdc ?? null,
-          daily_limit_usdc: wallet.cap_per_day_usdc ?? null,
-          spent_today_usdc: wallet.spent_today_usdc ?? null,
-          allowed_domains: me?.allowed_domains ?? null,
-        }
-      : null,
-    rails: Array.isArray(me?.rails) ? me.rails : [],
-    portal_url: BUYER_PORTAL_URL,
+    balance_usd: balance,
+    limits: {
+      per_call_usd: limits.per_call_usd ?? null,
+      daily_usd: limits.daily_usd ?? null,
+      daily_spent_usd: limits.daily_spent_usd ?? null,
+      daily_remaining_usd: dailyRemaining,
+    },
+    connect_url: connectUrl(env),
     message: payable
       ? "Connected and able to pay. State the price before every purchase, and stay inside the limits above."
       : `Connected, but not able to pay yet: ${notPayableReason}.`,
     next_steps: payable
       ? ["Call apiosk_discover with the job in plain words."]
-      : [`Top up your balance at ${BUYER_PORTAL_URL}, then call apiosk_connect again.`],
+      : [`Top up or raise the limit at ${connectUrl(env)}, then call apiosk_connect again.`],
   });
 }
