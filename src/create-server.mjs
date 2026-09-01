@@ -9,6 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
+import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { PROMPTS, getPrompt } from "./prompts.mjs";
 
 /**
@@ -68,15 +69,20 @@ export const SERVER_INFO = {
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.
-export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into a paid API call the buyer authorised. Five tools, one path, and only one of them spends anything:
+export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into a paid API call the buyer authorised. Six tools, one path, and only one of them spends anything:
 
+  apiosk                  -> one-shot answer: the shared App ranking's top runnable provider, exact price, required inputs and Approve/Deny card. Spends nothing.
   apiosk_connect          -> can this session buy? Which wallet, which policy, which limits. Spends nothing.
   apiosk_discover         -> what can perform this job? Sweeps the reviewed Apiosk catalogue AND the wider ecosystem of paid APIs. Spends nothing.
   apiosk_compare          -> how do the candidates perform against MY requirements? Price, measured p95 latency, measured success rate and input fit, each scored with the weights that produced the number, and each offer carrying a stable offer_id. Spends nothing.
   apiosk_execute          -> run the offer THE USER CHOSE, at the price you showed them. Apiosk settles it from the connected balance.
   apiosk_approval_status  -> the state of a purchase the buyer's rules put on hold. Spends nothing.
 
-Run them in that order. The one rule that matters: apiosk_compare returns offers, and a PERSON picks one. State the exact price, show the alternatives, wait for a choice, then pass that offer_id and max_price_usdc to apiosk_execute. Never choose for the user, never call apiosk_execute to explore, and never fabricate or placeholder data — if nothing fits the budget, say so plainly.
+Use one of two routes:
+  - quick ask: 'apiosk' for the top ranked runnable recommendation and its approval card.
+  - comparison flow: apiosk_discover -> apiosk_compare for ranked alternatives.
+
+The one rule that matters: a PERSON approves or denies the offer. State the exact price. The quick card already has Approve and Deny; do not add a second prose confirmation. Only Approve may continue to apiosk_execute. Never call apiosk_execute to explore, and never fabricate or placeholder data — if nothing clears the shared relevance floor or budget, say so plainly.
 
 Three outcomes of apiosk_execute are not failures and must not be retried blindly:
   approval_required  the buyer's rules need a human to say yes. Tell the user, then poll apiosk_approval_status. Retry only after it reports approved.
@@ -113,18 +119,29 @@ export function createApioskMcpServer(options = {}) {
         mimeType: "text/html+skybridge",
         _meta: APIO_RESULT_CANVAS_META,
       },
+      {
+        uri: APIO_OFFER_CARD_URI,
+        name: "Apiosk offer approval card",
+        mimeType: "text/html+skybridge",
+        _meta: APIO_OFFER_CARD_META,
+      },
     ],
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    if (request.params.uri !== APIO_RESULT_CANVAS_URI) throw new Error("Unknown Apiosk resource");
+    const resources = {
+      [APIO_RESULT_CANVAS_URI]: { text: APIO_RESULT_CANVAS_HTML, meta: APIO_RESULT_CANVAS_META },
+      [APIO_OFFER_CARD_URI]: { text: APIO_OFFER_CARD_HTML, meta: APIO_OFFER_CARD_META },
+    };
+    const resource = resources[request.params.uri];
+    if (!resource) throw new Error("Unknown Apiosk resource");
     return {
       contents: [
         {
-          uri: APIO_RESULT_CANVAS_URI,
+          uri: request.params.uri,
           mimeType: "text/html+skybridge",
-          text: APIO_RESULT_CANVAS_HTML,
-          _meta: APIO_RESULT_CANVAS_META,
+          text: resource.text,
+          _meta: resource.meta,
         },
       ],
     };

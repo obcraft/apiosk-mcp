@@ -2,7 +2,7 @@
 
 Supersedes `marketplace-submission-2026-04-08.md`, which still described the
 publisher and local-wallet tools removed on 2026-08-19 (see `../CLAUDE.md`).
-The current server exposes exactly five tools; this doc describes only those.
+The current server exposes exactly six tools; this doc describes only those.
 
 ## Open risk — read before submitting
 
@@ -86,13 +86,14 @@ ahead of.
 `https://mcp.apiosk.com/mcp` (Streamable HTTP). Legacy SSE at `/sse` for
 older clients.
 
-## Tool surface (current — five tools, in flow order)
+## Tool surface (current — six tools, in flow order)
 
 | Tool | Spends money | Behind OAuth | Annotations |
 | --- | --- | --- | --- |
+| `apiosk` | No | Yes | readOnly, idempotent, openWorld |
 | `apiosk_connect` | No | No | readOnly, idempotent |
-| `apiosk_discover` | No | No | readOnly, idempotent, openWorld |
-| `apiosk_compare` | No | No | readOnly, idempotent |
+| `apiosk_discover` | No | Yes | readOnly, idempotent, openWorld |
+| `apiosk_compare` | No | Yes | readOnly, idempotent, openWorld |
 | `apiosk_execute` | **Yes** | Yes | destructive, non-idempotent, openWorld |
 | `apiosk_approval_status` | No | Yes | readOnly, idempotent |
 

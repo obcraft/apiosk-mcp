@@ -387,7 +387,11 @@ test("a purchase goes select then run, through the one payment path", async () =
   assert.equal(run.url, "/v1/run");
   assert.equal(run.body.selection_id, "sel-1");
   assert.equal(run.body.max_price_usdc, 0.0055);
-  assert.deepEqual(run.body.query, { ticker: "ASML" });
+  assert.deepEqual(run.body.input_parts, {
+    path: {},
+    query: { ticker: "ASML" },
+    body: {},
+  });
   // A retry after a timeout must not pay twice.
   assert.match(run.body.idempotency_key, /^[0-9a-f-]{36}$/);
 
@@ -407,4 +411,3 @@ test("a purchase without an offer token is refused before anything is sent", asy
   // against, and inventing one is the whole thing the token prevents.
   assert.equal(handler.seen.length, 0);
 });
-

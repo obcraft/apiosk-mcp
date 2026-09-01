@@ -88,6 +88,7 @@
         "finance"
       ],
       "tools": [
+        "apiosk",
         "apiosk_connect",
         "apiosk_discover",
         "apiosk_compare",

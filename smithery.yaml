@@ -4,15 +4,10 @@
 # :3000) and ships with a Dockerfile, so Smithery builds and runs the container
 # rather than a language-specific runtime.
 #
-# ON CONFIG: there are no required connection parameters, which is deliberate
-# rather than an omission. Three of the five tools — apiosk_connect,
-# apiosk_discover and apiosk_compare — spend nothing and are served pre-auth, so
-# someone can install this and get a real answer without handing over anything.
-# A credential is only needed to SPEND (apiosk_execute) or to read a held
-# purchase (apiosk_approval_status), and that arrives per call through the
-# hosted OAuth flow or an Apiosk connect token rather than through install-time
-# config. Requiring a key up front to run a free comparison would be a worse
-# first run and a false claim about what the tool needs.
+# ON CONFIG: there are no required install-time parameters. Hosted clients are
+# onboarded by OAuth on the first provider-data call (`apiosk`, discover or
+# compare); execute and approval status use that same connection. A manually
+# supplied Connect token remains available for self-hosted or staging use.
 
 runtime: container
 
@@ -22,8 +17,7 @@ build:
 
 startCommand:
   type: http
-  # Every field is optional; a user who supplies nothing gets connect, discover
-  # and compare, which is enough to find out whether Apiosk is worth connecting.
+  # Every field is optional; hosted users connect through OAuth on first use.
   configSchema:
     type: object
     required: []
@@ -33,8 +27,9 @@ startCommand:
         title: Apiosk connect token
         description: >-
           Optional. A token minted at buy.apiosk.com, naming the wallet and the
-          spending policy this server may buy under. apiosk_execute and
-          apiosk_approval_status need one; discovery and comparison do not.
+          spending policy this server may buy under. Hosted users normally use
+          OAuth instead; all provider-data and execution tools require a
+          connected account.
       APIOSK_GATEWAY_URL:
         type: string
         title: Gateway base URL

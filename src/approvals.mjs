@@ -46,6 +46,8 @@ export async function getApprovalStatus(approvalId, { gateway } = {}) {
   return {
     status: normalised,
     approval_id: id,
+    offer_token: payload?.offer_token ?? null,
+    max_price_usdc: payload?.max_price_usdc ?? null,
     offer_id: payload?.offer_id ?? null,
     amount_usdc: payload?.amount_usdc ?? null,
     reason: payload?.reason ?? null,
@@ -60,7 +62,7 @@ export async function getApprovalStatus(approvalId, { gateway } = {}) {
 function nextStep(state, payload) {
   switch (state) {
     case "approved":
-      return "Approved. Call apiosk_execute again with the same offer_id to complete the purchase.";
+      return "Approved. Call apiosk_execute again with the same offer_token, max_price_usdc and approval_id to complete the purchase.";
     case "denied":
       return "The buyer declined this purchase. Do not retry it. Ask what they would rather do.";
     case "expired":

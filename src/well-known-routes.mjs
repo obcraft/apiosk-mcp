@@ -5,7 +5,7 @@
 // /.well-known/x402 document, which is the canonical one; nothing here is a
 // second source of truth, and nothing here is a capability an agent can call.
 //
-// It survived the cut to five tools for the same reason
+// It survived the earlier cut-to-five refactor for the same reason
 // src/settlement-disclosure.mjs did: it is a page this server serves, not a
 // choice an agent has to make.
 

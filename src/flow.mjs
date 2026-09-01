@@ -20,10 +20,10 @@ import { EXTERNAL_EXECUTION_NOTE, normalizeNetworkName, sanitizeText } from "./d
 // The scoring is the SAME scorer the gateway's decide and execute paths use
 // (`src/v1_routes/flow.rs`), so the menu and the meal cannot disagree.
 //
-// There used to be a second step here, `apiosk_decide`, which collapsed the
-// comparison into one pick. It is gone on purpose: the whole point of the step
-// after this one is that a PERSON chooses. A tool that decides for them removes
-// the only moment in the flow where the buyer is actually consulted.
+// The former `apiosk_decide` tool is gone. The short `apiosk` tool now exposes
+// the App's already-computed top pick, but execution still waits for the
+// person's explicit Approve action. `apiosk_compare` remains the detailed menu
+// when the person wants alternatives and score breakdowns.
 //
 // Nothing here spends anything.
 

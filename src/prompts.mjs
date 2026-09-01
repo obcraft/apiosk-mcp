@@ -28,7 +28,19 @@ const BUDGET = {
   required: false,
 };
 
+const NEED_ONLY = {
+  name: "need",
+  description: "What you need done, in plain words.",
+  required: true,
+};
+
 export const PROMPTS = [
+  {
+    name: "apiosk",
+    title: "Find top provider",
+    description: "Find the top ranked runnable provider, exact price, and Approve/Deny card for one question.",
+    arguments: [NEED_ONLY, BUDGET],
+  },
   {
     name: "find_and_choose_an_api",
     title: "Find and choose an API for a job",
@@ -78,6 +90,11 @@ function constraintLine(args) {
 }
 
 const BODIES = {
+  apiosk: (a) =>
+    `I need the top API provider for: ${need(a)}.${constraintLine(a)}
+
+Call the apiosk tool with that same query and any max_price_usdc constraint. Render its top-provider card with the exact price and its Approve and Deny buttons. Do not execute from the read-only result alone: Approve may continue to apiosk_execute; Deny stops without spending.`,
+
   find_and_choose_an_api: (a) =>
     `I need an API that can: ${need(a)}.${constraintLine(a)}
 

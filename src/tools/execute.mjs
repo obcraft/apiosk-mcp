@@ -36,12 +36,14 @@ export const EXECUTE_TOOL = {
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   _meta: {
     "openai/outputTemplate": "ui://apiosk/result-canvas.html",
+    "openai/widgetAccessible": true,
     "openai/toolInvocation/invoking": "Running the chosen call…",
     "openai/toolInvocation/invoked": "Result received",
-    ui: { resourceUri: "ui://apiosk/result-canvas.html" },
+    ui: { resourceUri: "ui://apiosk/result-canvas.html", visibility: ["model", "app"] },
   },
   inputSchema: {
     type: "object",
+    required: ["offer_token", "prompt", "max_price_usdc"],
     properties: {
       offer_token: {
         type: "string",
@@ -52,6 +54,10 @@ export const EXECUTE_TOOL = {
         type: "string",
         description:
           "The job you searched for, in the user's own words. Recorded with the pick so the purchase reads back as an answer to a question rather than a bare charge.",
+      },
+      approval_id: {
+        type: "string",
+        description: "Optional approval id returned by apiosk_execute after an approval_required hold.",
       },
       max_price_usdc: {
         type: "number",
@@ -66,12 +72,23 @@ export const EXECUTE_TOOL = {
       },
       query: { type: "object", additionalProperties: true, description: "Optional query-string parameters." },
       path_params: { type: "object", additionalProperties: true, description: "Optional path parameters." },
+      input_parts: {
+        type: "object",
+        additionalProperties: false,
+        description: "Optional exact split of provider inputs by path, query and body. The Apiosk approval card supplies this automatically.",
+        properties: {
+          path: { type: "object", additionalProperties: true },
+          query: { type: "object", additionalProperties: true },
+          body: { type: "object", additionalProperties: true },
+        },
+      },
     },
   },
 };
 
 export async function runExecute(args = {}, { env = process.env, gateway } = {}) {
   const offerToken = trimString(args.offer_token);
+  const approvalId = trimString(args.approval_id);
 
   if (!offerToken) {
     /* ONE WAY IN NOW, where there were three. `slug` and `url` named a thing
@@ -88,7 +105,7 @@ export async function runExecute(args = {}, { env = process.env, gateway } = {})
   }
 
   try {
-    return content(await executeSignedOffer(offerToken, args, gateway));
+    return content(await executeSignedOffer(offerToken, approvalId, args, gateway));
   } catch (error) {
     if (error instanceof ApioskPaymentRequiredError) {
       // A 402 is a business state, not a protocol failure. Returning isError
@@ -108,10 +125,24 @@ export async function runExecute(args = {}, { env = process.env, gateway } = {})
     }
 
     if (error instanceof GatewayError) {
-      if (error.status === 402 || error.code === "policy.approval_required") {
-        return content(approvalPayload(error));
+      if (isApprovalError(error)) {
+        return content(approvalPayload(error, offerToken, args));
       }
-      if (error.status === 401 || error.status === 403) {
+      if (error.status === 402) {
+        return content(paymentRequiredPayload(error, env));
+      }
+      if (error.status === 403 && error.code === "limit_exceeded") {
+        return content({
+          status: "limit_exceeded",
+          error_code: error.code,
+          message: error.message,
+          next_steps: [
+            "Do not retry this purchase.",
+            `The buyer can review this connection's limits at ${connectUrl(env)}.`,
+          ],
+        });
+      }
+      if (error.status === 401 || ["unauthorized", "invalid_token", "expired"].includes(error.code)) {
         return content({
           status: "not_authorised",
           error_code: error.code,
@@ -126,22 +157,52 @@ export async function runExecute(args = {}, { env = process.env, gateway } = {})
   }
 }
 
-function approvalPayload(error) {
+function isApprovalError(error) {
   const body = error.body || {};
+  return (
+    error.code === "policy.approval_required" ||
+    error.code === "approval_required" ||
+    body.status === "approval_required" ||
+    body.error === "approval_required" ||
+    body.error_code === "approval_required"
+  );
+}
+
+function paymentRequiredPayload(error, env) {
+  return {
+    status: "payment_required",
+    error_code: error.code,
+    message: error.message,
+    balance_micro_usd: error.body?.balance_micro_usd ?? null,
+    required_micro_usd: error.body?.required_micro_usd ?? null,
+    next_steps: [
+      "Call apiosk_connect to distinguish an empty balance from a connection limit.",
+      `Only the buyer can fund the balance or change limits at ${connectUrl(env)}.`,
+      "Do not retry until that state changes.",
+    ],
+  };
+}
+
+function approvalPayload(error, offerToken, args) {
+  const body = error.body || {};
+  const shownPrice = Number(args.max_price_usdc);
   return {
     status: "approval_required",
     approval_id: body.approval_id ?? null,
+    offer_token: offerToken ?? null,
+    max_price_usdc: body.max_price_usdc ?? (Number.isFinite(shownPrice) ? shownPrice : null),
     error_code: error.code,
-    amount_usdc: body.amount_usdc ?? null,
+    amount_usdc: body.amount_usdc ?? body.price_usdc ?? null,
     reason: body.reason ?? error.message,
     expires_at: body.expires_at ?? null,
-    message:
-      "The buyer's rules hold this purchase until a person approves it. Nothing has been paid and nothing has been called.",
+    approve_url: body.approve_url ?? null,
     next_steps: [
       "Tell the user the purchase is waiting on their approval, and where.",
       "Poll apiosk_approval_status with the approval_id, at most once every few seconds.",
-      "When it reports approved, call apiosk_execute again with the same offer_token.",
+      "When it reports approved, call apiosk_execute again with the same offer_token, max_price_usdc and approval_id.",
     ],
+    message:
+      "The buyer's rules hold this purchase until a person approves it. Nothing has been paid and nothing has been called.",
   };
 }
 
@@ -168,7 +229,7 @@ function approvalPayload(error) {
  * cannot pay twice: the charge is recorded under the key before anything is
  * paid, and a repeat replays the outcome instead of the payment.
  */
-async function executeSignedOffer(offerToken, args, gateway) {
+async function executeSignedOffer(offerToken, approvalId, args, gateway) {
   const prompt = trimString(args.prompt) || trimString(args.query_text) || "an agent's request";
 
   const selection = asObject(
@@ -194,9 +255,18 @@ async function executeSignedOffer(offerToken, args, gateway) {
   // The ceiling the user actually saw is the TOTAL, fee included, so it bounds
   // what leaves the balance rather than the provider's leg of it.
   if (Number.isFinite(Number(args.max_price_usdc))) body.max_price_usdc = Number(args.max_price_usdc);
-  if (args.query !== undefined) body.query = args.query;
-  if (args.path_params !== undefined) body.path_params = args.path_params;
+  const suppliedParts = asInputParts(args.input_parts);
+  const derivedParts = {
+    path: asRecord(args.path_params),
+    query: asRecord(args.query),
+    body: asRecord(args.input),
+  };
+  const inputParts = suppliedParts ?? derivedParts;
+  if (Object.values(inputParts).some((part) => Object.keys(part).length > 0)) {
+    body.input_parts = inputParts;
+  }
   if (trimString(args.operation)) body.operation = trimString(args.operation);
+  if (approvalId) body.approval_id = approvalId;
 
   const result = await gateway.requestJson("/v1/run", { method: "POST", body });
   return { status: "ok", selection_id: selectionId, ...asObject(result) };
@@ -205,4 +275,17 @@ async function executeSignedOffer(offerToken, args, gateway) {
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : { result: value };
+}
+
+function asRecord(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function asInputParts(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return {
+    path: asRecord(value.path),
+    query: asRecord(value.query),
+    body: asRecord(value.body),
+  };
 }

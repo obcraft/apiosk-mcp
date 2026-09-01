@@ -19,17 +19,19 @@ call.
 [![PyPI](https://img.shields.io/pypi/v/apiosk-mcp?label=PyPI%20apiosk-mcp)](https://pypi.org/project/apiosk-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 
-- **Hosted endpoint:** `https://mcp.apiosk.com/mcp` (streamable HTTP, OAuth for the tools that spend).
+- **Hosted endpoint:** `https://mcp.apiosk.com/mcp` (streamable HTTP; the first data request starts OAuth when needed).
 - **Local stdio package:** `npx -y @apiosk/mcp` or `uvx apiosk-mcp`.
 - **Buyer portal:** [buy.apiosk.com](https://buy.apiosk.com) — sign in, fund a wallet, set the limits, approve a held purchase.
 
-## The five tools
+## The six tools
 
-There are five, and there is no sixth. An agent does not browse a menu: it reads
+There are exactly six. `apiosk` is the one-shot entrypoint for fast shopping:
+it returns the App's own top ranked runnable provider and approval card. An agent does not browse a menu: it reads
 descriptions and picks, so every tool here earns its place in one flow.
 
 | Tool | What it answers | Spends |
 | --- | --- | --- |
+| `apiosk` | Return the top ranked runnable provider, exact price, required inputs and Approve/Deny card. | no |
 | `apiosk_connect` | Can this session buy? Which wallet, which policy, which limits. Returns the portal link when there is no connection. | no |
 | `apiosk_discover` | What can perform this job? Sweeps the reviewed Apiosk catalogue **and** the wider x402 ecosystem. | no |
 | `apiosk_compare` | How do the candidates perform against *my* requirements? Price, measured p95 latency, measured success rate and input fit, each offer carrying a stable `offer_id`. | no |
@@ -42,10 +44,11 @@ prices nothing and moves no money.
 
 ### The one rule
 
-`apiosk_compare` returns offers. **A person picks one.** State the exact price,
-show the alternatives, wait for a choice, then pass that `offer_id` and a
-`max_price_usdc` ceiling to `apiosk_execute`. There is deliberately no tool that
-chooses for the user.
+`apiosk_compare` and `apiosk` return offers. **A person approves or denies the
+purchase.** The quick card states the provider and exact price and supplies the
+two actions; do not add a second prose confirmation. Only Approve may pass the
+signed `offer_token`, exact `max_price_usdc` ceiling and entered inputs to
+`apiosk_execute`. Deny stops without spending.
 
 ### The three outcomes that are not failures
 
@@ -55,7 +58,8 @@ retried blindly:
 | `status` | Meaning | Next step |
 | --- | --- | --- |
 | `approval_required` | The buyer's rules need a human to say yes. Nothing was paid and nothing was called. | Tell the user, then poll `apiosk_approval_status`. Retry only once it reports approved. |
-| `payment_required` | The wallet is empty or over its limit. | Call `apiosk_connect` to see which, tell the user, stop. |
+| `payment_required` | The balance cannot cover the call. | Call `apiosk_connect`, tell the user, stop. |
+| `limit_exceeded` | This connection's per-call or daily ceiling refused the call. | Do not retry; only the buyer can change it. |
 | `not_authorised` | The connection expired or was revoked. | Call `apiosk_connect` for the re-connect link, stop. |
 
 ## Quick start
@@ -82,9 +86,10 @@ apiosk
 The PyPI package is a launcher for it, so `uvx apiosk-mcp` starts the same
 server as `npx -y @apiosk/mcp`.
 
-Discovery and comparison work immediately, with no account and no credential.
-To buy anything, connect once at [buy.apiosk.com](https://buy.apiosk.com) —
-`apiosk_connect` returns the link.
+The hosted server starts its OAuth handoff on the first `/apiosk`, discovery or
+comparison request, then resumes the request after the buyer approves the
+connection at [buy.apiosk.com](https://buy.apiosk.com). For local stdio, set
+`APIOSK_CONNECT_TOKEN` or call `apiosk_connect` for the connection link.
 
 ## Agent configuration
 
@@ -169,10 +174,10 @@ claude mcp add --transport http apiosk https://mcp.apiosk.com/mcp
 
 ### ChatGPT and other remote MCP apps
 
-Use `https://mcp.apiosk.com/mcp`. `apiosk_connect`, `apiosk_discover` and
-`apiosk_compare` are served before authorization, so a user gets a real answer
-before being asked for anything. `apiosk_execute` and `apiosk_approval_status`
-are behind OAuth, and the sign-in lands on the buyer portal.
+Use `https://mcp.apiosk.com/mcp`. The first tool that reads provider data starts
+OAuth automatically when the session is not connected; sign-in and spending
+limits live on the buyer portal. `apiosk_connect` remains available as the
+read-only diagnostic and reconnection entrypoint.
 
 ## Examples
 
@@ -202,15 +207,32 @@ contribution per dimension, so it can be recomputed rather than trusted.
 Dimensions Apiosk has not measured are named and dropped from the weighting —
 never scored zero.
 
+### Quick one-shot flow (`/apiosk`)
+
+```json
+{ "name": "apiosk", "arguments": { "query": "realtime USD to EUR exchange rate", "max_price_usdc": 0.01 } }
+```
+
+The result card shows the shared ranking's top provider, the exact per-call
+price and any required fields. **Approve** runs `apiosk_execute`; **Deny** stops
+without spending. In clients without MCP Apps UI, render those same two named
+choices and wait for the user's decision.
+
 ### Buy the one the user chose
 
 ```json
 {
   "name": "apiosk_execute",
   "arguments": {
-    "offer_id": "ofr_01J...",
+    "offer_token": "tok_...",
     "max_price_usdc": 0.004,
-    "query": { "from": "USD", "to": "EUR" }
+    "input": { "from": "USD", "to": "EUR" },
+    "input_parts": {
+      "path": {},
+      "query": { "from": "USD", "to": "EUR" },
+      "body": {}
+    },
+    "prompt": "realtime USD to EUR exchange rate"
   }
 }
 ```
@@ -221,12 +243,12 @@ price is above the number the user was shown.
 ### Wait on an approval
 
 ```json
-{ "name": "apiosk_approval_status", "arguments": { "approval_id": "apr_01J..." } }
+{ "name": "apiosk_approval_status", "arguments": { "approval_id": "2f8656ec-e667-4c8f-a340-a8dc2ddc36bc" } }
 ```
 
 ## Environment variables
 
-- `APIOSK_CONNECT_TOKEN` — a connect token from [buy.apiosk.com](https://buy.apiosk.com), naming the wallet and the spending policy this server may buy under. Without one, discovery and comparison still work.
+- `APIOSK_CONNECT_TOKEN` — a connect token from [buy.apiosk.com](https://buy.apiosk.com), naming the account and spending policy for local stdio. Hosted MCP obtains it through OAuth.
 - `APIOSK_GATEWAY_URL` — override the gateway base URL. Leave unset unless testing against staging.
 - `APIOSK_BUYER_PORTAL_URL` — override the portal link `apiosk_connect` hands back.
 - `APIOSK_MCP_OAUTH_SECRET` — signing secret for hosted OAuth codes, access tokens and refresh tokens.
@@ -275,7 +297,7 @@ npm run dev     # HTTP server on :3000
 node index.mjs  # stdio
 ```
 
-`test/surface.test.mjs` asserts the tool list is exactly the five, by name, and
+`test/surface.test.mjs` asserts the tool list is exactly the six, by name, and
 that the published manifests agree with it. If it fails, either a tool was added
 without a decision or a manifest drifted — a tool name that disagrees across
 `package.json`, `server.json`, `dxt.json` and this file is a broken install.

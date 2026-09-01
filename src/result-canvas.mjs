@@ -7,12 +7,18 @@ export const APIO_RESULT_CANVAS_URI = "ui://apiosk/result-canvas.html";
 // lists are intentionally empty (the policy is SET, and it permits nothing
 // outward). The domain is this app's own origin, unique to Apiosk.
 export const APIO_RESULT_CANVAS_META = {
+  ui: {
+    prefersBorder: true,
+    domain: "https://mcp.apiosk.com",
+    csp: { connectDomains: [], resourceDomains: [] },
+  },
   "openai/widgetCSP": {
     connect_domains: [],
     resource_domains: [],
   },
   "openai/widgetDomain": "https://mcp.apiosk.com",
   "openai/widgetPrefersBorder": true,
+  "openai/widgetDescription": "Shows the paid API result returned securely through Apiosk.",
 };
 
 // Generic, credential-free result renderer. Paid data is fetched server-side by

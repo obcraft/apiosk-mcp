@@ -16,6 +16,7 @@ import { TOOL_NAMES } from "../src/tools/index.mjs";
 import { listApioskTools } from "../src/create-server.mjs";
 
 const EXPECTED = [
+  "apiosk",
   "apiosk_connect",
   "apiosk_discover",
   "apiosk_compare",
@@ -23,7 +24,7 @@ const EXPECTED = [
   "apiosk_approval_status",
 ];
 
-test("the tool surface is exactly the five buyer-flow tools", async () => {
+test("the tool surface is exactly the six buyer-flow tools", async () => {
   assert.deepEqual(TOOL_NAMES, EXPECTED);
 
   const runtime = createApioskMcpRuntime({ env: {} });
@@ -56,13 +57,23 @@ test("every tool declares a description that says whether it spends", async () =
   }
 });
 
-test("only the tools that touch money are gated behind a connection", async () => {
+test("every agent-gateway data tool starts OAuth before its first request", async () => {
   const runtime = createApioskMcpRuntime({ env: {} });
+  assert.equal(await runtime.isToolProtected("apiosk"), true);
   assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
   assert.equal(await runtime.isToolProtected("apiosk_approval_status"), true);
   assert.equal(await runtime.isToolProtected("apiosk_connect"), false);
-  assert.equal(await runtime.isToolProtected("apiosk_discover"), false);
-  assert.equal(await runtime.isToolProtected("apiosk_compare"), false);
+  assert.equal(await runtime.isToolProtected("apiosk_discover"), true);
+  assert.equal(await runtime.isToolProtected("apiosk_compare"), true);
+});
+
+test("the quick card has real approve and deny actions", async () => {
+  const { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_META } = await import("../src/offer-card.mjs");
+  assert.match(APIO_OFFER_CARD_HTML, /id="approve"/);
+  assert.match(APIO_OFFER_CARD_HTML, /id="deny"/);
+  assert.match(APIO_OFFER_CARD_HTML, /callTool\('apiosk_execute'/);
+  assert.match(APIO_OFFER_CARD_HTML, /sendFollowUpMessage/);
+  assert.deepEqual(APIO_OFFER_CARD_META.ui.csp.connectDomains, []);
 });
 
 test("an unknown tool is refused by name, with the real list", async () => {
@@ -73,7 +84,7 @@ test("an unknown tool is refused by name, with the real list", async () => {
   assert.match(result.content[0].text, /tool\.unknown/);
 });
 
-test("the published manifests agree on the five names", () => {
+test("the published manifests agree on the six names", () => {
   const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), "utf8"));
 
   const dxt = read("../dxt.json");

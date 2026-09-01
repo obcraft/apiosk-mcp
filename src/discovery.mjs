@@ -79,7 +79,7 @@ function finiteNumber(value) {
  * on it without this file reconstructing a candidate id, a resource URL or a
  * pair of micro-USD amounts it has no business deciding.
  */
-function normalizeResult(result) {
+export function normalizeResult(result) {
   const offer = result?.offer;
   if (!offer || typeof offer !== "object") return null;
 
@@ -130,6 +130,27 @@ function normalizeResult(result) {
      * an hour.
      */
     offer_token: trimString(result.offer_token) || null,
+    relevance: finiteNumber(result.relevance),
+    matched: Array.isArray(result.matched)
+      ? result.matched.map((value) => sanitizeText(value, 120)).filter(Boolean).slice(0, 12)
+      : [],
+    input_fields: Array.isArray(offer.fields)
+      ? offer.fields
+          .filter((field) => field && typeof field === "object" && trimString(field.name))
+          .slice(0, 50)
+          .map((field) => ({
+            name: trimString(field.name),
+            label: sanitizeText(field.label || field.name, 120),
+            location: ["path", "query", "body"].includes(field.location) ? field.location : "body",
+            required: field.required === true,
+            type: trimString(field.type) || "string",
+            description: sanitizeText(field.description || "", 300) || null,
+            options: Array.isArray(field.options)
+              ? field.options.map((value) => sanitizeText(value, 120)).filter(Boolean).slice(0, 50)
+              : [],
+            ...(field.defaultValue !== undefined ? { default_value: field.defaultValue } : {}),
+          }))
+      : [],
   };
 
   if (!reviewed) {

@@ -1,4 +1,4 @@
-// The runtime: five tools, one client, one dispatch.
+// The runtime: six tools, one client, one dispatch.
 //
 // This file was 139 KB and held about thirty tool handlers, their schemas, a
 // wallet store, a publisher client and four ways to answer "what now". It is

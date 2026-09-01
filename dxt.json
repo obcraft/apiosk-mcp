@@ -22,6 +22,10 @@
   },
   "tools": [
     {
+      "name": "apiosk",
+      "description": "Return the shared App ranking's top runnable provider, exact price, required inputs and signed offer token for a plain-words job. The attached card provides Approve and Deny. Spends nothing."
+    },
+    {
       "name": "apiosk_connect",
       "description": "Report whether this session can buy: connected, payable, which wallet, which policy, which limits. Returns the buy.apiosk.com link when there is no connection. Spends nothing."
     },
