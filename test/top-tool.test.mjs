@@ -88,7 +88,8 @@ test("apiosk returns the gateway's ranked pick, not the cheapest row", async () 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].path, "/v1/ask");
   assert.equal(calls[0].options.query.q, "stock price");
-  assert.equal(calls[0].options.query.include_external, "true");
+  assert.equal(calls[0].options.query.include_external, undefined);
+  assert.equal(calls[0].options.timeout, 25_000);
   assert.equal(result.status, "ok");
   assert.equal(result.top.offer_token, "finn-token");
   assert.equal(result.top_provider, "Finnhub");

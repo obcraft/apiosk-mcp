@@ -11,6 +11,9 @@ import {
 } from "./src/create-server.mjs";
 import { PROMPTS } from "./src/prompts.mjs";
 import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
+import { APIO_OFFER_CARD_URI } from "./src/offer-card.mjs";
+import { APIO_RESULTS_PICKER_URI } from "./src/results-picker.mjs";
+import { APIO_CONNECT_CARD_URI } from "./src/connect-card.mjs";
 import {
   createHostedOAuthSupport,
   resolveHostedMcpUrls,
@@ -350,12 +353,14 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
       capabilities: { tools: {}, resources: {}, prompts: {} },
       tools,
       prompts: PROMPTS,
+      // Every card this server can render, not one of the four. A registry
+      // reading a card that lists a single resource publishes a connector that
+      // looks like it has no interface.
       resources: [
-        {
-          uri: APIO_RESULT_CANVAS_URI,
-          name: "Apiosk paid result canvas",
-          mimeType: "text/html+skybridge",
-        },
+        { uri: APIO_RESULT_CANVAS_URI, name: "Apiosk paid result canvas", mimeType: "text/html+skybridge" },
+        { uri: APIO_OFFER_CARD_URI, name: "Apiosk offer approval card", mimeType: "text/html+skybridge" },
+        { uri: APIO_RESULTS_PICKER_URI, name: "Apiosk offer picker", mimeType: "text/html+skybridge" },
+        { uri: APIO_CONNECT_CARD_URI, name: "Apiosk connection card", mimeType: "text/html+skybridge" },
       ],
     });
   } catch (error) {

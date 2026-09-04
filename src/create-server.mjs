@@ -10,6 +10,8 @@ import {
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
+import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
+import { APIO_CONNECT_CARD_HTML, APIO_CONNECT_CARD_URI, APIO_CONNECT_CARD_META } from "./connect-card.mjs";
 import { PROMPTS, getPrompt } from "./prompts.mjs";
 
 /**
@@ -60,12 +62,37 @@ export function resolveServerVersion(env = process.env) {
   return ms ? `${major}.${minor}.${Math.floor(ms / 1000)}` : SERVER_BASE_VERSION;
 }
 
+/**
+ * The connector's face, and the reason it is here rather than only in the
+ * published manifests.
+ *
+ * A host asking the user "Claude wants to use Apiosk discover from Apiosk"
+ * draws that card from `initialize`: the server title, the tool title, and an
+ * icon. server.json and dxt.json already carried icons, but a registry
+ * manifest is read once at install time — the card is drawn from the live
+ * session, and a session that declares none gets a grey placeholder next to
+ * every competitor's logo. Same three files as server.json, so the listing and
+ * the connection cannot show different marks.
+ */
+export const SERVER_ICONS = [
+  { src: "https://mcp.apiosk.com/logo-optimized-light.png", mimeType: "image/png", sizes: ["2048x2048"] },
+  { src: "https://apiosk.com/logo.svg", mimeType: "image/svg+xml", sizes: ["any"] },
+  { src: "https://apiosk.com/apple-touch-icon.png", mimeType: "image/png", sizes: ["180x180"] },
+];
+
 export const SERVER_INFO = {
   name: "apiosk-mcp",
   version: resolveServerVersion(),
-  title: "Apiosk Connect",
+  /**
+   * The word a host puts after "from" on its consent card — "Claude wants to
+   * use Apiosk discover from Apiosk". It was "Apiosk Connect", which read as a
+   * product called Connect and collided with the tool of that name; the tool
+   * titles carry the verb now, so the server carries only the brand.
+   */
+  title: "Apiosk",
   description: SERVER_DESCRIPTION,
   websiteUrl: "https://apiosk.com",
+  icons: SERVER_ICONS,
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.
@@ -82,7 +109,11 @@ Use one of two routes:
   - quick ask: 'apiosk' for the top ranked runnable recommendation and its approval card.
   - comparison flow: apiosk_discover -> apiosk_compare for ranked alternatives.
 
-The one rule that matters: a PERSON approves or denies the offer. State the exact price. The quick card already has Approve and Deny; do not add a second prose confirmation. Only Approve may continue to apiosk_execute. Never call apiosk_execute to explore, and never fabricate or placeholder data — if nothing clears the shared relevance floor or budget, say so plainly.
+The one rule that matters: a PERSON approves or denies the offer. State the exact price. Only Approve may continue to apiosk_execute.
+
+WHERE THIS SERVER CAN ASK THEM ITSELF, IT ALREADY HAS. On a host that supports elicitation or renders UI resources, 'apiosk' puts an Approve/Deny question in front of the user and apiosk_discover puts a picker of the runnable offers in front of them. Read the answer instead of re-asking:
+  apiosk           status 'approved' means they said yes at that price — call apiosk_execute now, with no second confirmation. status 'denied' means stop.
+  apiosk_discover  \`chosen.execute_arguments\` is the offer they picked, ready to run. \`chosen.declined\` means they said no; stop. \`chosen: null\` means this host has no picker, so print \`presentation\` and ask which one they want BY NAME — never ask them to reply with a number. Pass \`choose: false\` only for a sweep you are running on your own behalf. Never call apiosk_execute to explore, and never fabricate or placeholder data — if nothing clears the shared relevance floor or budget, say so plainly.
 
 Three outcomes of apiosk_execute are not failures and must not be retried blindly:
   approval_required  the buyer's rules need a human to say yes. Tell the user, then poll apiosk_approval_status. Retry only after it reports approved.
@@ -111,35 +142,70 @@ export function createApioskMcpServer(options = {}) {
     { capabilities: { tools: {}, resources: {}, prompts: {} }, instructions: SERVER_INSTRUCTIONS }
   );
 
+  /**
+   * The four cards, and the one mime type question.
+   *
+   * The two host families that render a `ui://` resource label the same HTML
+   * differently: MCP Apps (SEP-1865) reads `text/html;profile=mcp-app`, and
+   * OpenAI's Apps SDK reads `text/html+skybridge`. A resource can carry one
+   * label, so the label is chosen from what the client negotiated at
+   * `initialize` — the extension id is `io.modelcontextprotocol/ui` — and
+   * falls back to the Apps SDK spelling, which is the surface these cards
+   * actually render in today.
+   *
+   * The HTML itself is identical either way: src/ui-bridge.mjs speaks both
+   * protocols from inside the iframe, so there is one card per job rather than
+   * one per host.
+   */
+  function uiMimeType() {
+    const declared = server.getClientCapabilities()?.extensions?.["io.modelcontextprotocol/ui"];
+    return declared ? "text/html;profile=mcp-app" : "text/html+skybridge";
+  }
+
+  const UI_RESOURCES = [
+    {
+      uri: APIO_RESULT_CANVAS_URI,
+      name: "Apiosk paid result canvas",
+      text: APIO_RESULT_CANVAS_HTML,
+      meta: APIO_RESULT_CANVAS_META,
+    },
+    {
+      uri: APIO_OFFER_CARD_URI,
+      name: "Apiosk offer approval card",
+      text: APIO_OFFER_CARD_HTML,
+      meta: APIO_OFFER_CARD_META,
+    },
+    {
+      uri: APIO_RESULTS_PICKER_URI,
+      name: "Apiosk offer picker",
+      text: APIO_RESULTS_PICKER_HTML,
+      meta: APIO_RESULTS_PICKER_META,
+    },
+    {
+      uri: APIO_CONNECT_CARD_URI,
+      name: "Apiosk connection card",
+      text: APIO_CONNECT_CARD_HTML,
+      meta: APIO_CONNECT_CARD_META,
+    },
+  ];
+
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: [
-      {
-        uri: APIO_RESULT_CANVAS_URI,
-        name: "Apiosk paid result canvas",
-        mimeType: "text/html+skybridge",
-        _meta: APIO_RESULT_CANVAS_META,
-      },
-      {
-        uri: APIO_OFFER_CARD_URI,
-        name: "Apiosk offer approval card",
-        mimeType: "text/html+skybridge",
-        _meta: APIO_OFFER_CARD_META,
-      },
-    ],
+    resources: UI_RESOURCES.map(({ uri, name, meta }) => ({
+      uri,
+      name,
+      mimeType: uiMimeType(),
+      _meta: meta,
+    })),
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    const resources = {
-      [APIO_RESULT_CANVAS_URI]: { text: APIO_RESULT_CANVAS_HTML, meta: APIO_RESULT_CANVAS_META },
-      [APIO_OFFER_CARD_URI]: { text: APIO_OFFER_CARD_HTML, meta: APIO_OFFER_CARD_META },
-    };
-    const resource = resources[request.params.uri];
+    const resource = UI_RESOURCES.find((entry) => entry.uri === request.params.uri);
     if (!resource) throw new Error("Unknown Apiosk resource");
     return {
       contents: [
         {
           uri: request.params.uri,
-          mimeType: "text/html+skybridge",
+          mimeType: uiMimeType(),
           text: resource.text,
           _meta: resource.meta,
         },
@@ -158,7 +224,22 @@ export function createApioskMcpServer(options = {}) {
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    return runtime.callTool(request.params.name, request.params.arguments || {}, extra.authInfo);
+    /**
+     * The live session, handed to the tool so it can ask the PERSON.
+     *
+     * `sendRequest` is the request-scoped one rather than `server.elicitInput`,
+     * because on streamable HTTP a server-initiated request has to be
+     * correlated with the tool call it belongs to — sent off the session
+     * instead, the picker arrives on a stream the client is no longer reading.
+     * `capabilities` is what the client declared at `initialize`; a client that
+     * never declared `elicitation` is never asked, and the tool answers in
+     * prose (src/elicit.mjs).
+     */
+    const host = {
+      sendRequest: (message, schema, options) => extra.sendRequest(message, schema, options),
+      capabilities: server.getClientCapabilities() || null,
+    };
+    return runtime.callTool(request.params.name, request.params.arguments || {}, extra.authInfo, host);
   });
 
   return server;

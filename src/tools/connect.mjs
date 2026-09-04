@@ -9,8 +9,11 @@
 // this tool reports what the current connection can do and, when there is
 // nothing to report, hands back the link.
 
+import { randomUUID } from "node:crypto";
+
 import { GatewayError } from "../gateway-client.mjs";
 import { content, trimString } from "../tool-result.mjs";
+import { elicitConnect } from "../elicit.mjs";
 
 /**
  * Where a person tops up and sets limits — app.apiosk.com, the same screen the
@@ -25,10 +28,16 @@ const CONNECT_PATH = "/connect";
 
 export const CONNECT_TOOL = {
   name: "apiosk_connect",
-  title: "Check the Apiosk connection",
+  title: "Apiosk connect",
   description:
     "Report whether this session can buy: connected or not, payable or not, the balance left, and the exact per-call and daily limits with how much of today's allowance is gone. Call it first in any conversation that might end in a paid API call, and again whenever a purchase is refused, so you can tell the user what to fix. When there is no connection it returns the link to set one up — signing in, topping up and setting limits all happen there, never here. Reads only; spends nothing.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  _meta: {
+    "openai/outputTemplate": "ui://apiosk/connect-card.html",
+    "openai/toolInvocation/invoking": "Checking the Apiosk connection…",
+    "openai/toolInvocation/invoked": "Connection checked",
+    ui: { resourceUri: "ui://apiosk/connect-card.html" },
+  },
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
 };
 
@@ -38,12 +47,27 @@ export function connectUrl(env = process.env) {
   return `${base}${CONNECT_PATH}`;
 }
 
-export async function runConnect(_args = {}, { env = process.env, authInfo = null, gateway } = {}) {
+export async function runConnect(_args = {}, { env = process.env, authInfo = null, gateway, host = null } = {}) {
   if (!gateway.hasConnectToken) {
+    /**
+     * The hand-off, as something to click rather than something to copy.
+     *
+     * URL mode is the right shape for this step and not a flourish: signing in,
+     * topping up and setting the spending limits all happen in the buyer's own
+     * account, and none of it may pass through the chat. The host opens the
+     * link; this server never sees a password, a token or a limit. A host that
+     * cannot do it gets the same URL in the text below, which is what every
+     * host got before.
+     */
+    const url = connectUrl(env);
+    const handoff = await elicitConnect(host, { connectUrl: url, elicitationId: randomUUID() });
     return content({
       status: "not_connected",
       payable: false,
-      connect_url: connectUrl(env),
+      connect_url: url,
+      // Whether the person was handed the link directly, so the model does not
+      // repeat a link they are already looking at.
+      handoff_shown: Boolean(handoff),
       message:
         "This session is not connected to an Apiosk account, so nothing can be paid for yet. Discovery and comparison still work.",
       next_steps: [

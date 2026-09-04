@@ -30,7 +30,7 @@ import { content, errorContent, trimString } from "../tool-result.mjs";
 
 export const EXECUTE_TOOL = {
   name: "apiosk_execute",
-  title: "Run the chosen API call",
+  title: "Apiosk run",
   description:
     "Run the offer the user chose and return the result. Apiosk settles the call from the connected balance, at the price that was shown. Pass `offer_token` exactly as apiosk_discover returned it for the row the user picked, `prompt` set to the job you searched for, and `max_price_usdc` set to the price you showed — the call is refused rather than settled if the real price is above it. The token pins the endpoint and the price together, so there is nothing else to state and no price for you to restate. Before calling: say the exact price to the user and have them choose; never pick for them and never call this to explore. A token is good for an hour — if the user takes longer, run apiosk_discover again and use the fresh one. If the buyer's rules require a human to approve, this returns `status: approval_required` with an approval_id: poll apiosk_approval_status, then call this again with the same offer_token once approved. If it returns `status: payment_required`, the balance is empty or over its limit: call apiosk_connect to see which, and do not retry.",
   annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },

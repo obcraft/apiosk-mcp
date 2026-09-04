@@ -59,7 +59,7 @@ export function createApioskMcpRuntime(options = {}) {
     }));
   }
 
-  async function dispatchTool(name, argumentsObject, authInfo) {
+  async function dispatchTool(name, argumentsObject, authInfo, host) {
     const tool = getTool(name);
     if (!tool) {
       return errorContent({
@@ -69,7 +69,7 @@ export function createApioskMcpRuntime(options = {}) {
     }
 
     try {
-      return await tool.run(argumentsObject, { env, authInfo, gateway: gatewayFor(authInfo) });
+      return await tool.run(argumentsObject, { env, authInfo, gateway: gatewayFor(authInfo), host });
     } catch (error) {
       return errorContent({
         error_code: error?.code || "tool.failed",
@@ -81,12 +81,12 @@ export function createApioskMcpRuntime(options = {}) {
   // Observability wrapper: time and log every tools/call dispatch. Logging is
   // fire-and-forget — a logging failure never affects the tool result. Raw
   // tokens and arguments are never persisted (hash and key names only).
-  async function callTool(name, argumentsObject = {}, authInfo = null) {
+  async function callTool(name, argumentsObject = {}, authInfo = null, host = null) {
     const startedAt = Date.now();
     let outcome = "ok";
     let errorCode = null;
     try {
-      const result = await dispatchTool(name, argumentsObject, authInfo);
+      const result = await dispatchTool(name, argumentsObject, authInfo, host);
       if (result?.isError) outcome = "error";
       else if (result?.structuredContent?.status === "payment_required") outcome = "refused";
       else if (result?.structuredContent?.status === "approval_required") outcome = "held";

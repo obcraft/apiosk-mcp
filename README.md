@@ -50,6 +50,22 @@ two actions; do not add a second prose confirmation. Only Approve may pass the
 signed `offer_token`, exact `max_price_usdc` ceiling and entered inputs to
 `apiosk_execute`. Deny stops without spending.
 
+### How the user is asked
+
+The choice and the approval are the same question in three renderings, built
+from one description of the offers, so a row is called the same thing wherever
+it appears:
+
+| Host | What the person sees |
+| --- | --- |
+| Implements MCP elicitation (Claude Code) | A native picker: `apiosk_discover` lists the runnable offers with their prices, `apiosk` asks Approve or Deny with the price on the button. The answer comes back in `chosen` / `status`. |
+| Renders UI resources (MCP Apps SEP-1865, OpenAI Apps SDK) | A card: `ui://apiosk/results-picker.html` picks an offer and collects its inputs, `ui://apiosk/connect-card.html` shows the balance and limits, `ui://apiosk/offer-card.html` approves one offer, `ui://apiosk/result-canvas.html` shows the result. One document serves both protocols. |
+| Neither | `presentation`, printed verbatim, and the agent asks which one they want **by name**. Never ask somebody to reply with a number. |
+
+Interactive UI in Claude's own chat surfaces is limited to connectors approved
+for the Connectors Directory, so the elicitation path is what a Claude user gets
+today and the cards are what ChatGPT and MCP-UI hosts get.
+
 ### The three outcomes that are not failures
 
 `apiosk_execute` can come back without a result, and none of these should be

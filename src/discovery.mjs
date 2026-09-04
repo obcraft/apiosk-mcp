@@ -33,6 +33,7 @@ import {
   trimString,
 } from "./discovery-text.mjs";
 import { pipelineOf, renderPresentation } from "./presentation.mjs";
+import { offerChoice } from "./elicit.mjs";
 
 const DEFAULT_MAX_RESULTS = 8;
 const MAX_RESULTS_CEILING = 25;
@@ -324,7 +325,7 @@ export async function runDiscover(args = {}, ctx = {}) {
   });
 
   const guidance = [
-    "`presentation` IS THE ANSWER, already written and already formatted. Print it verbatim as your reply — every line, every row — then ask which number the user wants. Do not rebuild the table, do not re-order it, do not drop the external rows, and do not shorten it to the few you find most interesting. A user who is shown five of twenty-five rows has been told something false about what exists.",
+    "`presentation` IS THE ANSWER, already written and already formatted. Print it verbatim as your reply — every line, every row — then ask which one they want by name (`chosen` already holds it when this server could ask them itself). Do not rebuild the table, do not re-order it, do not drop the external rows, and do not shorten it to the few you find most interesting. A user who is shown five of twenty-five rows has been told something false about what exists.",
     "The names in the question — a company, a ticker, a brand, a data vendor — are PARAMETERS for one of these endpoints, not providers to go looking for. Nobody resells a named terminal's own feed here; an endpoint that serves analyst estimates answers a question about a specific company's estimates with that company as its argument. `input_params` and `capabilities[].input_contract` say which argument.",
     "Rows with `external: false` are reviewed Apiosk listings: the gateway prices and settles them, and only these can go on to apiosk_compare and apiosk_execute.",
   ];
@@ -340,12 +341,23 @@ export async function runDiscover(args = {}, ctx = {}) {
     "NEXT STEP: call apiosk_compare with `query` set to the SAME words you passed here, to turn the reviewed rows into quoted offers with a pinned price. Comparing is free and spends nothing."
   );
 
+  // The choice, offered as a choice: a host-drawn picker where there is one.
+  const { selection, chosen, guidance_for_selection } = await offerChoice(ctx.host, results, {
+    query,
+    enabled: args.choose !== false,
+  });
+
   return content({
     // First key on purpose: it is what the model is meant to do with all of
     // this, and it reads it top down.
     presentation,
+    // What the person picked, when they were asked directly.
+    // `chosen.declined` is an answer, not a failure: stop, do not re-ask.
+    selection,
+    chosen,
+    guidance_for_selection,
     guidance_for_presentation:
-      "Print `presentation` verbatim as your reply, then ask which number. Do not rebuild it and do not drop rows.",
+      "Print `presentation` verbatim as your reply, then ask which one they want by name. Do not rebuild it and do not drop rows.",
     query,
     segments,
     // The three substeps of the discovery pipeline, in the order they ran, so
@@ -399,6 +411,11 @@ export const DISCOVER_TOOL_INPUT_SCHEMA = {
       type: "string",
       enum: ["price", "latency", "reliability", "balanced"],
       description: "Which dimension the candidate ranking favours. Default 'price'.",
+    },
+    choose: {
+      type: "boolean",
+      description:
+        "Whether this search ends in the user picking one. Default true: where the host can draw a picker, they are shown the runnable offers and their prices, and the answer comes back in `chosen` ready for apiosk_execute. Pass false for a sweep you run on your own behalf.",
     },
   },
 };
