@@ -17,7 +17,7 @@ export const CANCEL_JOB_TOOL = {
   title: "Apiosk cancel job",
   description:
     "Stop a running plan. Call it only when the user asks to stop — never because a conversation is ending, and never to tidy up a job you are done watching, since a job keeps running perfectly well without this session. It stops further calls from being dispatched; calls already sent are still settled, so tell the user that rather than promising nothing was charged. A cancelled job stays visible and readable in the Apiosk app and through apiosk_job_status. Spends nothing itself, and cannot spend less than what has already been called.",
-  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+  annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   inputSchema: {
     type: "object",
     required: ["job_id"],

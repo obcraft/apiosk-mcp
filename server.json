@@ -3,29 +3,31 @@
   "name": "io.github.obcraft/apiosk-mcp",
   "title": "Apiosk Connect",
   "description": "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
-      "src": "https://mcp.apiosk.com/logo-optimized-light.png",
-      "mimeType": "image/png",
-      "sizes": [
-        "2048x2048"
-      ]
-    },
-    {
-      "src": "https://apiosk.com/logo.svg",
+      "src": "https://mcp.apiosk.com/brand/mark-20260905-transparent.svg",
       "mimeType": "image/svg+xml",
       "sizes": [
         "any"
       ]
     },
     {
-      "src": "https://apiosk.com/apple-touch-icon.png",
+      "src": "https://mcp.apiosk.com/brand/mark-light-20260905-transparent.png",
       "mimeType": "image/png",
       "sizes": [
-        "180x180"
-      ]
+        "512x512"
+      ],
+      "theme": "light"
+    },
+    {
+      "src": "https://mcp.apiosk.com/brand/mark-dark-20260905-transparent.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ],
+      "theme": "dark"
     }
   ],
   "repository": {
@@ -36,7 +38,7 @@
     {
       "registryType": "npm",
       "identifier": "@apiosk/mcp",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "transport": {
         "type": "stdio"
       },
@@ -53,7 +55,7 @@
     {
       "registryType": "pypi",
       "identifier": "apiosk-mcp",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "transport": {
         "type": "stdio"
       },

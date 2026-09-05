@@ -1,0 +1,212 @@
+{
+  "$schema": "https://developers.openai.com/apps-sdk/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "app_info": {
+    "display_name": "Apiosk",
+    "subtitle": "Find and run the right API",
+    "description": "Apiosk helps users find API services for a task, compare provider prices and measured performance, review the total price before approval, and run the selected provider from a connected Apiosk account. It supports quick one-call requests and multi-step research plans with status tracking and spending limits.",
+    "category": "PRODUCTIVITY"
+  },
+  "tools": {
+    "apiosk": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Retrieves and ranks one signed provider offer without executing it or changing the account.",
+        "open_world_justification": "Queries the external Apiosk catalogue and x402 sources over the internet.",
+        "destructive_justification": "Does not purchase, delete, overwrite, revoke access, or perform an irreversible action."
+      }
+    },
+    "apiosk_connect": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only reads connection status, balance, and spending limits for the current Apiosk account.",
+        "open_world_justification": "Reads private Apiosk account state and does not interact with public websites or third-party services.",
+        "destructive_justification": "Does not charge the balance, change limits, disconnect the account, or remove data."
+      }
+    },
+    "apiosk_discover": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches for matching providers and returns offers without executing or purchasing any service.",
+        "open_world_justification": "Queries the external Apiosk catalogue and live x402 indexes over the internet.",
+        "destructive_justification": "Does not buy a provider call or change, delete, or publish data."
+      }
+    },
+    "apiosk_compare": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Computes and returns priced provider comparisons without executing an offer or charging the user.",
+        "open_world_justification": "Reads external provider offers, pricing, and performance data over the internet.",
+        "destructive_justification": "Does not purchase, delete, overwrite, revoke, or publish anything."
+      }
+    },
+    "apiosk_execute": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Executes the selected external provider and charges the connected Apiosk balance.",
+        "open_world_justification": "Sends the approved request to an external provider through Apiosk.",
+        "destructive_justification": "Consumes paid API service and creates a settled charge that cannot be undone by retrying or cancelling."
+      }
+    },
+    "apiosk_approval_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only reads the status and deadline of an existing purchase approval.",
+        "open_world_justification": "Reads private approval state inside the user's Apiosk account without contacting a provider.",
+        "destructive_justification": "Does not approve, deny, execute, charge, or delete the held purchase."
+      }
+    },
+    "apiosk_plan": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and stores a research plan and signed price quote, but does not dispatch provider calls or spend money.",
+        "open_world_justification": "Uses the external Apiosk catalogue and x402 sources to build the plan.",
+        "destructive_justification": "Does not execute the plan, charge the balance, delete data, or perform an irreversible action."
+      }
+    },
+    "apiosk_execute_plan": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Starts a stored research job that can dispatch paid provider calls against the approved ceiling.",
+        "open_world_justification": "Runs the approved plan through Apiosk and its selected external providers.",
+        "destructive_justification": "Can consume paid API services and create settled charges that already-dispatched calls cannot reverse."
+      }
+    },
+    "apiosk_job_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Only reads an existing job, its progress, pending question, result, and event history.",
+        "open_world_justification": "Reads private job state in the user's Apiosk account without contacting providers or public services.",
+        "destructive_justification": "Does not start, resume, stop, retry, delete, or charge the job."
+      }
+    },
+    "apiosk_resolve_job": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records the user's selected candidate on an existing job and resumes that job.",
+        "open_world_justification": "Changes the state of an externally running Apiosk job that can continue to provider calls.",
+        "destructive_justification": "Accepts only a candidate the job offered and does not itself charge, delete, overwrite, or cancel work."
+      }
+    },
+    "apiosk_cancel_job": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": true
+      },
+      "justifications": {
+        "read_only_justification": "Changes a running Apiosk job so that no further provider calls are dispatched.",
+        "open_world_justification": "Changes the state of an externally running job and affects future provider dispatches.",
+        "destructive_justification": "Irreversibly stops future work while already-dispatched paid calls remain settled."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Check the account and return one priced provider offer without buying it.",
+      "user_prompt": "Check whether my Apiosk account can pay, then find the best API for the latest filed annual accounts of Coolblue B.V. Show the price and do not run it yet.",
+      "file_attachment_urls": null,
+      "tools_triggered": "apiosk_connect, apiosk",
+      "expected_output": "Reports the connection state and returns one matching provider with its exact buyer price, required inputs, and an approval choice without executing it.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Discover and compare providers under explicit price and reliability requirements.",
+      "user_prompt": "Find and compare APIs that can extract text from a receipt. Prefer reliability and keep the price below $0.10 per call.",
+      "file_attachment_urls": null,
+      "tools_triggered": "apiosk_discover, apiosk_compare",
+      "expected_output": "Returns relevant providers with exact prices, available performance measurements, and no charge, then waits for the user to choose.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Execute a selected offer and handle a required purchase approval safely.",
+      "user_prompt": "Run the receipt OCR provider I selected at the price shown. If my policy requires approval, wait for it and continue only after it is approved.",
+      "file_attachment_urls": null,
+      "tools_triggered": "apiosk_execute, apiosk_approval_status",
+      "expected_output": "Uses the unchanged signed offer and price ceiling, completes at most one approved purchase, and reports the provider result and charged amount.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Create, approve, and start a multi-step company research plan.",
+      "user_prompt": "Plan how to retrieve a Dutch company's profile and latest filed accounts, show the complete price first, and start the job only after I approve it.",
+      "file_attachment_urls": null,
+      "tools_triggered": "apiosk_plan, apiosk_execute_plan",
+      "expected_output": "Returns one stored plan with ordered steps and a total ceiling, waits for explicit approval, and starts one idempotent job for the approved plan.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Follow a research job, resolve an offered identity choice, and stop future work when requested.",
+      "user_prompt": "Check my running research job. If it is waiting on an identity choice, show me the candidates and use the one I select. If I then ask to stop, cancel the remaining work.",
+      "file_attachment_urls": null,
+      "tools_triggered": "apiosk_job_status, apiosk_resolve_job, apiosk_cancel_job",
+      "expected_output": "Reports current progress, records only the exact candidate selected by the user, and cancels future dispatches only when the user explicitly asks to stop.",
+      "expected_output_url": null
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Do not invoke Apiosk when the answer is already contained in an attached local file.",
+      "user_prompt": "Summarize the PDF I attached to this conversation.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The plugin should not be invoked because the request can be answered from the attached conversation content.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke Apiosk for a general writing task that needs no external API data.",
+      "user_prompt": "Rewrite this paragraph in a friendlier tone.",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The plugin should not be invoked because rewriting user-provided text is outside its provider discovery and execution workflows.",
+      "expected_output_url": null
+    },
+    {
+      "description": "Do not invoke Apiosk for an unrelated calendar request.",
+      "user_prompt": "What meetings do I have tomorrow?",
+      "file_attachment_urls": null,
+      "tools_triggered": null,
+      "expected_output": "The plugin should not be invoked because it does not access the user's calendar.",
+      "expected_output_url": null
+    }
+  ]
+}

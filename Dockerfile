@@ -5,5 +5,7 @@ RUN npm ci --omit=dev
 
 COPY index.mjs server.mjs well-known.mjs logo-optimized-light.png ./
 COPY src ./src
+COPY assets/brand ./assets/brand
+COPY plugin ./plugin
 EXPOSE 3000
 CMD ["node", "server.mjs"]

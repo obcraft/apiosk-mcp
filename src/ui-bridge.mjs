@@ -89,7 +89,7 @@ window.apiosk=api;
  if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool};emit(openaiData())}
  if(window.parent===window)return;
  try{
-  const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.7.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
+  const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
   mcp=true;host=(result&&result.hostCapabilities)||{};
   api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||'')};
   send({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}});

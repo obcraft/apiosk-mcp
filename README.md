@@ -227,6 +227,12 @@ OAuth automatically when the session is not connected; sign-in and spending
 limits live on the buyer portal. `apiosk_connect` remains available as the
 read-only diagnostic and reconnection entrypoint.
 
+The OpenAI plugin package lives in `plugin/apiosk`. It combines this MCP server
+with the `apiosk` skill, so one installation provides both the live tools and
+the workflow instructions. The hosted server also exposes the bounded MCP
+skills extension used by OpenAI's **Scan Tools** action. A skill-only upload is
+available from the same source at `plugin/apiosk/skills/apiosk`.
+
 ## Examples
 
 ### Check the connection

@@ -14,6 +14,14 @@ import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_
 import { APIO_CONNECT_CARD_HTML, APIO_CONNECT_CARD_URI, APIO_CONNECT_CARD_META } from "./connect-card.mjs";
 import { APIO_PLAN_CARD_HTML, APIO_PLAN_CARD_URI, APIO_PLAN_CARD_META } from "./plan-card.mjs";
 import { PROMPTS, getPrompt } from "./prompts.mjs";
+import {
+  GetSkillRequestSchema,
+  ListSkillsRequestSchema,
+  getApioskSkill,
+  listApioskSkillResources,
+  listApioskSkills,
+  readApioskSkillResource,
+} from "./skill-catalog.mjs";
 
 /**
  * One sentence, defined once.
@@ -29,7 +37,7 @@ export const SERVER_DESCRIPTION =
   "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.";
 
 // Base version, kept in step with the published manifests (package.json etc.).
-export const SERVER_BASE_VERSION = "1.7.0";
+export const SERVER_BASE_VERSION = "1.8.0";
 
 // The millisecond timestamp encoded in the first 10 chars of a ULID (Crockford
 // base32). Fly's FLY_MACHINE_VERSION is a ULID that changes on every deploy, and
@@ -63,22 +71,32 @@ export function resolveServerVersion(env = process.env) {
   return ms ? `${major}.${minor}.${Math.floor(ms / 1000)}` : SERVER_BASE_VERSION;
 }
 
-/**
- * The connector's face, and the reason it is here rather than only in the
- * published manifests.
- *
- * A host asking the user "Claude wants to use Apiosk discover from Apiosk"
- * draws that card from `initialize`: the server title, the tool title, and an
- * icon. server.json and dxt.json already carried icons, but a registry
- * manifest is read once at install time — the card is drawn from the live
- * session, and a session that declares none gets a grey placeholder next to
- * every competitor's logo. Same three files as server.json, so the listing and
- * the connection cannot show different marks.
- */
+/** Transparent brand mark, shared by initialize and the published server card.
+ * SVG follows the host color scheme; PNG fallbacks explicitly name their theme. */
 export const SERVER_ICONS = [
-  { src: "https://mcp.apiosk.com/logo-optimized-light.png", mimeType: "image/png", sizes: ["2048x2048"] },
-  { src: "https://apiosk.com/logo.svg", mimeType: "image/svg+xml", sizes: ["any"] },
-  { src: "https://apiosk.com/apple-touch-icon.png", mimeType: "image/png", sizes: ["180x180"] },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-20260905-transparent.svg",
+    "mimeType": "image/svg+xml",
+    "sizes": [
+      "any"
+    ]
+  },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-light-20260905-transparent.png",
+    "mimeType": "image/png",
+    "sizes": [
+      "512x512"
+    ],
+    "theme": "light"
+  },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-dark-20260905-transparent.png",
+    "mimeType": "image/png",
+    "sizes": [
+      "512x512"
+    ],
+    "theme": "dark"
+  }
 ];
 
 export const SERVER_INFO = {
@@ -155,7 +173,15 @@ export function createApioskMcpServer(options = {}) {
     // `prompts` is declared because it is implemented. Leaving it out made
     // prompts/list answer -32601 Method not found, which a scanner reads as a
     // broken server rather than a server without prompts.
-    { capabilities: { tools: {}, resources: {}, prompts: {} }, instructions: SERVER_INSTRUCTIONS }
+    {
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+        extensions: { "io.modelcontextprotocol/skills": {} },
+      },
+      instructions: SERVER_INSTRUCTIONS,
+    }
   );
 
   /**
@@ -212,15 +238,21 @@ export function createApioskMcpServer(options = {}) {
   ];
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: UI_RESOURCES.map(({ uri, name, meta }) => ({
-      uri,
-      name,
-      mimeType: uiMimeType(),
-      _meta: meta,
-    })),
+    resources: [
+      ...UI_RESOURCES.map(({ uri, name, meta }) => ({
+        uri,
+        name,
+        mimeType: uiMimeType(),
+        _meta: meta,
+      })),
+      ...(await listApioskSkillResources()),
+    ],
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const skillResource = await readApioskSkillResource(request.params.uri);
+    if (skillResource) return { contents: [skillResource] };
+
     const resource = UI_RESOURCES.find((entry) => entry.uri === request.params.uri);
     if (!resource) throw new Error("Unknown Apiosk resource");
     return {
@@ -234,6 +266,12 @@ export function createApioskMcpServer(options = {}) {
       ],
     };
   });
+
+  server.setRequestHandler(ListSkillsRequestSchema, async () => listApioskSkills());
+
+  server.setRequestHandler(GetSkillRequestSchema, async (request) =>
+    getApioskSkill(request.params.uri),
+  );
 
   server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: PROMPTS }));
 

@@ -1,3 +1,10 @@
+# Superseded
+
+The current OpenAI Plugins submission plan is
+[`openai-plugin-submission-2026-09-05.md`](./openai-plugin-submission-2026-09-05.md).
+This file describes the retired six-tool surface and must not be used for a new
+submission.
+
 # Apiosk Connect — ChatGPT App Directory submission
 
 Supersedes `marketplace-submission-2026-04-08.md`, which still described the

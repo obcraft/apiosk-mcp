@@ -13,7 +13,7 @@ import fs from "node:fs";
 
 import { createApioskMcpRuntime } from "../src/runtime.mjs";
 import { TOOL_NAMES } from "../src/tools/index.mjs";
-import { listApioskTools } from "../src/create-server.mjs";
+import { listApioskTools, SERVER_BASE_VERSION } from "../src/create-server.mjs";
 
 // The order is the order the two flows run in, and it is asserted rather than
 // sorted: a list that reorders itself is a list a reviewer stops reading.
@@ -65,6 +65,31 @@ test("every tool declares a description that says whether it spends", async () =
       tool.description
     );
     assert.ok(saysSpend, `${tool.name} must say whether it spends money`);
+  }
+});
+
+test("every tool has all three explicit review annotations", async () => {
+  const runtime = createApioskMcpRuntime({ env: {} });
+  for (const tool of await runtime.listTools()) {
+    for (const annotation of ["readOnlyHint", "openWorldHint", "destructiveHint"]) {
+      assert.equal(
+        typeof tool.annotations?.[annotation],
+        "boolean",
+        `${tool.name} must explicitly declare ${annotation}`,
+      );
+    }
+  }
+});
+
+test("every state-changing tool is marked open-world", async () => {
+  const runtime = createApioskMcpRuntime({ env: {} });
+  const tools = await runtime.listTools();
+  for (const tool of tools.filter((entry) => entry.annotations.readOnlyHint === false)) {
+    assert.equal(
+      tool.annotations.openWorldHint,
+      true,
+      `${tool.name} changes a job, purchase, or external provider call`,
+    );
   }
 });
 
@@ -124,6 +149,26 @@ test("the published manifests agree on the eleven names", () => {
   for (const gone of ["apiosk_decide", "apiosk_fetch_paid", "apiosk_list_wallets", "apiosk_publish_api"]) {
     assert.ok(!readme.includes(gone), `README.md still documents the removed ${gone}`);
   }
+});
+
+test("every published package and UI reports the server base version", () => {
+  const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), "utf8"));
+  const packageJson = read("../package.json");
+  const serverJson = read("../server.json");
+  const dxt = read("../dxt.json");
+  const pluginJson = read("../plugin/apiosk/.codex-plugin/plugin.json");
+  const pyproject = fs.readFileSync(new URL("../pyproject.toml", import.meta.url), "utf8");
+  const uiBridge = fs.readFileSync(new URL("../src/ui-bridge.mjs", import.meta.url), "utf8");
+
+  assert.equal(packageJson.version, SERVER_BASE_VERSION);
+  assert.equal(serverJson.version, SERVER_BASE_VERSION);
+  for (const publishedPackage of serverJson.packages) {
+    assert.equal(publishedPackage.version, SERVER_BASE_VERSION);
+  }
+  assert.equal(dxt.version, SERVER_BASE_VERSION);
+  assert.equal(pluginJson.version, SERVER_BASE_VERSION);
+  assert.match(pyproject, new RegExp(`^version = "${SERVER_BASE_VERSION}"$`, "m"));
+  assert.match(uiBridge, new RegExp(`appInfo:\\{name:'Apiosk',version:'${SERVER_BASE_VERSION}'`));
 });
 
 test("no module in src/ is allowed to grow past 20 KB", () => {

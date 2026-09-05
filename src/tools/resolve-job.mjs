@@ -2,7 +2,7 @@
 //
 // It costs nothing, and that is a fact about the flow rather than a promise:
 // the lookup that produced the candidates has already run and already been
-// charged. This reads one of them and lets the branch continue.
+// charged. This records one of them and lets the branch continue.
 //
 // THE ANSWER IS A CANDIDATE, NOT A DESCRIPTION. `chosen` must equal the
 // `identity` of one of the candidates the job offered, exactly as offered. The
@@ -16,8 +16,8 @@ export const RESOLVE_JOB_TOOL = {
   name: "apiosk_resolve_job",
   title: "Apiosk answer job",
   description:
-    "Answer the question a running plan stopped to ask. A job pauses when a lookup matched more than one subject — several companies of the same name, say — and it cannot continue until a person says which one was meant. Read the candidates from `pending_question` in apiosk_job_status, show them to the user with the details that tell them apart, and ask BY NAME, never by number. Then pass `node_key` from that question and `chosen` set to the chosen candidate's `identity`, copied exactly: an answer that is not one of the offered candidates is refused rather than guessed at. Do not choose on the user's behalf, and do not answer from the question text alone. Reads only; spends nothing — the lookup that produced these candidates was already paid for.",
-  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    "Answer the question a running plan stopped to ask. A job pauses when a lookup matched more than one subject — several companies of the same name, say — and it cannot continue until a person says which one was meant. Read the candidates from `pending_question` in apiosk_job_status, show them to the user with the details that tell them apart, and ask BY NAME, never by number. Then pass `node_key` from that question and `chosen` set to the chosen candidate's `identity`, copied exactly: an answer that is not one of the offered candidates is refused rather than guessed at. Do not choose on the user's behalf, and do not answer from the question text alone. This records the answer on the external job and resumes it; answering spends nothing because the lookup that produced these candidates was already paid for.",
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   inputSchema: {
     type: "object",
     required: ["job_id", "node_key", "chosen"],

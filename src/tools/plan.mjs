@@ -44,7 +44,7 @@ export const PLAN_TOOL = {
   title: "Apiosk plan",
   description:
     "Turn a research goal that needs several API calls into ONE plan with ONE price ceiling: the steps in the order they run, which of them the plan can and cannot reach, and a signed `plan_token` that authorises exactly this version. Use it when the answer needs more than one call — a lookup whose result feeds a second call, or several facts about the same company — and use apiosk_discover plus apiosk_execute when a single call will do. Pass the user's question directly; the Gateway shares the App's reader and asks for missing context. Supply `intent` only when you already have a structured goal with known subjects and required fact types. The gateway compiles it, shares a lookup two branches both need instead of buying it twice, and prices the whole plan once. Where this host can ask, the user is shown the plan and its one price and answers Approve or Deny here; read that answer instead of asking again. Nothing is reserved and nothing is called: this tool spends nothing, and only apiosk_execute_plan starts the work.",
-  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   _meta: {
     "openai/outputTemplate": "ui://apiosk/plan-card.html",
     "openai/toolInvocation/invoking": "Planning the research…",

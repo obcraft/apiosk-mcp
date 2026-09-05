@@ -1,0 +1,13 @@
+interface:
+  display_name: "Apiosk"
+  short_description: "Find and run the right API"
+  brand_color: "#6349DB"
+  default_prompt: "Use $apiosk to find and price the best API for my request."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "apiosk"
+      description: "Find, compare, price, and run API services through Apiosk"
+      transport: "streamable_http"
+      url: "https://mcp.apiosk.com/mcp"

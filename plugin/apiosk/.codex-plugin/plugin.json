@@ -1,0 +1,35 @@
+{
+  "name": "apiosk",
+  "version": "1.8.0",
+  "description": "Find, compare, price, and run API services through Apiosk.",
+  "author": {
+    "name": "Apiosk",
+    "email": "hello@apiosk.com",
+    "url": "https://apiosk.com"
+  },
+  "homepage": "https://apiosk.com/agents",
+  "repository": "https://github.com/obcraft/apiosk-mcp",
+  "license": "MIT",
+  "keywords": ["api", "mcp", "data", "research", "x402"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Apiosk",
+    "shortDescription": "Find and run the right API",
+    "longDescription": "Apiosk finds API services for a request, compares price and measured performance, shows the exact cost before purchase, and runs the provider the user approves. The connected Apiosk account controls balance, limits, and approval policy.",
+    "developerName": "Apiosk",
+    "category": "Productivity",
+    "capabilities": ["Discover APIs", "Compare providers", "Run approved API calls"],
+    "websiteURL": "https://apiosk.com",
+    "privacyPolicyURL": "https://apiosk.com/privacy",
+    "termsOfServiceURL": "https://apiosk.com/terms",
+    "defaultPrompt": [
+      "Find the best API for current company information and show me the price.",
+      "Compare APIs that can extract text from a receipt.",
+      "Plan the API calls needed to research a company before spending anything."
+    ],
+    "brandColor": "#6349DB",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  },
+  "mcpServers": "./.mcp.json"
+}

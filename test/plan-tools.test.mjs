@@ -451,7 +451,7 @@ test("the single-call flow is untouched by any of this", () => {
   assert.ok(!JSON.stringify(EXECUTE_TOOL.inputSchema).includes("plan_token"));
   // The plan tool is a separate door, not a change to that one.
   assert.notEqual(PLAN_TOOL.name, EXECUTE_TOOL.name);
-  assert.equal(PLAN_TOOL.annotations.readOnlyHint, true);
+  assert.equal(PLAN_TOOL.annotations.readOnlyHint, false);
   assert.equal(EXECUTE_PLAN_TOOL.annotations.readOnlyHint, false);
   assert.equal(JOB_STATUS_TOOL.annotations.readOnlyHint, true);
 });

@@ -14,6 +14,7 @@ import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
 import { APIO_OFFER_CARD_URI } from "./src/offer-card.mjs";
 import { APIO_RESULTS_PICKER_URI } from "./src/results-picker.mjs";
 import { APIO_CONNECT_CARD_URI } from "./src/connect-card.mjs";
+import { APIO_PLAN_CARD_URI } from "./src/plan-card.mjs";
 import {
   createHostedOAuthSupport,
   resolveHostedMcpUrls,
@@ -282,9 +283,21 @@ app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
   return sendOpenAiAppsChallenge(res, OPENAI_APPS_CHALLENGE_TOKEN);
 });
 
+// Preserve the original URL for already-installed connectors.
 app.get("/logo-optimized-light.png", (req, res) => {
+  res.setHeader("cache-control", "public, max-age=0, must-revalidate");
   res.type("png").sendFile(fileURLToPath(new URL("./logo-optimized-light.png", import.meta.url)));
 });
+
+// Only the declared, versioned brand files are exposed.
+for (const icon of SERVER_INFO.icons) {
+  const pathname = new URL(icon.src).pathname;
+  const filename = pathname.slice("/brand/".length);
+  app.get(pathname, (_req, res) => {
+    res.setHeader("cache-control", "public, max-age=31536000, immutable");
+    res.type(icon.mimeType).sendFile(fileURLToPath(new URL(`./assets/brand/${filename}`, import.meta.url)));
+  });
+}
 
 app.get(SETTLEMENT_DISCLOSURE_PATH, (_req, res) => {
   res
@@ -341,16 +354,18 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
       description: SERVER_DESCRIPTION,
       version: SERVER_INFO.version,
       websiteUrl: "https://apiosk.com",
-      icons: [
-        { src: "https://mcp.apiosk.com/logo-optimized-light.png", mimeType: "image/png", sizes: ["2048x2048"] },
-        { src: "https://apiosk.com/logo.svg", mimeType: "image/svg+xml", sizes: ["any"] },
-      ],
+      icons: SERVER_INFO.icons,
       instructions: SERVER_INSTRUCTIONS,
       authentication: {
         required: false,
         schemes: ["oauth2", "noauth"],
       },
-      capabilities: { tools: {}, resources: {}, prompts: {} },
+      capabilities: {
+        tools: {},
+        resources: {},
+        prompts: {},
+        extensions: { "io.modelcontextprotocol/skills": {} },
+      },
       tools,
       prompts: PROMPTS,
       // Every card this server can render, not one of the four. A registry
@@ -361,6 +376,7 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
         { uri: APIO_OFFER_CARD_URI, name: "Apiosk offer approval card", mimeType: "text/html+skybridge" },
         { uri: APIO_RESULTS_PICKER_URI, name: "Apiosk offer picker", mimeType: "text/html+skybridge" },
         { uri: APIO_CONNECT_CARD_URI, name: "Apiosk connection card", mimeType: "text/html+skybridge" },
+        { uri: APIO_PLAN_CARD_URI, name: "Apiosk plan approval card", mimeType: "text/html+skybridge" },
       ],
     });
   } catch (error) {
