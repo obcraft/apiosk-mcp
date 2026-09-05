@@ -22,7 +22,7 @@
 // settled in `_shared/execution.ts`. Both of the old branches still happen, one
 // layer down, chosen from the selection's own kind.
 
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { ApioskPaymentRequiredError, GatewayError } from "../gateway-client.mjs";
 import { connectUrl } from "./connect.mjs";
@@ -105,7 +105,12 @@ export async function runExecute(args = {}, { env = process.env, gateway } = {})
   }
 
   try {
-    return content(await executeSignedOffer(offerToken, approvalId, args, gateway));
+    const value = await executeSignedOffer(offerToken, approvalId, args, gateway);
+    const result = content(value);
+    if (typeof value.answer === "string" && value.answer.trim()) {
+      result.content = [{ type: "text", text: value.answer }];
+    }
+    return result;
   } catch (error) {
     if (error instanceof ApioskPaymentRequiredError) {
       // A 402 is a business state, not a protocol failure. Returning isError
@@ -250,7 +255,7 @@ async function executeSignedOffer(offerToken, approvalId, args, gateway) {
   const body = {
     selection_id: selectionId,
     inputs: args.input ?? {},
-    idempotency_key: randomUUID(),
+    idempotency_key: executionKey(offerToken, args),
   };
   // The ceiling the user actually saw is the TOTAL, fee included, so it bounds
   // what leaves the balance rather than the provider's leg of it.
@@ -268,8 +273,24 @@ async function executeSignedOffer(offerToken, approvalId, args, gateway) {
   if (trimString(args.operation)) body.operation = trimString(args.operation);
   if (approvalId) body.approval_id = approvalId;
 
-  const result = await gateway.requestJson("/v1/run", { method: "POST", body });
+  const result = await gateway.requestJson("/v1/run", { method: "POST", body, timeout: 90_000 });
   return { status: "ok", selection_id: selectionId, ...asObject(result) };
+}
+
+// A retry of the same signed offer and exact inputs is the same purchase,
+// including across MCP restarts. The ledger accepts UUID-v4-shaped keys.
+export function executionKey(offerToken, args) {
+  function canonical(value) {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical(value[k])]));
+    return value;
+  }
+  const parts = asInputParts(args.input_parts) ?? { path: asRecord(args.path_params), query: asRecord(args.query), body: asRecord(args.input) };
+  const hash = createHash("sha256").update(JSON.stringify(canonical({ offerToken, parts, operation: trimString(args.operation) }))).digest();
+  hash[6] = (hash[6] & 15) | 64;
+  hash[8] = (hash[8] & 63) | 128;
+  const id = hash.subarray(0, 16).toString("hex");
+  return `${id.slice(0,8)}-${id.slice(8,12)}-${id.slice(12,16)}-${id.slice(16,20)}-${id.slice(20)}`;
 }
 
 
