@@ -146,6 +146,24 @@ function fakeGateway(routes = {}) {
 
 const planningGateway = () => fakeGateway({ "/v1/plans": PLAN_RESPONSE });
 
+test("a Picnic question uses the Gateway reader without an MCP interpretation", async () => {
+  const gateway = planningGateway();
+  const value = parse(await runPlan({ question: "Picnic jaarrekening", max_price_usdc: 0.25 }, { gateway, env: {} }));
+  assert.equal(value.plan.plan_hash, PLAN_HASH);
+  assert.equal(gateway.calls[0].body.question, "Picnic jaarrekening");
+  assert.equal(gateway.calls[0].body.intent, undefined);
+  assert.equal(gateway.calls[0].body.max_buyer_total_atomic, 250000);
+});
+
+test("missing research context is returned as a question with complete examples", async () => {
+  const gateway = { requestJson: async () => {
+    throw new GatewayError("Which company?", { status: 422, code: "needs_input", body: { suggestions: ["Annual accounts of Picnic"] } });
+  } };
+  const value = parse(await runPlan({ question: "annual accounts" }, { gateway, env: {} }));
+  assert.equal(value.status, "needs_input");
+  assert.deepEqual(value.suggestions, ["Annual accounts of Picnic"]);
+});
+
 /** A client that declared elicitation and answers with `decision`. */
 function hostAnswering(decision, seen = []) {
   return {

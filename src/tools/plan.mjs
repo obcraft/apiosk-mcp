@@ -8,12 +8,9 @@
 // an MCP client must show the same plan hash and the same amount for the same
 // intent, and two implementations of a plan is exactly one too many.
 //
-// WHY AN INTENT RATHER THAN A QUESTION. `POST /v1/plans` takes a described
-// goal, not a sentence, and it does so deliberately — a model call inside the
-// compile would make the hash depend on a sampler, and then the App and this
-// server could disagree while both being right. So the intent crosses this
-// boundary as data. Passing one through is not planning; the compiler validates
-// it and refuses by name an intent naming an output nothing produces.
+// The question-only path uses the same Gateway reader as the App. An explicit
+// intent remains supported. The approved plan stores the interpreted intent,
+// so execution never reinterprets it.
 
 import { elicitPlanApproval } from "../elicit.mjs";
 import { GatewayError } from "../gateway-client.mjs";
@@ -46,7 +43,7 @@ export const PLAN_TOOL = {
   name: "apiosk_plan",
   title: "Apiosk plan",
   description:
-    "Turn a research goal that needs several API calls into ONE plan with ONE price ceiling: the steps in the order they run, which of them the plan can and cannot reach, and a signed `plan_token` that authorises exactly this version. Use it when the answer needs more than one call — a lookup whose result feeds a second call, or several facts about the same company — and use apiosk_discover plus apiosk_execute when a single call will do. Describe the goal as `intent`: the subject with whatever you already know about it, and the fact types the answer must contain. The gateway compiles it, shares a lookup two branches both need instead of buying it twice, and prices the whole plan once. Where this host can ask, the user is shown the plan and its one price and answers Approve or Deny here; read that answer instead of asking again. Nothing is reserved and nothing is called: this tool spends nothing, and only apiosk_execute_plan starts the work.",
+    "Turn a research goal that needs several API calls into ONE plan with ONE price ceiling: the steps in the order they run, which of them the plan can and cannot reach, and a signed `plan_token` that authorises exactly this version. Use it when the answer needs more than one call — a lookup whose result feeds a second call, or several facts about the same company — and use apiosk_discover plus apiosk_execute when a single call will do. Pass the user's question directly; the Gateway shares the App's reader and asks for missing context. Supply `intent` only when you already have a structured goal with known subjects and required fact types. The gateway compiles it, shares a lookup two branches both need instead of buying it twice, and prices the whole plan once. Where this host can ask, the user is shown the plan and its one price and answers Approve or Deny here; read that answer instead of asking again. Nothing is reserved and nothing is called: this tool spends nothing, and only apiosk_execute_plan starts the work.",
   annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   _meta: {
     "openai/outputTemplate": "ui://apiosk/plan-card.html",
@@ -56,13 +53,13 @@ export const PLAN_TOOL = {
   },
   inputSchema: {
     type: "object",
-    required: ["question", "intent"],
+    required: ["question"],
     additionalProperties: false,
     properties: {
       question: {
         type: "string",
         description:
-          "The goal in the user's own words. Shown on the plan card and recorded with the approval; the compiler never reads it.",
+          "The goal in the user's own words, including the company and information needed. The Gateway interprets it when intent is omitted and asks for missing context.",
       },
       intent: {
         type: "object",
@@ -120,7 +117,7 @@ export async function runPlan(args = {}, { env = process.env, gateway, host } = 
   const requiredOutputs = Array.isArray(intent?.required_outputs)
     ? intent.required_outputs.map(trimString).filter(Boolean)
     : [];
-  if (requiredOutputs.length === 0) {
+  if (intent && requiredOutputs.length === 0) {
     return errorContent({
       error_code: "plan.no_required_outputs",
       message:
@@ -133,16 +130,19 @@ export async function runPlan(args = {}, { env = process.env, gateway, host } = 
   // It is the caller's own limit, never a price anything computed.
   const body = {
     question,
-    intent: {
+    ...(intent ? { intent: {
       subjects: Array.isArray(intent.subjects) && intent.subjects.length ? intent.subjects : [{ role: "subject" }],
       required_outputs: requiredOutputs,
       ...(Array.isArray(intent.optional_outputs) ? { optional_outputs: intent.optional_outputs } : {}),
       ...(trimString(intent.format) ? { format: trimString(intent.format) } : {}),
       ...(trimString(intent.jurisdiction) ? { jurisdiction: trimString(intent.jurisdiction) } : {}),
-    },
+    } } : {}),
   };
   const ceiling = atomicFromUsdc(args.max_price_usdc);
-  if (ceiling !== null) body.intent.max_buyer_total_atomic = ceiling;
+  if (ceiling !== null) {
+    if (body.intent) body.intent.max_buyer_total_atomic = ceiling;
+    else body.max_buyer_total_atomic = ceiling;
+  }
 
   let payload;
   try {
@@ -216,6 +216,16 @@ export async function runPlan(args = {}, { env = process.env, gateway, host } = 
 /** A refusal a caller can act on: the reason, and where there is a number, the number. */
 function planFailure(error, env) {
   if (!(error instanceof GatewayError)) throw error;
+
+  if (error.code === "needs_input") {
+    return content({
+      status: "needs_input",
+      error_code: error.code,
+      message: error.message,
+      suggestions: Array.isArray(error.body?.suggestions) ? error.body.suggestions : [],
+      next_steps: ["Ask the user this clarification. Keep their original goal and add the reply as context when calling apiosk_plan again. Do not invent missing company identifiers."],
+    });
+  }
 
   if (error.status === 401 || ["unauthorized", "invalid_token", "expired"].includes(error.code)) {
     return content({

@@ -1,28 +1,5 @@
-// Apiosk discovery, as one call to the gateway's own pipeline.
-//
-// This file used to be a second discovery engine. It tokenised the job here,
-// searched `/v1/apis` once per keyword, swept the Coinbase Bazaar itself, and
-// ranked the merge with its own weights. The gateway does all four of those
-// steps — read the job, match the reviewed catalogue, sweep every wired x402
-// index, rank the result — and doing them twice meant two answers to "what can
-// perform this job" with no way to tell which one an agent decided on.
-//
-// It also meant the weaker of the two answered. Asked for "Bloomberg's latest
-// consensus revenue estimate for ASML", the local copy searched the words
-// `bloomberg` and `asml` against a catalogue that files that job under analyst
-// estimates, and swept one index where the gateway sweeps seven — so it
-// reported that no API can do a job the ecosystem has two dozen endpoints for.
-// The gateway reads the same sentence as "consensus estimate / revenue forecast
-// / analyst estimates" before it searches anything.
-//
-// So nothing here decides. This module calls `GET /v1/discover`, and presents
-// both halves of what comes back: the reviewed candidates Apiosk can settle,
-// and the external x402 offers it cannot. The boundary between them is the
-// point — an unreviewed endpoint is worth showing and is not worth pretending
-// to have measured.
-//
-// Trust model unchanged: provider-supplied text is sanitised and flagged as
-// untrusted data, never as instructions.
+// Discover through the canonical Gateway Ask pipeline. Preserve its order,
+// buyer prices, clarification and ranking status across the MCP boundary.
 
 import { GatewayError } from "./gateway-client.mjs";
 import { content, errorContent } from "./tool-result.mjs";
@@ -329,6 +306,12 @@ export async function runDiscover(args = {}, ctx = {}) {
     "The names in the question — a company, a ticker, a brand, a data vendor — are PARAMETERS for one of these endpoints, not providers to go looking for. Nobody resells a named terminal's own feed here; an endpoint that serves analyst estimates answers a question about a specific company's estimates with that company as its argument. `input_params` and `capabilities[].input_contract` say which argument.",
     "Rows with `external: false` are reviewed Apiosk listings: the gateway prices and settles them, and only these can go on to apiosk_compare and apiosk_execute.",
   ];
+  if (primary?.ranking_status === "unavailable") {
+    guidance.push("Sources were found, but the ranking service was temporarily unavailable. Show the candidates with that qualification; this is not evidence that no API exists or a confident recommendation to buy.");
+  }
+  if (primary?.needs_context?.question) {
+    guidance.push(`Ask for the missing context before choosing a source: ${sanitizeText(primary.needs_context.question, 500)}`);
+  }
   if (externalCount > 0) {
     guidance.push(
       "Rows with `external: true` are live x402 endpoints Apiosk found in the wider ecosystem and has never reviewed or measured. Every one of them is bought the same way as a reviewed row and from the same balance: Apiosk pays the provider and takes `price_usdc` off the buyer's balance. Show them all: an unreviewed endpoint that does the job is worth more to the user than a clean 'nothing found'."
@@ -344,7 +327,7 @@ export async function runDiscover(args = {}, ctx = {}) {
   // The choice, offered as a choice: a host-drawn picker where there is one.
   const { selection, chosen, guidance_for_selection } = await offerChoice(ctx.host, results, {
     query,
-    enabled: args.choose !== false,
+    enabled: args.choose !== false && !primary?.needs_context,
   });
 
   return content({
@@ -360,6 +343,9 @@ export async function runDiscover(args = {}, ctx = {}) {
       "Print `presentation` verbatim as your reply, then ask which one they want by name. Do not rebuild it and do not drop rows.",
     query,
     segments,
+    ranking_status: primary?.ranking_status ?? "unknown",
+    needs_input: primary?.needs_input ?? null,
+    needs_context: primary?.needs_context ?? null,
     // The three substeps of the discovery pipeline, in the order they ran, so
     // the conversation can show the work rather than only its conclusion. A
     // misread question and an empty catalogue produce the same short answer;
