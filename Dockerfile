@@ -7,5 +7,6 @@ COPY index.mjs server.mjs well-known.mjs logo-optimized-light.png ./
 COPY src ./src
 COPY assets/brand ./assets/brand
 COPY plugin ./plugin
+COPY assets/brand ./assets/brand
 EXPOSE 3000
 CMD ["node", "server.mjs"]

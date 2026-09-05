@@ -63,6 +63,7 @@
     "README.md",
     "docs",
     "assets/brand",
+    "assets/brand",
     "plugin"
   ],
   "dependencies": {
