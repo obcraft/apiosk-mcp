@@ -7,25 +7,27 @@
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
-      "src": "https://mcp.apiosk.com/logo-optimized-light.png",
-      "mimeType": "image/png",
-      "sizes": [
-        "2048x2048"
-      ]
-    },
-    {
-      "src": "https://apiosk.com/logo.svg",
+      "src": "https://mcp.apiosk.com/brand/mark-20260905-transparent.svg",
       "mimeType": "image/svg+xml",
       "sizes": [
         "any"
       ]
     },
     {
-      "src": "https://apiosk.com/apple-touch-icon.png",
+      "src": "https://mcp.apiosk.com/brand/mark-light-20260905-transparent.png",
       "mimeType": "image/png",
       "sizes": [
-        "180x180"
-      ]
+        "512x512"
+      ],
+      "theme": "light"
+    },
+    {
+      "src": "https://mcp.apiosk.com/brand/mark-dark-20260905-transparent.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ],
+      "theme": "dark"
     }
   ],
   "repository": {

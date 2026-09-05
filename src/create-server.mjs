@@ -63,22 +63,32 @@ export function resolveServerVersion(env = process.env) {
   return ms ? `${major}.${minor}.${Math.floor(ms / 1000)}` : SERVER_BASE_VERSION;
 }
 
-/**
- * The connector's face, and the reason it is here rather than only in the
- * published manifests.
- *
- * A host asking the user "Claude wants to use Apiosk discover from Apiosk"
- * draws that card from `initialize`: the server title, the tool title, and an
- * icon. server.json and dxt.json already carried icons, but a registry
- * manifest is read once at install time — the card is drawn from the live
- * session, and a session that declares none gets a grey placeholder next to
- * every competitor's logo. Same three files as server.json, so the listing and
- * the connection cannot show different marks.
- */
+/** Transparent brand mark, shared by initialize and the published server card.
+ * SVG follows the host color scheme; PNG fallbacks explicitly name their theme. */
 export const SERVER_ICONS = [
-  { src: "https://mcp.apiosk.com/logo-optimized-light.png", mimeType: "image/png", sizes: ["2048x2048"] },
-  { src: "https://apiosk.com/logo.svg", mimeType: "image/svg+xml", sizes: ["any"] },
-  { src: "https://apiosk.com/apple-touch-icon.png", mimeType: "image/png", sizes: ["180x180"] },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-20260905-transparent.svg",
+    "mimeType": "image/svg+xml",
+    "sizes": [
+      "any"
+    ]
+  },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-light-20260905-transparent.png",
+    "mimeType": "image/png",
+    "sizes": [
+      "512x512"
+    ],
+    "theme": "light"
+  },
+  {
+    "src": "https://mcp.apiosk.com/brand/mark-dark-20260905-transparent.png",
+    "mimeType": "image/png",
+    "sizes": [
+      "512x512"
+    ],
+    "theme": "dark"
+  }
 ];
 
 export const SERVER_INFO = {

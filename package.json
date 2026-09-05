@@ -61,7 +61,8 @@
     "dxt.json",
     "src",
     "README.md",
-    "docs"
+    "docs",
+    "assets/brand"
   ],
   "dependencies": {
     "@apiosk/sdk": "^0.1.0",
