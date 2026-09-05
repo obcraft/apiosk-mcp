@@ -23,11 +23,14 @@ call.
 - **Local stdio package:** `npx -y @apiosk/mcp` or `uvx apiosk-mcp`.
 - **Buyer portal:** [buy.apiosk.com](https://buy.apiosk.com) — sign in, fund a wallet, set the limits, approve a held purchase.
 
-## The six tools
+## The eleven tools
 
-There are exactly six. `apiosk` is the one-shot entrypoint for fast shopping:
-it returns the App's own top ranked runnable provider and approval card. An agent does not browse a menu: it reads
-descriptions and picks, so every tool here earns its place in one flow.
+Two paths, and the same rules on both. `apiosk` is the one-shot entrypoint for
+fast shopping: it returns the App's own top ranked runnable provider and
+approval card. An agent does not browse a menu: it reads descriptions and picks,
+so every tool here earns its place in one of the two flows.
+
+**One call**, when a single API answers the question:
 
 | Tool | What it answers | Spends |
 | --- | --- | --- |
@@ -38,8 +41,25 @@ descriptions and picks, so every tool here earns its place in one flow.
 | `apiosk_execute` | Run the offer the user chose, at the price they were shown. | **yes** |
 | `apiosk_approval_status` | What happened to the purchase the buyer's rules put on hold? | no |
 
+**Several calls**, when a lookup's result feeds the next call, or several facts
+are wanted about one subject:
+
+| Tool | What it answers | Spends |
+| --- | --- | --- |
+| `apiosk_plan` | What would answering this take, in what order, and what is the one price for all of it? Returns the steps, what it cannot reach, and a signed `plan_token`. | no |
+| `apiosk_execute_plan` | Start the plan the user approved, by `plan_token` and nothing else. | **yes** |
+| `apiosk_job_status` | Where has the running plan got to, and what happened since the last cursor? | no |
+| `apiosk_resolve_job` | Which subject was meant, when the job stopped to ask? | no |
+| `apiosk_cancel_job` | Stop dispatching further calls. Calls already sent are still settled. | no |
+
+The plan is compiled, deduplicated and priced by the gateway, never here: a
+lookup two branches both need is bought once, and a fact you already hold
+removes its lookup from the plan and from the price. The App and this server
+show the same `plan_hash` and the same amount for the same intent because
+exactly one of them computes it.
+
 Anything a buyer needs that is not on this list is a link to
-[buy.apiosk.com](https://buy.apiosk.com), not a tool. This server holds no keys,
+[app.apiosk.com](https://app.apiosk.com), not a tool. This server holds no keys,
 prices nothing and moves no money.
 
 ### The one rule
@@ -50,6 +70,12 @@ two actions; do not add a second prose confirmation. Only Approve may pass the
 signed `offer_token`, exact `max_price_usdc` ceiling and entered inputs to
 `apiosk_execute`. Deny stops without spending.
 
+A plan is the same rule at plan scale: **one confirmation, for the whole plan,
+at the whole price.** `apiosk_plan` asks it once and returns the answer in
+`status`; `apiosk_execute_plan` asks nothing and accepts nothing but the
+`plan_token`, so it cannot build a plan, change one, or re-open a decision that
+was already made.
+
 ### How the user is asked
 
 The choice and the approval are the same question in three renderings, built
@@ -58,9 +84,9 @@ it appears:
 
 | Host | What the person sees |
 | --- | --- |
-| Implements MCP elicitation (Claude Code) | A native picker: `apiosk_discover` lists the runnable offers with their prices, `apiosk` asks Approve or Deny with the price on the button. The answer comes back in `chosen` / `status`. |
-| Renders UI resources (MCP Apps SEP-1865, OpenAI Apps SDK) | A card: `ui://apiosk/results-picker.html` picks an offer and collects its inputs, `ui://apiosk/connect-card.html` shows the balance and limits, `ui://apiosk/offer-card.html` approves one offer, `ui://apiosk/result-canvas.html` shows the result. One document serves both protocols. |
-| Neither | `presentation`, printed verbatim, and the agent asks which one they want **by name**. Never ask somebody to reply with a number. |
+| Implements MCP elicitation (Claude Code) | A native picker: `apiosk_discover` lists the runnable offers with their prices, `apiosk` asks Approve or Deny with the price on the button, `apiosk_plan` asks Approve or Deny for the whole plan at its one ceiling. The answer comes back in `chosen` / `status`. |
+| Renders UI resources (MCP Apps SEP-1865, OpenAI Apps SDK) | A card: `ui://apiosk/results-picker.html` picks an offer and collects its inputs, `ui://apiosk/connect-card.html` shows the balance and limits, `ui://apiosk/offer-card.html` approves one offer, `ui://apiosk/plan-card.html` approves one plan, `ui://apiosk/result-canvas.html` shows the result. One document serves both protocols. |
+| Neither | `presentation`, printed verbatim, and the agent asks which one they want **by name**. Never ask somebody to reply with a number. For a plan the fallback is the App approval link in `approval.approve_url`. |
 
 Interactive UI in Claude's own chat surfaces is limited to connectors approved
 for the Connectors Directory, so the elicitation path is what a Claude user gets
@@ -77,6 +103,12 @@ retried blindly:
 | `payment_required` | The balance cannot cover the call. | Call `apiosk_connect`, tell the user, stop. |
 | `limit_exceeded` | This connection's per-call or daily ceiling refused the call. | Do not retry; only the buyer can change it. |
 | `not_authorised` | The connection expired or was revoked. | Call `apiosk_connect` for the re-connect link, stop. |
+
+`apiosk_execute_plan` adds one more, and it is not a failure either:
+
+| `status` | Meaning | Next step |
+| --- | --- | --- |
+| `plan_stale` | The quote expired, the plan moved, or the fee schedule changed since the approval. Nothing was reserved. | Do not retry the token. Call `apiosk_plan` again and have the user approve the new plan and its price. |
 
 ## Quick start
 
@@ -261,6 +293,41 @@ price is above the number the user was shown.
 ```json
 { "name": "apiosk_approval_status", "arguments": { "approval_id": "2f8656ec-e667-4c8f-a340-a8dc2ddc36bc" } }
 ```
+
+### Plan a job that needs more than one call
+
+```json
+{
+  "name": "apiosk_plan",
+  "arguments": {
+    "question": "Is Mollie a healthy company?",
+    "intent": {
+      "subjects": [{ "role": "subject", "known": { "company.name": "Mollie B.V." } }],
+      "required_outputs": ["company.profile", "company.financial_statements"],
+      "jurisdiction": "NL"
+    },
+    "max_price_usdc": 0.25
+  }
+}
+```
+
+The result carries the steps in the order they run, whatever the plan could not
+reach, one `total_usdc` ceiling and a signed `plan_token`. It spends nothing.
+A `company.registration.nl.kvk` in `known` removes the identity lookup from both
+the steps and the price.
+
+### Start it, watch it, answer it
+
+```json
+{ "name": "apiosk_execute_plan", "arguments": { "plan_token": "pt_..." } }
+{ "name": "apiosk_job_status",   "arguments": { "job_id": "…", "after": 0 } }
+{ "name": "apiosk_resolve_job",  "arguments": { "job_id": "…", "node_key": "n_lookup", "chosen": "30528634" } }
+{ "name": "apiosk_cancel_job",   "arguments": { "job_id": "…" } }
+```
+
+Starting the same approved plan twice gives one job, not two. The job outlives
+the conversation, and the same job is visible and manageable in the Apiosk app —
+only cancel one when the user asks to stop.
 
 ## Environment variables
 

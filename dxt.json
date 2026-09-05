@@ -44,6 +44,26 @@
     {
       "name": "apiosk_approval_status",
       "description": "Read the state of a purchase the buyer's rules put on hold: pending, approved, denied or expired. Spends nothing."
+    },
+    {
+      "name": "apiosk_plan",
+      "description": "Turn a goal that needs several API calls into one plan with one price ceiling, its steps, what it cannot reach, and a signed plan token. The gateway compiles and prices it. Spends nothing."
+    },
+    {
+      "name": "apiosk_execute_plan",
+      "description": "Start the plan the user approved, by plan token and nothing else, and return the job that runs it. This settles the plan's calls from the balance the buyer funded and capped."
+    },
+    {
+      "name": "apiosk_job_status",
+      "description": "Read where a running plan has got to, what it has used of the approved budget, and what happened since a cursor. Spends nothing."
+    },
+    {
+      "name": "apiosk_resolve_job",
+      "description": "Answer a running plan when it stopped to ask which subject was meant, with a candidate it offered. Spends nothing."
+    },
+    {
+      "name": "apiosk_cancel_job",
+      "description": "Stop a running plan from dispatching further calls, when the user asks to stop. Calls already sent are still settled."
     }
   ]
 }

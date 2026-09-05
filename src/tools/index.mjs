@@ -1,6 +1,10 @@
 // The tool registry, and the only place a tool is added.
 //
-// Six tools, one per step of the buyer flow plus the one-shot fast path.
+// Eleven tools: six for the single call a buyer approves one of, and five for
+// the multi-call plan they approve once and watch afterwards. The second five
+// are not a second product — they are the same flow when the answer needs more
+// than one call, and they share the price, the approval question and the
+// gateway with the first six.
 //
 // Before adding another, read apiosk-buyer-flow-tasks/mcp/00-tool-surface.md.
 // The last time this surface was left to grow it reached thirty nine tools with
@@ -13,6 +17,11 @@ import { COMPARE_TOOL, runCompareTool } from "./compare.mjs";
 import { EXECUTE_TOOL, runExecute } from "./execute.mjs";
 import { APPROVAL_STATUS_TOOL, runApprovalStatus } from "./approval-status.mjs";
 import { QUICK_TOOL, runQuickBest } from "./top.mjs";
+import { PLAN_TOOL, runPlan } from "./plan.mjs";
+import { EXECUTE_PLAN_TOOL, runExecutePlan } from "./execute-plan.mjs";
+import { JOB_STATUS_TOOL, runJobStatus } from "./job-status.mjs";
+import { RESOLVE_JOB_TOOL, runResolveJob } from "./resolve-job.mjs";
+import { CANCEL_JOB_TOOL, runCancelJob } from "./cancel-job.mjs";
 
 /**
  * The surface, in the order the flow runs.
@@ -33,6 +42,14 @@ export const TOOLS = [
   { definition: COMPARE_TOOL, run: runCompareTool, requiresConnection: true },
   { definition: EXECUTE_TOOL, run: runExecute, requiresConnection: true },
   { definition: APPROVAL_STATUS_TOOL, run: runApprovalStatus, requiresConnection: true },
+  // The plan half of the surface, in the order it runs: plan, approve and
+  // start, watch, answer, stop. Every one of them reaches the same gateway
+  // routes the app reaches, so a job is one job whichever surface began it.
+  { definition: PLAN_TOOL, run: runPlan, requiresConnection: true },
+  { definition: EXECUTE_PLAN_TOOL, run: runExecutePlan, requiresConnection: true },
+  { definition: JOB_STATUS_TOOL, run: runJobStatus, requiresConnection: true },
+  { definition: RESOLVE_JOB_TOOL, run: runResolveJob, requiresConnection: true },
+  { definition: CANCEL_JOB_TOOL, run: runCancelJob, requiresConnection: true },
 ];
 
 export const TOOL_DEFINITIONS = TOOLS.map((tool) => tool.definition);

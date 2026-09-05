@@ -15,6 +15,8 @@ import { createApioskMcpRuntime } from "../src/runtime.mjs";
 import { TOOL_NAMES } from "../src/tools/index.mjs";
 import { listApioskTools } from "../src/create-server.mjs";
 
+// The order is the order the two flows run in, and it is asserted rather than
+// sorted: a list that reorders itself is a list a reviewer stops reading.
 const EXPECTED = [
   "apiosk",
   "apiosk_connect",
@@ -22,9 +24,16 @@ const EXPECTED = [
   "apiosk_compare",
   "apiosk_execute",
   "apiosk_approval_status",
+  // Step 7 of goal-plan-price-result: the multi-call flow. Added deliberately,
+  // with the plan compiled and priced by the gateway and by nothing here.
+  "apiosk_plan",
+  "apiosk_execute_plan",
+  "apiosk_job_status",
+  "apiosk_resolve_job",
+  "apiosk_cancel_job",
 ];
 
-test("the tool surface is exactly the six buyer-flow tools", async () => {
+test("the tool surface is exactly the eleven buyer-flow tools", async () => {
   assert.deepEqual(TOOL_NAMES, EXPECTED);
 
   const runtime = createApioskMcpRuntime({ env: {} });
@@ -52,7 +61,9 @@ test("every tool declares a description that says whether it spends", async () =
     // the user is not reaching for a card, Apiosk settles the call from a
     // balance they funded and capped in advance. The claim still has to be
     // there, in one of the words that actually mean it.
-    const saysSpend = /settles the call|spends nothing|Spends nothing|Reads only/.test(tool.description);
+    const saysSpend = /settles the call|settles its calls|settles the plan's calls|spends nothing|Spends nothing|Spends nothing itself|Reads only/.test(
+      tool.description
+    );
     assert.ok(saysSpend, `${tool.name} must say whether it spends money`);
   }
 });
@@ -65,6 +76,9 @@ test("every agent-gateway data tool starts OAuth before its first request", asyn
   assert.equal(await runtime.isToolProtected("apiosk_connect"), false);
   assert.equal(await runtime.isToolProtected("apiosk_discover"), true);
   assert.equal(await runtime.isToolProtected("apiosk_compare"), true);
+  for (const name of ["apiosk_plan", "apiosk_execute_plan", "apiosk_job_status", "apiosk_resolve_job", "apiosk_cancel_job"]) {
+    assert.equal(await runtime.isToolProtected(name), true, `${name} must start OAuth before its first request`);
+  }
 });
 
 test("the quick card has real approve and deny actions", async () => {
@@ -84,7 +98,18 @@ test("an unknown tool is refused by name, with the real list", async () => {
   assert.match(result.content[0].text, /tool\.unknown/);
 });
 
-test("the published manifests agree on the six names", () => {
+test("the plan card has real approve and deny actions and starts nothing else", async () => {
+  const { APIO_PLAN_CARD_HTML, APIO_PLAN_CARD_META } = await import("../src/plan-card.mjs");
+  assert.match(APIO_PLAN_CARD_HTML, /id="approve"/);
+  assert.match(APIO_PLAN_CARD_HTML, /id="deny"/);
+  assert.match(APIO_PLAN_CARD_HTML, /callTool\('apiosk_execute_plan'/);
+  assert.match(APIO_PLAN_CARD_HTML, /sendFollowUpMessage/);
+  assert.deepEqual(APIO_PLAN_CARD_META.ui.csp.connectDomains, []);
+  // The card carries the token through; it never assembles a plan of its own.
+  assert.ok(!/required_outputs|apiosk_plan'/.test(APIO_PLAN_CARD_HTML));
+});
+
+test("the published manifests agree on the eleven names", () => {
   const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), "utf8"));
 
   const dxt = read("../dxt.json");

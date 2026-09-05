@@ -118,6 +118,46 @@ export async function elicitApproval(host, { provider, priceLabel }) {
 }
 
 /**
+ * The one plan confirmation.
+ *
+ * A plan is several paid calls behind one amount, and the amount is the whole
+ * of what is being agreed to — which is why this asks once, here, and why
+ * apiosk_execute_plan never asks again. A second confirmation in front of a
+ * plan_token would be a second question about a decision already made, and the
+ * only thing it could add is a chance to answer it differently from the first.
+ *
+ * The shape is deliberately the same two options as `elicitApproval`: the price
+ * is on the button, and there is no third answer, because this is a decision
+ * that costs money and a hedge is not one of the things it can mean.
+ */
+export async function elicitPlanApproval(host, { question, priceLabel, calls }) {
+  if (!canElicit(host)) return null;
+
+  const scope = Number.isFinite(Number(calls)) ? `${calls} paid call${Number(calls) === 1 ? "" : "s"}` : "the planned calls";
+  const result = await ask(host, {
+    mode: "form",
+    message: `Run this plan for at most ${priceLabel}? It covers ${scope} for "${question}", comes off your Apiosk balance, and nothing is spent if you deny.`,
+    requestedSchema: {
+      type: "object",
+      required: ["decision"],
+      properties: {
+        decision: {
+          type: "string",
+          title: "This plan",
+          oneOf: [
+            { const: "approve", title: `Approve · at most ${priceLabel}` },
+            { const: "deny", title: "Deny · spend nothing" },
+          ],
+        },
+      },
+    },
+  });
+
+  if (!result || result.action !== "accept") return { decision: "denied", answered: false };
+  return { decision: result.content?.decision === "approve" ? "approved" : "denied", answered: true };
+}
+
+/**
  * The connect hand-off, in URL mode.
  *
  * URL mode is the shape of this step and not a stylistic choice: the buyer signs

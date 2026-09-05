@@ -93,7 +93,12 @@
         "apiosk_discover",
         "apiosk_compare",
         "apiosk_execute",
-        "apiosk_approval_status"
+        "apiosk_approval_status",
+        "apiosk_plan",
+        "apiosk_execute_plan",
+        "apiosk_job_status",
+        "apiosk_resolve_job",
+        "apiosk_cancel_job"
       ]
     }
   }

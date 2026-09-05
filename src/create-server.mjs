@@ -12,6 +12,7 @@ import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_MET
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
 import { APIO_CONNECT_CARD_HTML, APIO_CONNECT_CARD_URI, APIO_CONNECT_CARD_META } from "./connect-card.mjs";
+import { APIO_PLAN_CARD_HTML, APIO_PLAN_CARD_URI, APIO_PLAN_CARD_META } from "./plan-card.mjs";
 import { PROMPTS, getPrompt } from "./prompts.mjs";
 
 /**
@@ -96,7 +97,9 @@ export const SERVER_INFO = {
 };
 
 // Shown to every connecting MCP client/agent as server-level guidance.
-export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into a paid API call the buyer authorised. Six tools, one path, and only one of them spends anything:
+export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into paid API calls the buyer authorised. Eleven tools, two paths, and exactly two of them spend anything.
+
+ONE CALL, when a single API answers the question:
 
   apiosk                  -> one-shot answer: the shared App ranking's top runnable provider, exact price, required inputs and Approve/Deny card. Spends nothing.
   apiosk_connect          -> can this session buy? Which wallet, which policy, which limits. Spends nothing.
@@ -105,11 +108,22 @@ export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into a paid 
   apiosk_execute          -> run the offer THE USER CHOSE, at the price you showed them. Apiosk settles it from the connected balance.
   apiosk_approval_status  -> the state of a purchase the buyer's rules put on hold. Spends nothing.
 
-Use one of two routes:
+SEVERAL CALLS, when the answer needs a lookup whose result feeds the next call, or several facts about one subject:
+
+  apiosk_plan             -> one plan, one price ceiling, one signed plan_token. The gateway compiles and prices it; a lookup two branches both need is bought once. Spends nothing.
+  apiosk_execute_plan     -> start the plan the user approved, by plan_token and nothing else. Apiosk settles its calls from the connected balance, never above the approved ceiling.
+  apiosk_job_status       -> where the running plan has got to, and what happened since a cursor. Spends nothing.
+  apiosk_resolve_job      -> answer the job when it stopped to ask which subject was meant. Spends nothing.
+  apiosk_cancel_job       -> stop further calls, only when the user asks to stop. Already-sent calls are still settled.
+
+Use one of three routes:
   - quick ask: 'apiosk' for the top ranked runnable recommendation and its approval card.
   - comparison flow: apiosk_discover -> apiosk_compare for ranked alternatives.
+  - research flow: apiosk_plan -> apiosk_execute_plan -> apiosk_job_status, when one call cannot answer it.
 
-The one rule that matters: a PERSON approves or denies the offer. State the exact price. Only Approve may continue to apiosk_execute.
+The one rule that matters: a PERSON approves or denies. State the exact price. Only Approve may continue to apiosk_execute or apiosk_execute_plan.
+
+ONE PLAN, ONE CONFIRMATION. apiosk_plan asks the money question once, for the whole plan, at the whole price. apiosk_execute_plan asks nothing and takes nothing but the plan_token: it cannot build or change a plan, and a second confirmation in front of it is a second chance to answer a decision already made. If the plan expired or moved, it refuses with status 'plan_stale' — plan again and have the user approve the new price rather than retrying. A job outlives this conversation; do not cancel one because a chat is ending.
 
 WHERE THIS SERVER CAN ASK THEM ITSELF, IT ALREADY HAS. On a host that supports elicitation or renders UI resources, 'apiosk' puts an Approve/Deny question in front of the user and apiosk_discover puts a picker of the runnable offers in front of them. Read the answer instead of re-asking:
   apiosk           status 'approved' means they said yes at that price — call apiosk_execute now, with no second confirmation. status 'denied' means stop.
@@ -143,7 +157,7 @@ export function createApioskMcpServer(options = {}) {
   );
 
   /**
-   * The four cards, and the one mime type question.
+   * The five cards, and the one mime type question.
    *
    * The two host families that render a `ui://` resource label the same HTML
    * differently: MCP Apps (SEP-1865) reads `text/html;profile=mcp-app`, and
@@ -186,6 +200,12 @@ export function createApioskMcpServer(options = {}) {
       name: "Apiosk connection card",
       text: APIO_CONNECT_CARD_HTML,
       meta: APIO_CONNECT_CARD_META,
+    },
+    {
+      uri: APIO_PLAN_CARD_URI,
+      name: "Apiosk plan approval card",
+      text: APIO_PLAN_CARD_HTML,
+      meta: APIO_PLAN_CARD_META,
     },
   ];
 
