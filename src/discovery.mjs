@@ -24,9 +24,9 @@ const MAX_SEGMENT_QUERIES = 3;
 const EXTERNAL_ROWS_IN_TABLE = 8;
 
 /* THE FEE USED TO BE COMPUTED HERE, and it is gone.
-   `BUYER_FEE_MULTIPLIER = 1.1` mirrored the gateway's BUYER_MARKUP_BPS because
+   `BUYER_FEE_MULTIPLIER` mirrored the gateway's BUYER_MARKUP_BPS because
    `/v1/discover` quoted the provider's list price and the buyer is debited that
-   plus 10% — so this file marked every price up itself, or the menu and the
+   plus the buyer markup — so this file marked every price up itself, or the menu and the
    bill disagreed. A mirrored constant is a copy of somebody else's decision
    that goes stale silently, and a price computed in two places is two prices.
    `/v1/ask` returns the one number there is. Nothing in this module prices
@@ -202,7 +202,7 @@ export async function runDiscover(args = {}, ctx = {}) {
   // Sent as the buyer's ceiling, undivided. `/v1/ask` filters on the ONE price
   // there is — what the call takes off the balance — so the division by the
   // fee multiplier that used to happen here is not just unnecessary now, it
-  // would ask for a ceiling 10% under the one the caller set.
+  // would ask for a ceiling under the one the caller set, by the buyer markup.
   if (maxPrice !== null) baseParams.max_price = String(maxPrice);
   if (trimString(args.optimize_for)) baseParams.optimize_for = trimString(args.optimize_for);
 

@@ -34,7 +34,7 @@ import {
  * changing the pitch means changing it here.
  */
 export const SERVER_DESCRIPTION =
-  "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.";
+  "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at app.apiosk.com; the gateway enforces them on every call.";
 
 // Base version, kept in step with the published manifests (package.json etc.).
 export const SERVER_BASE_VERSION = "1.8.0";
@@ -120,7 +120,7 @@ export const SERVER_INSTRUCTIONS = `Apiosk turns "I need this done" into paid AP
 ONE CALL, when a single API answers the question:
 
   apiosk                  -> one-shot answer: the shared App ranking's top runnable provider, exact price, required inputs and Approve/Deny card. Spends nothing.
-  apiosk_connect          -> can this session buy? Which wallet, which policy, which limits. Spends nothing.
+  apiosk_connect          -> can this session buy? Balance left, what is held, which policy, which limits. Spends nothing.
   apiosk_discover         -> what can perform this job? Sweeps the reviewed Apiosk catalogue AND the wider ecosystem of paid APIs. Spends nothing.
   apiosk_compare          -> how do the candidates perform against MY requirements? Price, measured p95 latency, measured success rate and input fit, each scored with the weights that produced the number, and each offer carrying a stable offer_id. Spends nothing.
   apiosk_execute          -> run the offer THE USER CHOSE, at the price you showed them. Apiosk settles it from the connected balance.
@@ -152,7 +152,7 @@ Three outcomes of apiosk_execute are not failures and must not be retried blindl
   payment_required   the wallet is empty or over its limit. Call apiosk_connect to see which, tell the user, and stop.
   not_authorised     the connection expired or was revoked. Call apiosk_connect for the re-connect link, and stop.
 
-Identity, wallets, funding, spending limits and approvals all live in the buyer portal at https://buy.apiosk.com. This server holds no keys, prices nothing and moves no money; the gateway (https://gateway.apiosk.com) does the pricing, the policy check and the settlement.
+Identity, funding, spending limits and approvals all live in the Apiosk app at https://app.apiosk.com. There is no wallet to connect: a purchase is paid from the buyer's Apiosk balance, and Apiosk's own treasury settles with the provider. This server holds no keys, prices nothing and moves no money; the gateway does the pricing, the policy check and the settlement.
 
 For ordinary single questions, propose only the one best service with its full price. Only show alternatives on request or when the best service is unavailable. After successful execution, answer the original question in a NEW short assistant message in the user's language, grounded only in the returned result. Use the returned answer when present; never show raw JSON as the primary answer. Preserve identifiers and units. Offer the returned follow_up_questions as optional next questions; let the user edit them, carry already-found values forward and get a new approval before spending again. Do not add these single-answer follow-ups to Research jobs.
 

@@ -11,7 +11,11 @@ import { trimString } from "./tool-result.mjs";
 
 export const APPROVAL_STATES = ["pending", "approved", "denied", "expired"];
 
-const BUYER_PORTAL_URL = "https://buy.apiosk.com";
+// One portal, imported rather than restated. `buy.apiosk.com` was a SECOND
+// frontend over the same money: somebody sent there to approve a purchase, or
+// to fix a limit they had set in the app, saw a different account view of it.
+// See the note on BUYER_PORTAL_URL in ./tools/connect.mjs.
+import { BUYER_PORTAL_URL } from "./tools/connect.mjs";
 
 /**
  * Read one held purchase.

@@ -104,6 +104,25 @@ export async function runExecute(args = {}, { env = process.env, gateway } = {})
     });
   }
 
+  /* A purchase with no stated ceiling is not a purchase the user approved.
+     `max_price_usdc` is declared `required` in the schema above, but a schema
+     is a hint to a model, not a gate: a caller that omits it — or passes null,
+     which is what an unpriced row would hand over — used to reach `/v1/run`
+     with the ceiling silently dropped from the body. The offer_token still
+     pins the price server-side, so this was never unbounded spend, but it did
+     remove the one check that makes "at the price you showed them" true, and
+     it removed it precisely in the case where no price was shown. Refuse
+     here instead, before any selection is recorded. */
+  if (!Number.isFinite(Number(args.max_price_usdc)) || Number(args.max_price_usdc) <= 0) {
+    return errorContent({
+      error_code: "execute.no_ceiling",
+      message:
+        "Refused: `max_price_usdc` is missing. Pass the exact price you showed the user, " +
+        "in USD. It is the ceiling this purchase is refused above, so a call without one " +
+        "is a call nobody approved an amount for. Nothing was spent and nothing was called.",
+    });
+  }
+
   try {
     const value = await executeSignedOffer(offerToken, approvalId, args, gateway);
     const result = content(value);
@@ -258,8 +277,9 @@ async function executeSignedOffer(offerToken, approvalId, args, gateway) {
     idempotency_key: executionKey(offerToken, args),
   };
   // The ceiling the user actually saw is the TOTAL, fee included, so it bounds
-  // what leaves the balance rather than the provider's leg of it.
-  if (Number.isFinite(Number(args.max_price_usdc))) body.max_price_usdc = Number(args.max_price_usdc);
+  // what leaves the balance rather than the provider's leg of it. It is always
+  // present: the handler refuses the call above without one.
+  body.max_price_usdc = Number(args.max_price_usdc);
   const suppliedParts = asInputParts(args.input_parts);
   const derivedParts = {
     path: asRecord(args.path_params),

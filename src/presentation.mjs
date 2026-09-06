@@ -205,7 +205,7 @@ export function renderPresentation(pipeline, rows, { totalExternal, shownExterna
   lines.push("", "| # | Provider | Source | Buy | Price |", "| --- | --- | --- | --- | --- |");
   for (const row of rows) {
     // An external endpoint is not automatically unbuyable: the gateway fronts
-    // the provider's own 402 and bills list + 10%, so most of these rows are
+    // the provider's own 402 and bills list + 15%, so most of these rows are
     // bought exactly like a catalogue one. The gateway said which; this only
     // prints it.
     const buy = row.settlement === "direct" ? "pay provider directly" : "via Apiosk";
@@ -221,7 +221,7 @@ export function renderPresentation(pipeline, rows, { totalExternal, shownExterna
   }
   lines.push(
     "",
-    "Every price is what leaves your wallet. Rows marked *via Apiosk* are settled by the gateway with Apiosk's 10% already in the price — the ones from the Apiosk catalogue are reviewed listings, the ones from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf. Rows marked *pay provider directly* are ones Apiosk will not settle: their price is the provider's own and you would call the URL and pay its 402 yourself. Nothing has been paid for."
+    "Every price is what leaves your wallet. Rows marked *via Apiosk* are settled by the gateway with Apiosk's 15% already in the price — the ones from the Apiosk catalogue are reviewed listings, the ones from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf. Rows marked *pay provider directly* are ones Apiosk will not settle: their price is the provider's own and you would call the URL and pay its 402 yourself. Nothing has been paid for."
   );
   return lines.join("\n");
 }
@@ -349,8 +349,8 @@ export function renderOffers(payload, offers, external = []) {
   lines.push(
     "",
     direct.length
-      ? "Every price is what leaves your wallet. Apiosk settles every row except the ones marked below, and its 10% is already in those prices. Rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
-      : "Every price is what you pay, Apiosk's 10% fee included. Apiosk settles the call either way: rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
+      ? "Every price is what leaves your wallet. Apiosk settles every row except the ones marked below, and its 15% is already in those prices. Rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
+      : "Every price is what you pay, Apiosk's 15% fee included. Apiosk settles the call either way: rows from the catalogue are reviewed listings; rows from an x402 index are endpoints Apiosk found, has never measured, and pays on your behalf."
   );
 
   if (direct.length) {

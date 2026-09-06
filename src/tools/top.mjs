@@ -138,6 +138,38 @@ export async function runQuickBest(args = {}, { gateway, host } = {}) {
   const price = priceLabel(topCandidate.price_usdc);
 
   /**
+   * An unpriced offer is not an offer.
+   *
+   * `priceLabel` renders a missing price as an em dash, so a row the gateway
+   * never priced used to reach the picker as `Approve · —` and the summary
+   * line as `$not published`. That is a person pressing Approve on an amount
+   * nobody stated, and the ceiling handed to apiosk_execute
+   * (`max_price_usdc: topCandidate.price_usdc`) would have been null — an
+   * approval of an unknown amount followed by a purchase with no cap.
+   *
+   * Refuse instead. The row is still returned so the model can say what was
+   * found, but there is no approval object and no execute arguments, because
+   * there is no price to approve.
+   */
+  if (!Number.isFinite(Number(topCandidate.price_usdc))) {
+    return content({
+      status: "unpriced",
+      query,
+      offer_count: candidateCount,
+      max_price_usdc: maxPrice,
+      top: topCandidate,
+      message:
+        `${topCandidate.provider} ranked first but published no price, so there is ` +
+        "nothing to approve. Apiosk never asks anyone to authorise an amount it cannot state.",
+      next_steps: [
+        "Tell the user this provider published no price and was NOT called.",
+        "Do not call apiosk_execute for this offer.",
+        "Call apiosk_discover or apiosk_compare to look for a priced alternative.",
+      ],
+    });
+  }
+
+  /**
    * The money question, asked rather than described.
    *
    * This tool has always promised an Approve/Deny card, and on a host with no
@@ -169,7 +201,7 @@ export async function runQuickBest(args = {}, { gateway, host } = {}) {
     top: topCandidate,
     presentation:
       `Top offer: **${topCandidate.provider}** (${topCandidate.source})\n` +
-      `Price: **$${topCandidate.price_usdc ?? "not published"}**\n` +
+      `Price: **${price}**\n` +
       `${topCandidate.relevance == null ? "" : `Relevance: **${topCandidate.relevance}/100**\n`}` +
       "Approve to run it, or deny to stop without spending anything.",
     // Keep raw fields if a model wants to add context before running.

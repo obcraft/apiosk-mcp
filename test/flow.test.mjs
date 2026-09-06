@@ -103,7 +103,7 @@ test("compare POSTs the job to /v1/quote and surfaces the offer_id an agent hand
   assert.doesNotMatch(payload.guidance, /THAT offer's `offer_id`/);
 });
 
-test("compare restates each offer price as the buyer total, list + 10%", async () => {
+test("compare restates each offer price as the buyer total, list + 15%", async () => {
   const handler = jsonHandler({
     offers: [
       { offer_id: "sig.a", api_slug: "macropulse", price_usdc: 0.005, score: 100 },
@@ -115,10 +115,10 @@ test("compare restates each offer price as the buyer total, list + 10%", async (
   const result = await withStubGateway(handler, (ctx) => runCompare({ query: "convert USD to EUR" }, ctx));
   const payload = JSON.parse(result.content[0].text);
 
-  assert.equal(payload.offers[0].price_usdc, 0.0055);
+  assert.equal(payload.offers[0].price_usdc, 0.00575);
   assert.equal(payload.offers[0].list_price_usdc, 0.005);
   assert.equal(payload.offers[0].price_includes_apiosk_fee, true);
-  assert.equal(payload.offers[1].price_usdc, 0.055);
+  assert.equal(payload.offers[1].price_usdc, 0.0575);
   assert.equal(payload.offers[1].list_price_usdc, 0.05);
   // The offer_id is never rewritten — it pins the raw price server-side.
   assert.equal(payload.offers[0].offer_id, "sig.a");
@@ -128,13 +128,16 @@ test("compare restates each offer price as the buyer total, list + 10%", async (
 test("compare prefers the gateway's buyer_price_usdc over the local mirror", async () => {
   const handler = jsonHandler({
     offers: [
-      // Gateway buyer price present — use it verbatim, not list * 1.1.
+      // Gateway buyer price present — use it verbatim, not list * 1.15.
       { offer_id: "sig.a", api_slug: "m", price_usdc: 0.005, buyer_price_usdc: 0.0055, score: 100 },
     ],
     rejected: [],
   });
   const result = await withStubGateway(handler, (ctx) => runCompare({ query: "x" }, ctx));
   const payload = JSON.parse(result.content[0].text);
+  // The gateway's own figure, verbatim — NOT list * 1.15, which would be
+  // 0.00575. That difference is the whole point of the test: the mirror is a
+  // fallback and must never override what the gateway priced.
   assert.equal(payload.offers[0].price_usdc, 0.0055);
   assert.equal(payload.offers[0].list_price_usdc, 0.005);
   // The intermediate gateway field is dropped from the output.
@@ -246,7 +249,7 @@ test("the offer table is rendered here, with a number the user can say back", as
   // table rather than in every cell.
   assert.match(data.presentation, /\| 1 \| \*\*CityFALCON\*\* \| Apiosk catalogue \| \$0\.033 \|/);
   assert.match(data.presentation, /\| 2 \| \*\*Apiosk Basics\*\* `newsapi` \| Apiosk catalogue \| \$0\.066 \|/);
-  assert.match(data.presentation, /Apiosk's 10% fee included/);
+  assert.match(data.presentation, /Apiosk's 15% fee included/);
   // The measured columns are gone from the table, not from the data: they said
   // "not measured" on nearly every row and taught the reader to skip the table.
   assert.ok(!/p95 latency/.test(data.presentation));

@@ -86,3 +86,49 @@ test("connection spending limits remain distinct from authentication failures", 
   assert.equal(value.status, "limit_exceeded");
   assert.notEqual(value.status, "not_authorised");
 });
+
+/* A purchase with no stated ceiling is a purchase nobody approved an amount
+   for. `max_price_usdc` is declared `required` in the tool schema, but a schema
+   steers a model rather than gating a call: a client that omitted it — or
+   passed the `null` an unpriced row hands over — used to reach `/v1/run` with
+   the ceiling quietly dropped from the body. */
+test("a call with no price ceiling is refused before anything is selected", async () => {
+  let touched = false;
+  const gateway = {
+    requestJson: async () => {
+      touched = true;
+      return {};
+    },
+  };
+  for (const args of [
+    { offer_token: "signed", prompt: "weather" },
+    { offer_token: "signed", prompt: "weather", max_price_usdc: null },
+    { offer_token: "signed", prompt: "weather", max_price_usdc: 0 },
+    { offer_token: "signed", prompt: "weather", max_price_usdc: "not a number" },
+  ]) {
+    const value = parse(await runExecute(args, { gateway, env: {} }));
+    assert.equal(value.error_code, "execute.no_ceiling");
+    // Refused BEFORE the gateway is touched: no selection is recorded, so
+    // there is nothing half-made to reconcile.
+    assert.equal(touched, false, `gateway was called for ${JSON.stringify(args)}`);
+  }
+});
+
+test("a stated ceiling is always sent, never dropped", async () => {
+  const sent = [];
+  const gateway = {
+    requestJson: async (path, init) => {
+      sent.push({ path, body: init?.body });
+      return path === "/v1/select" ? { selection_id: "sel-1" } : { answer: "ok" };
+    },
+  };
+  // Not parsed: a result carrying `answer` renders as plain text, not JSON.
+  // What is under test is the body that went out, not the shape that came back.
+  await runExecute(
+    { offer_token: "signed", prompt: "weather", max_price_usdc: 0.0125 },
+    { gateway, env: {} },
+  );
+  const run = sent.find((call) => call.path === "/v1/run");
+  assert.equal(run.body.max_price_usdc, 0.0125);
+});
+
