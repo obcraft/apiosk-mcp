@@ -223,7 +223,7 @@ function planFailure(error, env) {
       error_code: error.code,
       message: error.message,
       suggestions: Array.isArray(error.body?.suggestions) ? error.body.suggestions : [],
-      next_steps: ["Ask the user this clarification. Keep their original goal and add the reply as context when calling apiosk_plan again. Do not invent missing company identifiers."],
+      next_steps: ["Ask the user this clarification. Keep their original goal and add the reply as context when calling apiosk_plan again. Do not invent an identifier the user did not give — a company number, a postcode or anything else the gateway asked for."],
     });
   }
 
