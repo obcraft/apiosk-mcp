@@ -67,4 +67,6 @@ Read billing status separately from result status. Funding is the existing Apios
 
 ## Current single-call mode
 
+When `context_view.single_call_mode` is false, preserve every dependency as a separate service step. If step 2 requires a value produced by step 1, explain that handoff clearly and use the returned value; do not ask the person to know or select an opaque identifier unless the gateway returns a genuine ambiguous match selection.
+
 When `context_view.single_call_mode` is true, only one direct source call is supported per question. Multi-step research and automatic related-service continuation are paused. Present the returned source JSON, attribution, and service status. A company search can return multiple matches as JSON; do not ask the person to choose an unexplained registration number or auto-select one. If more calls would be required, explain the missing identifier and offer a standalone search question. For existing multi-step tasks, read available results; do not try to bypass the paused execution actions.
