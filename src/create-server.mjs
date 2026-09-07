@@ -8,6 +8,7 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
+import { V2_INSTRUCTIONS } from "./gateway-v2.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
@@ -180,7 +181,7 @@ export function createApioskMcpServer(options = {}) {
         prompts: {},
         extensions: { "io.modelcontextprotocol/skills": {} },
       },
-      instructions: SERVER_INSTRUCTIONS,
+      instructions: (options.env || process.env).APIOSK_GATEWAY_V2_URL ? V2_INSTRUCTIONS : SERVER_INSTRUCTIONS,
     }
   );
 
@@ -237,8 +238,9 @@ export function createApioskMcpServer(options = {}) {
     },
   ];
 
+  const gatewayV2 = Boolean((options.env || process.env).APIOSK_GATEWAY_V2_URL);
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: [
+    resources: gatewayV2 ? [{ uri: "apiosk://v2/host-contract", name: "Apiosk v2 host contract", mimeType: "text/plain" }] : [
       ...UI_RESOURCES.map(({ uri, name, meta }) => ({
         uri,
         name,
@@ -250,6 +252,10 @@ export function createApioskMcpServer(options = {}) {
   }));
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    if (gatewayV2) {
+      if (request.params.uri !== "apiosk://v2/host-contract") throw new Error("Unknown v2 resource");
+      return { contents: [{ uri: request.params.uri, mimeType: "text/plain", text: V2_INSTRUCTIONS }] };
+    }
     const skillResource = await readApioskSkillResource(request.params.uri);
     if (skillResource) return { contents: [skillResource] };
 
@@ -267,17 +273,19 @@ export function createApioskMcpServer(options = {}) {
     };
   });
 
-  server.setRequestHandler(ListSkillsRequestSchema, async () => listApioskSkills());
+  server.setRequestHandler(ListSkillsRequestSchema, async () => gatewayV2 ? { skills: [] } : listApioskSkills());
 
-  server.setRequestHandler(GetSkillRequestSchema, async (request) =>
-    getApioskSkill(request.params.uri),
-  );
+  server.setRequestHandler(GetSkillRequestSchema, async (request) => {
+    if (gatewayV2) throw new Error("Read apiosk://v2/host-contract instead");
+    return getApioskSkill(request.params.uri);
+  });
 
-  server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: PROMPTS }));
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({ prompts: gatewayV2 ? [] : PROMPTS }));
 
-  server.setRequestHandler(GetPromptRequestSchema, async (request) =>
-    getPrompt(request.params.name, request.params.arguments || {}),
-  );
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    if (gatewayV2) throw new Error("Use apiosk_discover with your question");
+    return getPrompt(request.params.name, request.params.arguments || {});
+  });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: await runtime.listTools(),

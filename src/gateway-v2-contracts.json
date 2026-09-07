@@ -1,0 +1,32 @@
+{
+  "state": {
+    "type":"object","additionalProperties":false,
+    "required":["schema_version","state_ref","revision","expires_at","focus","state_token"],
+    "properties":{
+      "schema_version":{"type":"string","const":"2"},"state_ref":{"type":"string","format":"uuid"},
+      "revision":{"type":"integer","minimum":0},"expires_at":{"type":"string","format":"date-time"},
+      "focus":{"type":"object","additionalProperties":false,"required":["entity_refs","goal_refs"],"properties":{"entity_refs":{"type":"array","items":{"type":"string","format":"uuid"}},"goal_refs":{"type":"array","items":{"type":"string","format":"uuid"}}}},
+      "state_token":{"type":"string","maxLength":128}
+    }
+  },
+  "discover": {
+    "type":"object","additionalProperties":false,"required":["question"],
+    "properties":{
+      "question":{"type":"string","minLength":1,"maxLength":4000},"request_id":{"type":"string","format":"uuid"},
+      "state":{"description":"Copy the complete last state envelope unchanged.","type":["object","null"]},
+      "context_delta":{"type":"object","additionalProperties":false,"properties":{
+        "explicit_values":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"required":["entity_ref","semantic_type","value"],"properties":{"entity_ref":{"type":"string","format":"uuid"},"semantic_type":{"type":"string"},"value":{}}}},
+        "requested_focus_refs":{"type":"array","maxItems":8,"items":{"type":"string","format":"uuid"}}
+      }}
+    }
+  },
+  "execute": {
+    "type":"object","additionalProperties":false,"oneOf":[{"required":["action_id","state"],"not":{"required":["recover_task_ref"]}},{"required":["recover_task_ref"],"not":{"required":["action_id"]}}],
+    "properties":{
+      "action_id":{"type":"string","format":"uuid"},"state":{"type":"object"},
+      "recover_task_ref":{"type":"string","format":"uuid","description":"Recover state using a previously gateway-issued task reference. Reads only; does not execute or parse."},
+      "request_id":{"type":"string","format":"uuid"},"idempotency_key":{"type":"string","format":"uuid"},
+      "quote_ref":{"type":["string","null"],"format":"uuid"},"authorization_ref":{"type":["string","null"],"format":"uuid"},"input":{}
+    }
+  }
+}

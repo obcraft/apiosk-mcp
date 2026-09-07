@@ -14,6 +14,7 @@ import { createGatewayClient } from "./gateway-client.mjs";
 import { logToolCall } from "./observability.mjs";
 import { TOOL_DEFINITIONS, TOOL_NAMES, getTool } from "./tools/index.mjs";
 import { errorContent } from "./tool-result.mjs";
+import { createV2Runtime } from "./gateway-v2.mjs";
 
 export { TOOL_NAMES };
 
@@ -34,6 +35,7 @@ const DEFAULT_TOOL_OUTPUT_SCHEMA = {
  */
 export function createApioskMcpRuntime(options = {}) {
   const env = options.env || process.env;
+  if (env.APIOSK_GATEWAY_V2_URL) return createV2Runtime(options);
 
   // One client per request, not one per process: the connect token that names
   // the buyer's wallet and policy arrives on the request, and one server serves
