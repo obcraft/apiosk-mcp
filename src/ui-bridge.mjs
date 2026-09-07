@@ -86,18 +86,20 @@ const api={
   return false},
  // Cards grow when a list renders. A host sizing an iframe once shows the first
  // two rows of six and no scrollbar.
- resize(){if(!mcp)return;
-  send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{width:Math.ceil(document.documentElement.scrollWidth),height:Math.ceil(document.documentElement.scrollHeight)}})}};
+ resize(){const width=Math.ceil(document.documentElement.scrollWidth),height=Math.ceil(document.documentElement.scrollHeight);
+  if(window.openai&&window.openai.notifyIntrinsicHeight){try{window.openai.notifyIntrinsicHeight(height)}catch(e){}}
+  if(mcp)send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{width,height}})}};
 window.apiosk=api;
 (async()=>{
  if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool};emitInput(window.openai.toolInput);emit(openaiData())}
+ if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>api.resize()).observe(document.documentElement);
+ if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>api.resize());else setTimeout(()=>api.resize(),0);
  if(window.parent===window)return;
  try{
   const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
   mcp=true;host=(result&&result.hostCapabilities)||{};
   api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||'')};
   send({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}});
-  new ResizeObserver(()=>api.resize()).observe(document.documentElement);
  }catch(e){/* not an MCP Apps host: the OpenAI path above, or nothing */}
 })();
 })();

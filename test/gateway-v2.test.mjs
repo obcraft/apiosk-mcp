@@ -4,7 +4,7 @@ import { createApioskMcpRuntime } from '../src/runtime.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
 test('v2 exposes three tools while legacy stays unchanged',async()=>{
  const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute']);
- for(const tool of tools){assert.equal(tool._meta.ui.resourceUri,'ui://apiosk/gateway-v2-card-v4.html');assert.equal(tool._meta['openai/outputTemplate'],'ui://apiosk/gateway-v2-card-v4.html');assert.equal(tool.outputSchema.type,'object')}
+ for(const tool of tools){assert.equal(tool._meta.ui.resourceUri,'ui://apiosk/gateway-v2-card-v5.html');assert.equal(tool._meta['openai/outputTemplate'],'ui://apiosk/gateway-v2-card-v5.html');assert.equal(tool.outputSchema.type,'object')}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);
@@ -64,6 +64,13 @@ test('source browsing is an authenticated GET with filters and no purchase body'
  assert.equal(request.url.searchParams.get('offset'),'20');assert.equal(request.url.searchParams.get('capability'),'company.accounts');assert.equal(request.url.searchParams.has('request_id'),false);
  assert.equal((await runtime.callTool('apiosk_sources',{limit:51})).isError,true);
  assert.equal((await runtime.callTool('apiosk_sources',{approved:true})).isError,true);
+});
+test('source browsing keeps internal readiness fields out of chatbot output', async () => {
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',sources:[{slug:'registry',provider_slug:'provider',logo_url:'https://api.apiosk.com/logo.png',name:'Registry',description:'Company data',category:'data',tags:[],sectors:[],endpoint_count:4,available_in_v2:true,capabilities:[],input_types:[]}],total:1,catalog_total:1,offset:0,next_offset:null,categories:['data'],tags:[],sectors:[],capabilities:[],notice:'internal'})});
+ const response=await runtime.callTool('apiosk_sources',{});
+ assert.equal(response.structuredContent.sources[0].can_answer_questions,true);
+ assert.equal(response.structuredContent.sources[0].available_in_v2,undefined);
+ assert.doesNotMatch(response.structuredContent.notice,/available_in_v2|validated contract/i);
 });
 test('v2 omits optional nulls instead of forwarding chatbot placeholder values', async () => {
  let request;

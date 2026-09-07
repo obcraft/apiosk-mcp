@@ -39,6 +39,12 @@ test('MCP Apps negotiates the current protocol and accepts only its parent frame
   assert.equal(h.window.apiosk.data.answer,'verified');
 });
 
+test('the shared bridge reports compact content height to ChatGPT',()=>{
+  const heights=[];const h=harness(null,{notifyIntrinsicHeight:value=>heights.push(value)});
+  h.window.apiosk.resize();
+  assert.deepEqual(heights,[200]);
+});
+
 test('the shared bridge delivers tool input to interactive paginated cards',async()=>{
   const h=harness();let input=null;h.window.apiosk.onInput(value=>{input=value});
   await h.initialize();
