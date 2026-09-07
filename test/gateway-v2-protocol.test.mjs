@@ -4,6 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createApioskMcpServer, resolveServerPresentation } from '../src/create-server.mjs';
 import { V2_INSTRUCTIONS } from '../src/gateway-v2.mjs';
+import { APIO_V2_CARD_URI } from '../src/gateway-v2-card.mjs';
 
 for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and resource share the same contract`,async()=>{
  const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082'};
@@ -19,7 +20,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   for(const tool of tools) assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);
   const {resources}=await client.listResources();assert.equal(resources.length,2);
   const contract=resources.find(r=>r.uri==='apiosk://v2/host-contract');
-  const card=resources.find(r=>r.uri==='ui://apiosk/gateway-v2-card-v1.html');
+  const card=resources.find(r=>r.uri===APIO_V2_CARD_URI);
   assert.ok(contract);assert.ok(card);assert.match(card.mimeType,/text\/html/);
   const doc=await client.readResource({uri:contract.uri});assert.equal(doc.contents[0].text,V2_INSTRUCTIONS);
   const ui=await client.readResource({uri:card.uri});assert.match(ui.contents[0].text,/Apiosk balance/);
