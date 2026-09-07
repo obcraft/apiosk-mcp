@@ -62,3 +62,12 @@ test('source browsing is an authenticated GET with filters and no purchase body'
  assert.equal((await runtime.callTool('apiosk_sources',{limit:51})).isError,true);
  assert.equal((await runtime.callTool('apiosk_sources',{approved:true})).isError,true);
 });
+test('v2 omits optional nulls instead of forwarding chatbot placeholder values', async () => {
+ let request;
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{request={url,...options};return Response.json({protocol_version:'2',status:'unsupported',next_actions:[],errors:[]});}});
+ const tool=(await runtime.listTools()).find(t=>t.name==='apiosk_discover');
+ assert.equal(tool.inputSchema.properties.state.type,'object');
+ await runtime.callTool('apiosk_discover',{question:'Find website SEO audits',state:null,context_delta:null});
+ const body=JSON.parse(request.body);
+ assert.equal(body.state,undefined);assert.equal(body.context_delta,undefined);
+});

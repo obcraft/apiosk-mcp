@@ -23,7 +23,9 @@ export function createV2Runtime(options = {}) {
   const authFailure = () => ({ ...failure({ error_code: 'unauthorized', message: 'Reconnect your Apiosk account, then recover the existing task.' }),
     _meta: { 'mcp/www_authenticate': [`Bearer resource_metadata="${metadata}", error="invalid_token", error_description="Connect your Apiosk account to continue", scope="mcp:tools"`] } });
   const discover = structuredClone(schemas.discover);
-  discover.properties.state = { anyOf: [schemas.state, { type: "null" }] };
+  // Optional means omit it. Advertising null makes some chatbot models eagerly
+  // send nulls for every unused field, which weakens the wire contract.
+  discover.properties.state = schemas.state;
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [
@@ -47,16 +49,17 @@ export function createV2Runtime(options = {}) {
       // Hosted sessions must never fall back to a machine-wide buyer credential.
       const token = resolveConnectToken(authInfo, options.hostedAuthEnabled ? {} : env);
       if (!token) return authFailure();
-      if (!validate.get(name)(args).valid) return failure({ error_code: 'invalid_arguments', message: 'Use the tool schema and copy the latest gateway-issued state and action. Recovery takes only recover_task_ref.' });
-      const recover = name === "apiosk_execute" && args.recover_task_ref;
-      if (recover && Object.keys(args).some(k => !['recover_task_ref', 'request_id'].includes(k))) return failure({ error_code: 'invalid_recovery', message: 'Recover using only recover_task_ref and an optional request_id.' });
-      const body = { ...args, request_id: args.request_id || randomUUID() };
+      const cleanArgs = Object.fromEntries(Object.entries(args).filter(([, value]) => value !== null && value !== undefined));
+      if (!validate.get(name)(cleanArgs).valid) return failure({ error_code: 'invalid_arguments', message: 'Use the tool schema and copy the latest gateway-issued state and action. Recovery takes only recover_task_ref.' });
+      const recover = name === "apiosk_execute" && cleanArgs.recover_task_ref;
+      if (recover && Object.keys(cleanArgs).some(k => !['recover_task_ref', 'request_id'].includes(k))) return failure({ error_code: 'invalid_recovery', message: 'Recover using only recover_task_ref and an optional request_id.' });
+      const body = { ...cleanArgs, request_id: cleanArgs.request_id || randomUUID() };
       if (name === "apiosk_execute" && !recover) body.idempotency_key ||= args.action_id;
       const browsing = name === "apiosk_sources";
       const path = browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : "/v2/execute";
       try {
         const url = new URL(path, base);
-        if (browsing) for (const [key, value] of Object.entries(args)) url.searchParams.set(key, String(value));
+        if (browsing) for (const [key, value] of Object.entries(cleanArgs)) url.searchParams.set(key, String(value));
         const response = await (options.fetchImpl || fetch)(url, {
           method: recover || browsing ? "GET" : "POST", redirect: "error", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: recover || browsing ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(80_000),

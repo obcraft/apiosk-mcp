@@ -48,6 +48,7 @@ test('the shared bridge delivers tool input to interactive paginated cards',asyn
 
 test('the v2 card renders sources and a priced plan from structured content',async()=>{
   const sources=harness(APIO_V2_CARD_HTML);await sources.initialize();
+  assert.doesNotMatch(APIO_V2_CARD_HTML,/Preparing your request|apiosk-wordmark/);
   await sources.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',sources:[{name:'Registry',category:'company data',endpoint_count:3,capabilities:['company.profile']}],total:1,offset:0,next_offset:null}}});
   assert.equal(sources.nodes.get('title').textContent,'1 matching source');
   assert.equal(sources.nodes.get('status-pill').textContent,'Ready');
