@@ -49,13 +49,15 @@ test('the shared bridge delivers tool input to interactive paginated cards',asyn
 test('the v2 card renders sources and a priced plan from structured content',async()=>{
   const sources=harness(APIO_V2_CARD_HTML);await sources.initialize();
   assert.doesNotMatch(APIO_V2_CARD_HTML,/Preparing your request|apiosk-wordmark/);
+  assert.doesNotMatch(APIO_V2_CARD_HTML,/Check progress/);
   await sources.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',sources:[{name:'Registry',category:'company data',endpoint_count:3,capabilities:['company.profile']}],total:1,offset:0,next_offset:null}}});
   assert.equal(sources.nodes.get('title').textContent,'1 matching source');
   assert.equal(sources.nodes.get('status-pill').textContent,'Ready');
   const plan=harness(APIO_V2_CARD_HTML);await plan.initialize();
-  await plan.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'requires_approval',proposal:{label:'Your plan',currency:'USDC',max_total_atomic:'97826',steps:['company.profile'],step_details:[{title:'Retrieve company profile',status:'pending',source:{name:'Global Company Registry'}}]},context_view:{},billing:{currency:'USD',total_charged:'0',balance_available:'15101060'},next_actions:[],errors:[],state:null}}});
-  assert.equal(plan.nodes.get('title').textContent,'Your plan');
-  assert.equal(plan.nodes.get('price-value').textContent,'0.097826 USDC');
+  await plan.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'requires_approval',proposal:{label:'Your plan',currency:'USDC',max_total_atomic:'97826',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.profile'],step_details:[{title:'Retrieve company profile',status:'pending',source:{name:'Global Company Registry'}}]},context_view:{},billing:{currency:'USD',total_charged:'0',balance_available:'15101060'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}],errors:[],state:{state_ref:'task',revision:1}}}});
+  const planSection=plan.nodes.get('sections').children[0];
+  assert.equal(planSection.children[0].children[0].textContent,'Your plan');
+  assert.equal(planSection.children.at(-1).children[0].textContent,'Approve up to 0.097826 USDC');
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
 });
 
