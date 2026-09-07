@@ -22,7 +22,7 @@ const sourceOutput = {
     slug: { type: "string" }, provider_slug: { type: ["string", "null"] }, logo_url: { type: ["string", "null"] },
     name: { type: "string" }, description: { type: "string" }, category: { type: "string" },
     tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
-    endpoint_count: { type: "integer", minimum: 0, description: "Published endpoints in this source, not chatbot tools." }, can_answer_questions: { type: "boolean", description: "Whether Apiosk can currently plan questions with this source." },
+    endpoint_count: { type: "integer", minimum: 0, description: "Published endpoints in this source, not chatbot tools." },
     capabilities: { type: "array", items: { type: "string" } }, input_types: { type: "array", items: { type: "string" } },
   },
 };
@@ -30,12 +30,12 @@ const sourcesOutput = {
   type: "object", additionalProperties: false,
   properties: {
     protocol_version: { type: "string", const: "2" }, sources: { type: "array", items: sourceOutput },
-    total: { type: "integer", minimum: 0 }, catalog_total: { type: "integer", minimum: 0 }, offset: { type: "integer", minimum: 0 },
+    total: { type: "integer", minimum: 0 }, offset: { type: "integer", minimum: 0 },
     next_offset: { type: ["integer", "null"], minimum: 0 }, categories: { type: "array", items: { type: "string" } },
     tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
     capabilities: { type: "array", items: { type: "string" } }, notice: { type: "string" }, ...errorFields,
   },
-  anyOf: [{ required: ["protocol_version", "sources", "total", "catalog_total", "offset", "categories", "tags", "sectors", "capabilities", "notice"] }, { required: ["error_code", "message"] }],
+  anyOf: [{ required: ["protocol_version", "sources", "total", "offset", "categories", "tags", "sectors", "capabilities", "notice"] }, { required: ["error_code", "message"] }],
 };
 const actionOutput = {
   type: "object", additionalProperties: false, required: ["action_id", "kind", "label", "requires_authorization", "input_schema"],
@@ -79,7 +79,7 @@ export function createV2Runtime(options = {}) {
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [
-    { name: "apiosk_sources", title: "Browse Apiosk sources", description: "Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. Recommend only sources marked as able to answer questions. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.", inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+    { name: "apiosk_sources", title: "Browse Apiosk sources", description: "Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. Recommend sources that match the person's need. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.", inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     { name: "apiosk_discover", title: "Plan a data request", description: "Start a NEW data question; preserve source, entity and period requirements. Returns one plan, total price ceiling or required clarification. No provider purchase. Continue the SAME question through apiosk_execute with returned next_actions.", inputSchema: discover, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_execute", title: "Continue an Apiosk task", description: "Use a returned next_action to execute, supply input, select an entity, poll, cancel or read a result. Paid steps require saved App consent and the current quote_ref. For lost state, pass ONLY recover_task_ref. Never invent action IDs or change payment identity on retry.", inputSchema: execute, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
   ].map(d => ({ ...d, securitySchemes: schemes, _meta: {
@@ -122,10 +122,13 @@ export function createV2Runtime(options = {}) {
         let result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         if (!response.ok) return failure(result);
         if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
-        if (browsing) result = { ...result,
-          sources: result.sources.map(({ available_in_v2, ...source }) => ({ ...source, can_answer_questions: available_in_v2 === true })),
+        if (browsing) {
+          const { catalog_total: _catalogTotal, ...publicResult } = result;
+          result = { ...publicResult,
+          sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
           notice: "Browsing is free. Catalog descriptions help choose a source; Apiosk checks the exact question and price before any purchase.",
-        };
+          };
+        }
         return content(result);
       } catch {
         // Transport errors may contain credential-bearing URLs or upstream text.
