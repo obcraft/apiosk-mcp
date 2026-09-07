@@ -8,7 +8,7 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
-import { V2_INSTRUCTIONS } from "./gateway-v2.mjs";
+import { V2_INSTRUCTIONS, V2_DESCRIPTION, V2_RESOURCE } from "./gateway-v2.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
@@ -167,10 +167,20 @@ export async function listApioskTools(options = {}) {
   return resolveRuntime(options).listTools();
 }
 
+export function resolveServerPresentation(env = process.env) {
+  const v2 = Boolean(env.APIOSK_GATEWAY_V2_URL);
+  return {
+    v2,
+    info: v2 ? { ...SERVER_INFO, description: V2_DESCRIPTION, version: `${resolveServerVersion(env)}-gateway-v2` } : SERVER_INFO,
+    description: v2 ? V2_DESCRIPTION : SERVER_DESCRIPTION,
+    instructions: v2 ? V2_INSTRUCTIONS : SERVER_INSTRUCTIONS,
+  };
+}
 export function createApioskMcpServer(options = {}) {
   const runtime = resolveRuntime(options);
+  const gatewayV2 = Boolean((options.env || process.env).APIOSK_GATEWAY_V2_URL);
   const server = new Server(
-    SERVER_INFO,
+    resolveServerPresentation(options.env || process.env).info,
     // `prompts` is declared because it is implemented. Leaving it out made
     // prompts/list answer -32601 Method not found, which a scanner reads as a
     // broken server rather than a server without prompts.
@@ -179,7 +189,7 @@ export function createApioskMcpServer(options = {}) {
         tools: {},
         resources: {},
         prompts: {},
-        extensions: { "io.modelcontextprotocol/skills": {} },
+        ...(gatewayV2 ? {} : { extensions: { "io.modelcontextprotocol/skills": {} } }),
       },
       instructions: (options.env || process.env).APIOSK_GATEWAY_V2_URL ? V2_INSTRUCTIONS : SERVER_INSTRUCTIONS,
     }
@@ -238,9 +248,8 @@ export function createApioskMcpServer(options = {}) {
     },
   ];
 
-  const gatewayV2 = Boolean((options.env || process.env).APIOSK_GATEWAY_V2_URL);
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: gatewayV2 ? [{ uri: "apiosk://v2/host-contract", name: "Apiosk v2 host contract", mimeType: "text/plain" }] : [
+    resources: gatewayV2 ? [V2_RESOURCE] : [
       ...UI_RESOURCES.map(({ uri, name, meta }) => ({
         uri,
         name,
@@ -254,7 +263,7 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (gatewayV2) {
       if (request.params.uri !== "apiosk://v2/host-contract") throw new Error("Unknown v2 resource");
-      return { contents: [{ uri: request.params.uri, mimeType: "text/plain", text: V2_INSTRUCTIONS }] };
+      return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
     }
     const skillResource = await readApioskSkillResource(request.params.uri);
     if (skillResource) return { contents: [skillResource] };

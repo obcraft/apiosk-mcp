@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "index.mjs",
+    "server.mjs",
+    "well-known.mjs",
+    "src/create-server.mjs",
+    "src/runtime.mjs",
+    "scripts/**/*.mjs",
+    "test/**/*.test.mjs"
+  ],
+  "project": [
+    "**/*.{js,mjs,cjs,ts,mts,cts}"
+  ],
+  "ignore": [
+    "node_modules/**",
+    "dist/**",
+    "python/**"
+  ],
+  "ignoreBinaries": ["node"],
+  "ignoreExportsUsedInFile": true
+}

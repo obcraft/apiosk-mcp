@@ -3,12 +3,11 @@ import { fileURLToPath } from "node:url";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
-  SERVER_INFO,
-  SERVER_DESCRIPTION,
-  SERVER_INSTRUCTIONS,
+  resolveServerPresentation,
   createApioskMcpServer,
   listApioskTools,
 } from "./src/create-server.mjs";
+import { V2_RESOURCE } from "./src/gateway-v2.mjs";
 import { PROMPTS } from "./src/prompts.mjs";
 import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
 import { APIO_OFFER_CARD_URI } from "./src/offer-card.mjs";
@@ -30,6 +29,8 @@ import {
   SETTLEMENT_DISCLOSURE_PATH,
   createSettlementDisclosurePage,
 } from "./src/settlement-disclosure.mjs";
+
+const { v2: gatewayV2, info: SERVER_INFO, description: SERVER_DESCRIPTION, instructions: SERVER_INSTRUCTIONS } = resolveServerPresentation();
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
@@ -174,18 +175,15 @@ function renderMcpWelcomeHtml(mcpUrl) {
     <span class="badge">Model Context Protocol</span>
     <h1>Welcome to Apiosk Connect</h1>
     <p class="lead">
-      This is the Apiosk MCP server endpoint &mdash; it lets AI agents discover, compare,
-      and pay for APIs through the Apiosk gateway. It is a machine endpoint, not a
-      website, so connect it from an MCP client (Claude, Cursor, ChatGPT, and others) rather
-      than browsing it here.
+${SERVER_DESCRIPTION}
     </p>
 
     <h2>What you can do with it</h2>
     <ul>
-      <li><strong>Discover</strong> APIs across the reviewed Apiosk catalog and the wider x402 ecosystem.</li>
+      ${gatewayV2 ? `<li><strong>Plan</strong> a data question with apiosk_discover.</li><li><strong>Approve</strong> one price ceiling in your Apiosk account.</li><li><strong>Continue</strong> with apiosk_execute for inputs, progress and source-backed results.</li>` : `<li><strong>Discover</strong> APIs across the reviewed Apiosk catalog and the wider x402 ecosystem.</li>
       <li><strong>Compare</strong> candidates on price, measured latency, measured success rate and input fit.</li>
       <li><strong>Execute</strong> the offer you chose, paid per call in USDC (x402 on Base).</li>
-      <li><strong>Check approvals</strong> on a purchase your spending rules put on hold.</li>
+      <li><strong>Check approvals</strong> on a purchase your spending rules put on hold.</li>`}
     </ul>
 
     <h2>Endpoint</h2>
@@ -227,8 +225,7 @@ function sendMcpWelcome(req, res) {
   res.status(200).json({
     name: "Apiosk Connect",
     server: SERVER_INFO,
-    description:
-      "Apiosk Connect lets MCP clients discover, compare, and pay for APIs through the Apiosk gateway.",
+    description: SERVER_DESCRIPTION,
     transport: "streamable-http",
     endpoint: mcpUrl,
     legacy_sse_endpoint: mcpUrl.replace(/\/mcp$/, "/sse"),
@@ -242,7 +239,8 @@ function sendMcpWelcome(req, res) {
 
 // Public Fly deployment must accept the Fly hostname instead of localhost-only
 // host validation defaults.
-const app = createMcpExpressApp({ host: "0.0.0.0" });
+const bindHost = process.env.APIOSK_MCP_BIND_HOST || "0.0.0.0";
+const app = createMcpExpressApp({ host: bindHost });
 // Fly terminates TLS and adds one trusted proxy hop. Without this,
 // express-rate-limit rejects X-Forwarded-For and can surface as MCP -32603.
 app.set("trust proxy", 1);
@@ -357,21 +355,21 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
       icons: SERVER_INFO.icons,
       instructions: SERVER_INSTRUCTIONS,
       authentication: {
-        required: false,
-        schemes: ["oauth2", "noauth"],
+        required: gatewayV2,
+        schemes: gatewayV2 ? ["oauth2"] : ["oauth2", "noauth"],
       },
       capabilities: {
         tools: {},
         resources: {},
         prompts: {},
-        extensions: { "io.modelcontextprotocol/skills": {} },
+        ...(gatewayV2 ? {} : { extensions: { "io.modelcontextprotocol/skills": {} } }),
       },
       tools,
-      prompts: PROMPTS,
+      prompts: gatewayV2 ? [] : PROMPTS,
       // Every card this server can render, not one of the four. A registry
       // reading a card that lists a single resource publishes a connector that
       // looks like it has no interface.
-      resources: [
+      resources: gatewayV2 ? [V2_RESOURCE] : [
         { uri: APIO_RESULT_CANVAS_URI, name: "Apiosk paid result canvas", mimeType: "text/html+skybridge" },
         { uri: APIO_OFFER_CARD_URI, name: "Apiosk offer approval card", mimeType: "text/html+skybridge" },
         { uri: APIO_RESULTS_PICKER_URI, name: "Apiosk offer picker", mimeType: "text/html+skybridge" },
@@ -554,11 +552,11 @@ app.post("/messages", mcpAuthMiddleware, async (req, res) => {
   }
 });
 
-app.listen(port, "0.0.0.0", async () => {
-  console.log(`Apiosk MCP server listening on http://0.0.0.0:${port}`);
-  console.log(`Health check: http://0.0.0.0:${port}/health`);
-  console.log(`MCP endpoint: http://0.0.0.0:${port}/mcp`);
-  console.log(`Legacy SSE endpoint: http://0.0.0.0:${port}/sse`);
+app.listen(port, bindHost, async () => {
+  console.log(`Apiosk MCP server listening on http://${bindHost}:${port}`);
+  console.log(`Health check: http://${bindHost}:${port}/health`);
+  console.log(`MCP endpoint: http://${bindHost}:${port}/mcp`);
+  console.log(`Legacy SSE endpoint: http://${bindHost}:${port}/sse`);
   console.log(`OAuth issuer: ${issuerUrl.href}`);
   console.log(`OAuth protected-resource metadata: ${hostedOAuth.resourceMetadataUrl}`);
   try {

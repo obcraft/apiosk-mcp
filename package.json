@@ -18,7 +18,8 @@
     "pack:check": "npm pack --dry-run",
     "test": "node --test",
     "dev": "node server.mjs",
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "dev:v2": "node --env-file=.env.v2.local server.mjs"
   },
   "keywords": [
     "mcp",
