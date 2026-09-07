@@ -5,6 +5,7 @@ import { APIOSK_UI_BRIDGE } from '../src/ui-bridge.mjs';
 import { APIO_OFFER_CARD_HTML } from '../src/offer-card.mjs';
 import { APIO_RESULT_CANVAS_HTML } from '../src/result-canvas.mjs';
 import { APIO_RESULTS_PICKER_HTML } from '../src/results-picker.mjs';
+import { APIO_V2_CARD_HTML } from '../src/gateway-v2-card.mjs';
 import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
@@ -36,6 +37,25 @@ test('MCP Apps negotiates the current protocol and accepts only its parent frame
   await h.initialize();assert.ok(h.sent.some(m=>m.method==='ui/notifications/initialized'));
   await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{answer:'verified'}}});
   assert.equal(h.window.apiosk.data.answer,'verified');
+});
+
+test('the shared bridge delivers tool input to interactive paginated cards',async()=>{
+  const h=harness();let input=null;h.window.apiosk.onInput(value=>{input=value});
+  await h.initialize();
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-input',params:{search:'security',offset:20}});
+  assert.deepEqual(input,{search:'security',offset:20});
+});
+
+test('the v2 card renders sources and a priced plan from structured content',async()=>{
+  const sources=harness(APIO_V2_CARD_HTML);await sources.initialize();
+  await sources.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',sources:[{name:'Registry',category:'company data',endpoint_count:3,capabilities:['company.profile']}],total:1,offset:0,next_offset:null}}});
+  assert.equal(sources.nodes.get('title').textContent,'1 matching source');
+  assert.equal(sources.nodes.get('status-pill').textContent,'Ready');
+  const plan=harness(APIO_V2_CARD_HTML);await plan.initialize();
+  await plan.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'requires_approval',proposal:{label:'Your plan',currency:'USDC',max_total_atomic:'97826',steps:['company.profile'],step_details:[{title:'Retrieve company profile',status:'pending',source:{name:'Global Company Registry'}}]},context_view:{},billing:{currency:'USD',total_charged:'0',balance_available:'15101060'},next_actions:[],errors:[],state:null}}});
+  assert.equal(plan.nodes.get('title').textContent,'Your plan');
+  assert.equal(plan.nodes.get('price-value').textContent,'0.097826 USDC');
+  assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
 });
 
 test('conversation messages use content blocks and honor host rejection',async()=>{

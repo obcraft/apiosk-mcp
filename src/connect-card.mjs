@@ -20,25 +20,30 @@ import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.m
 
 export const APIO_CONNECT_CARD_URI = "ui://apiosk/connect-card.html";
 
-export const APIO_CONNECT_CARD_META = uiResourceMeta(
-  "Shows whether this session can pay: the Apiosk balance, the per-call and daily limits, how much of today's allowance is left, and a button to connect or top up."
-);
+export const APIO_CONNECT_CARD_META = (() => {
+  const meta = uiResourceMeta(
+    "Shows whether this session can pay: the Apiosk balance, the per-call and daily limits, how much of today's allowance is left, and a button to connect or top up."
+  );
+  meta.ui.csp.resourceDomains = ["https://mcp.apiosk.com"];
+  meta["openai/widgetCSP"].resource_domains = ["https://mcp.apiosk.com"];
+  return meta;
+})();
 
 export const APIO_CONNECT_CARD_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${APIOSK_UI_STYLE}
-.headline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-top:6px}
-.balance{font-weight:750;font-size:26px;line-height:1.1;white-space:nowrap}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:#b94848}
-.dot[data-payable="true"]{background:#167a50}
-.limits{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:14px}
-.limit{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,CanvasText 6%,transparent)}
-.limit span{font-size:11px;opacity:.65}.limit b{display:block;font-size:15px;margin-top:4px}
-.bar{height:6px;border-radius:3px;margin-top:12px;background:color-mix(in srgb,CanvasText 12%,transparent);overflow:hidden}
-.bar i{display:block;height:100%;background:#167a50}
+:root{--apiosk:var(--apiosk-accent);--apiosk-soft:var(--apiosk-accent-wash);--good:#36a577;--bad:#d56071}
+body{padding:8px}.card{padding:15px;border-radius:18px;box-shadow:0 18px 45px -38px rgba(72,42,145,.62)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.apiosk-wordmark{display:block;width:74px;height:24px}.apiosk-wordmark img{display:block;width:74px;height:24px;object-fit:contain;object-position:left center}.state-pill{border:1px solid color-mix(in srgb,CanvasText 12%,transparent);border-radius:999px;padding:5px 8px;font-size:10px;line-height:1;opacity:.72}
+.headline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.headline h2{font-size:18px}.balance{font-weight:600;font-size:20px;letter-spacing:-.025em;line-height:1.1;white-space:nowrap}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:var(--bad)}.dot[data-payable="true"]{background:var(--good)}
+.limits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}.limit{padding:10px;border-radius:11px;background:color-mix(in srgb,CanvasText 5%,transparent)}.limit span{font-size:9px;opacity:.62}.limit b{display:block;font-size:14px;font-weight:600;letter-spacing:-.02em;margin-top:3px}
+.bar{height:4px;border-radius:99px;margin-top:11px;background:color-mix(in srgb,CanvasText 10%,transparent);overflow:hidden}.bar i{display:block;height:100%;background:var(--apiosk)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.status{margin-top:10px;min-height:0}.status:empty{display:none}
+@media(max-width:480px){.headline{display:block}.balance{margin-top:10px}.limits{grid-template-columns:1fr}.actions button{flex:1}}
 </style></head>
 <body><main class="card">
-<div class="eyebrow">Apiosk connection</div>
+<div class="top"><picture class="apiosk-wordmark"><source media="(prefers-color-scheme:dark)" srcset="https://mcp.apiosk.com/brand/wordmark-white-320.png"><img src="https://mcp.apiosk.com/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture><span class="state-pill">Connection</span></div>
 <div class="headline"><div><h2 id="state"><span id="dot" class="dot"></span>Checking…</h2><div id="message" class="meta"></div></div><div id="balance" class="balance"></div></div>
 <div id="bar" class="bar hidden"><i id="fill"></i></div>
 <div id="limits" class="limits"></div>
@@ -70,7 +75,7 @@ function render(output){if(!output||typeof output!=='object')return;current=outp
  else bar.classList.add('hidden');
  primary.textContent=connected?(payable?'Manage in Apiosk':'Top up in Apiosk'):'Connect Apiosk';
  primary.className=payable?'secondary':'primary';
- setStatus(payable?'':'Nothing can be bought until this says ready.');
+ setStatus(payable?'':'Connect or top up before approving a paid source.');
  window.apiosk.resize()}
 primary.addEventListener('click',async()=>{const url=current&&current.connect_url;if(!url)return;
  const opened=await window.apiosk.openLink(url);

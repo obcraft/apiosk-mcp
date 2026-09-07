@@ -9,6 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { V2_INSTRUCTIONS, V2_DESCRIPTION, V2_RESOURCE } from "./gateway-v2.mjs";
+import { APIO_V2_CARD_URI, APIO_V2_CARD_HTML, APIO_V2_CARD_META } from "./gateway-v2-card.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
@@ -249,7 +250,12 @@ export function createApioskMcpServer(options = {}) {
   ];
 
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-    resources: gatewayV2 ? [V2_RESOURCE] : [
+    resources: gatewayV2 ? [V2_RESOURCE, {
+      uri: APIO_V2_CARD_URI,
+      name: "Apiosk Gateway v2 interactive card",
+      mimeType: uiMimeType(),
+      _meta: APIO_V2_CARD_META,
+    }] : [
       ...UI_RESOURCES.map(({ uri, name, meta }) => ({
         uri,
         name,
@@ -262,8 +268,9 @@ export function createApioskMcpServer(options = {}) {
 
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (gatewayV2) {
-      if (request.params.uri !== "apiosk://v2/host-contract") throw new Error("Unknown v2 resource");
-      return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
+      if (request.params.uri === "apiosk://v2/host-contract") return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
+      if (request.params.uri === APIO_V2_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: APIO_V2_CARD_HTML, _meta: APIO_V2_CARD_META }] };
+      throw new Error("Unknown v2 resource");
     }
     const skillResource = await readApioskSkillResource(request.params.uri);
     if (skillResource) return { contents: [skillResource] };

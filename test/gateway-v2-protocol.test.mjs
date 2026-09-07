@@ -17,8 +17,12 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(client.getServerCapabilities().extensions,undefined);
   const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute']);
   for(const tool of tools) assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);
-  const {resources}=await client.listResources();assert.equal(resources.length,1);
-  const doc=await client.readResource({uri:resources[0].uri});assert.equal(doc.contents[0].text,V2_INSTRUCTIONS);
+  const {resources}=await client.listResources();assert.equal(resources.length,2);
+  const contract=resources.find(r=>r.uri==='apiosk://v2/host-contract');
+  const card=resources.find(r=>r.uri==='ui://apiosk/gateway-v2-card-v1.html');
+  assert.ok(contract);assert.ok(card);assert.match(card.mimeType,/text\/html/);
+  const doc=await client.readResource({uri:contract.uri});assert.equal(doc.contents[0].text,V2_INSTRUCTIONS);
+  const ui=await client.readResource({uri:card.uri});assert.match(ui.contents[0].text,/Apiosk balance/);
   assert.deepEqual((await client.listPrompts()).prompts,[]);
   const result=await client.callTool({name:'apiosk_discover',arguments:{question:'Example'}});
   assert.equal(result.isError,true);assert.ok(result._meta['mcp/www_authenticate']);

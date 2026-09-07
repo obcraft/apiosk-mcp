@@ -134,69 +134,31 @@ function renderMcpWelcomeHtml(mcpUrl) {
 <meta name="robots" content="noindex" />
 <title>Apiosk Connect</title>
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: radial-gradient(1200px 600px at 50% -10%, #1b2230, #0b0e14 60%);
-    color: #e6e9ef; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    padding: 32px;
-  }
-  main { max-width: 640px; width: 100%; }
-  .badge {
-    display: inline-block; font-size: 12px; letter-spacing: .08em; text-transform: uppercase;
-    color: #8aa0c6; border: 1px solid #2a3344; border-radius: 999px; padding: 4px 12px; margin-bottom: 20px;
-  }
-  h1 { font-size: 30px; margin: 0 0 12px; letter-spacing: -.02em; }
-  p { color: #b8c0cf; margin: 0 0 16px; }
-  .lead { color: #d6dce6; font-size: 17px; }
-  ul { color: #b8c0cf; margin: 0 0 16px; padding-left: 20px; }
-  li { margin: 6px 0; }
-  code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
-    background: #141a24; border: 1px solid #232c3a; border-radius: 6px; padding: 2px 7px; color: #cfe0ff;
-  }
-  .card { background: #0f141c; border: 1px solid #1f2937; border-radius: 14px; padding: 28px 30px; }
-  .endpoint {
-    display: block; margin: 4px 0 20px; padding: 12px 14px; background: #141a24;
-    border: 1px solid #232c3a; border-radius: 8px; color: #cfe0ff; word-break: break-all;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
-  }
-  h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: #7f8aa0; margin: 24px 0 8px; }
-  a { color: #7aa2ff; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .links { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; padding-top: 18px; border-top: 1px solid #1f2937; }
-  footer { color: #6b7689; font-size: 12px; margin-top: 20px; }
+  @font-face{font-family:Inter;src:url("/brand/inter-latin-500-normal.woff2") format("woff2");font-weight:500;font-display:swap}@font-face{font-family:Inter;src:url("/brand/inter-latin-600-normal.woff2") format("woff2");font-weight:600;font-display:swap}
+  :root{color-scheme:light dark;--bg:#f8f8fb;--card:#fff;--text:#1f2028;--muted:#676371;--border:#e7e3ef;--soft:#f2f1f6;--accent:#6349db;--wash:rgb(99 73 219/.07)}
+  @media(prefers-color-scheme:dark){:root{--bg:#0d0f13;--card:#15171d;--text:#ecebf2;--muted:#a5a2b0;--border:#262a34;--soft:#1d2028;--accent:#c3a0ff;--wash:rgb(195 160 255/.12)}}
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(760px 340px at 50% -12%,var(--wash),transparent 70%),var(--bg);color:var(--text);font:500 14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:-.011em;padding:24px;-webkit-font-smoothing:antialiased}
+  main{max-width:560px;width:100%}.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 18px 45px -38px rgba(72,42,145,.45)}
+  .brand{display:block;width:92px;height:30px;margin-bottom:24px}.brand img{display:block;width:92px;height:30px;object-fit:contain;object-position:left center}
+  .badge{display:inline-block;font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:4px 8px;margin-bottom:12px}
+  h1{font-size:25px;font-weight:600;line-height:1.18;margin:0 0 8px;letter-spacing:-.032em}p{color:var(--muted);margin:0}.lead{font-size:14px}
+  .steps{display:grid;gap:8px;margin:20px 0}.step{display:flex;align-items:center;gap:10px;padding:10px 11px;background:var(--soft);border-radius:11px}.step b{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--wash);color:var(--accent);font-size:10px}.step span{font-size:12px}
+  h2{font-size:11px;font-weight:600;margin:18px 0 7px}.endpoint{display:block;padding:10px 11px;background:var(--soft);border:1px solid var(--border);border-radius:10px;color:var(--text);word-break:break-all;font:500 11px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}
+  details{margin-top:12px;color:var(--muted);font-size:12px}details code{display:block;margin-top:8px;padding:9px 10px;background:var(--soft);border-radius:8px;word-break:break-all}.links{display:flex;gap:15px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}footer{color:var(--muted);font-size:10px;margin-top:14px}
 </style>
 </head>
 <body>
 <main>
   <div class="card">
+    <picture class="brand"><source media="(prefers-color-scheme:dark)" srcset="/brand/wordmark-white-320.png"><img src="/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture>
     <span class="badge">Model Context Protocol</span>
-    <h1>Welcome to Apiosk Connect</h1>
-    <p class="lead">
-${SERVER_DESCRIPTION}
-    </p>
+    <h1>Connect Apiosk to your chatbot</h1>
+    <p class="lead">Ask for specialist data, approve the total price in Apiosk and receive the source-backed result in the same conversation.</p>
+    <div class="steps"><div class="step"><b>1</b><span>Ask a data question</span></div><div class="step"><b>2</b><span>Review and approve the price</span></div><div class="step"><b>3</b><span>Receive the result and source JSON</span></div></div>
 
-    <h2>What you can do with it</h2>
-    <ul>
-      ${gatewayV2 ? `<li><strong>Plan</strong> a data question with apiosk_discover.</li><li><strong>Approve</strong> one price ceiling in your Apiosk account.</li><li><strong>Continue</strong> with apiosk_execute for inputs, progress and source-backed results.</li>` : `<li><strong>Discover</strong> APIs across the reviewed Apiosk catalog and the wider x402 ecosystem.</li>
-      <li><strong>Compare</strong> candidates on price, measured latency, measured success rate and input fit.</li>
-      <li><strong>Execute</strong> the offer you chose, paid per call in USDC (x402 on Base).</li>
-      <li><strong>Check approvals</strong> on a purchase your spending rules put on hold.</li>`}
-    </ul>
-
-    <h2>Endpoint</h2>
+    <h2>Secure MCP endpoint</h2>
     <code class="endpoint">${mcpUrl}</code>
-
-    <h2>Connect from Claude Code</h2>
-    <code>claude mcp add --transport http apiosk ${mcpUrl}</code>
-
-    <h2>Connect from ChatGPT</h2>
-    <code class="endpoint">${mcpUrl}</code>
-
-    <h2>Legacy SSE fallback</h2>
-    <code class="endpoint">${mcpUrl.replace(/\/mcp$/, "/sse")}</code>
+    <details><summary>Manual setup</summary><code>claude mcp add --transport http apiosk ${mcpUrl}</code><code>${mcpUrl.replace(/\/mcp$/, "/sse")}</code></details>
 
     <div class="links">
       <a href="/health">Health</a>
@@ -294,6 +256,23 @@ for (const icon of SERVER_INFO.icons) {
   app.get(pathname, (_req, res) => {
     res.setHeader("cache-control", "public, max-age=31536000, immutable");
     res.type(icon.mimeType).sendFile(fileURLToPath(new URL(`./assets/brand/${filename}`, import.meta.url)));
+  });
+}
+
+// UI resources use the same compact wordmark and self-hosted Inter weights as
+// the App. Keep this an explicit allowlist: /brand is not a general file
+// server, and adding a packaged asset does not make it public by accident.
+for (const asset of [
+  { filename: "wordmark-black-320.png", type: "image/png" },
+  { filename: "wordmark-white-320.png", type: "image/png" },
+  { filename: "inter-latin-500-normal.woff2", type: "font/woff2" },
+  { filename: "inter-latin-600-normal.woff2", type: "font/woff2" },
+]) {
+  app.get(`/brand/${asset.filename}`, (_req, res) => {
+    res.setHeader("cache-control", "public, max-age=31536000, immutable");
+    res.type(asset.type).sendFile(
+      fileURLToPath(new URL(`./assets/brand/${asset.filename}`, import.meta.url))
+    );
   });
 }
 

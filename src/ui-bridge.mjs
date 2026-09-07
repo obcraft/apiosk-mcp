@@ -36,8 +36,9 @@
  */
 export const APIOSK_UI_BRIDGE = `
 (()=>{
-const listeners=[];let data=null,pending=new Map(),rpcId=0,mcp=false,host={};
+const listeners=[],inputListeners=[];let data=null,input=null,pending=new Map(),rpcId=0,mcp=false,host={};
 function emit(v){if(v==null)return;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
+function emitInput(v){if(v==null)return;input=v;for(const fn of inputListeners){try{fn(v)}catch(e){}}}
 function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;
  if(Array.isArray(r.content)&&r.content[0]&&r.content[0].text){try{return JSON.parse(r.content[0].text)}catch(e){return r}}}
  return r}
@@ -51,16 +52,19 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  if(msg.id!=null&&pending.has(msg.id)){const p=pending.get(msg.id);pending.delete(msg.id);
   clearTimeout(p.timer);
   msg.error?p.reject(new Error(msg.error.message||'host error')):p.resolve(msg.result);return}
+ if(msg.method==='ui/notifications/tool-input'){emitInput(msg.params);return}
  if(msg.method==='ui/notifications/tool-result'){emit(unwrap(msg.params));return}
  if(msg.method==='ui/notifications/tool-cancelled'){emit({status:'cancelled'});return}});
 // ---- OpenAI Apps SDK: globals plus an event ---------------------------------
 function openaiData(){const o=window.openai;return o?(o.toolOutput??o.structuredContent??null):null}
 window.addEventListener('openai:set_globals',e=>{const d=e.detail;
+ emitInput((d&&d.globals&&d.globals.toolInput)??(d&&d.toolInput)??(window.openai&&window.openai.toolInput));
  emit((d&&d.globals&&d.globals.toolOutput)??(d&&d.toolOutput)??openaiData())});
 // ---- one surface over both ---------------------------------------------------
 const api={
  get data(){return data},
  can:{callTool:false,say:false,openLink:false,purchase:false},
+ onInput(fn){inputListeners.push(fn);if(input!=null){try{fn(input)}catch(e){}}},
  onData(fn){listeners.push(fn);if(data!=null){try{fn(data)}catch(e){}}},
  async callTool(name,args){
   if(window.openai&&window.openai.callTool)return unwrap(await window.openai.callTool(name,args||{}));
@@ -86,7 +90,7 @@ const api={
   send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{width:Math.ceil(document.documentElement.scrollWidth),height:Math.ceil(document.documentElement.scrollHeight)}})}};
 window.apiosk=api;
 (async()=>{
- if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool};emit(openaiData())}
+ if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool};emitInput(window.openai.toolInput);emit(openaiData())}
  if(window.parent===window)return;
  try{
   const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
@@ -133,15 +137,18 @@ export function uiResourceMeta(description) {
  * its own white background is a white rectangle in a dark conversation.
  */
 export const APIOSK_UI_STYLE = `
-:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}
-body{margin:0;padding:12px;background:transparent;color:CanvasText}
+@font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-500-normal.woff2") format("woff2");font-style:normal;font-weight:500;font-display:swap}
+@font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-600-normal.woff2") format("woff2");font-style:normal;font-weight:600;font-display:swap}
+:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
+@media(prefers-color-scheme:dark){:root{--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}}
+*{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:CanvasText;font-weight:500;letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
 .card{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:16px;padding:16px;background:color-mix(in srgb,Canvas 96%,transparent)}
 .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
-h2{font-size:17px;line-height:1.25;margin:2px 0 0}
+h2{font-size:17px;line-height:1.25;margin:2px 0 0;font-weight:600;letter-spacing:-.025em}
 .meta,.hint,.status{font-size:12px;line-height:1.45;opacity:.72}
 .status{margin-top:12px;min-height:18px}.status.error{color:#b94848;opacity:1}.status.ok{color:#167a50;opacity:1}
-button{border:0;border-radius:10px;padding:10px 12px;font:inherit;font-weight:700;cursor:pointer}
-.primary{background:#167a50;color:white}.secondary{background:color-mix(in srgb,CanvasText 9%,transparent);color:CanvasText}
+button{border:0;border-radius:10px;padding:10px 12px;font:inherit;font-weight:600;letter-spacing:-.016em;cursor:pointer}
+.primary{background:var(--apiosk-accent);color:var(--apiosk-accent-fg)}.secondary{background:color-mix(in srgb,CanvasText 9%,transparent);color:CanvasText}
 button:disabled{opacity:.5;cursor:default}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
 .hidden{display:none}
