@@ -1,6 +1,7 @@
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
 export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v5.html";
+export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
 
 export const APIO_V2_CARD_META = (() => {
   const meta = uiResourceMeta(
