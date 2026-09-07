@@ -15,7 +15,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(client.getInstructions(),V2_INSTRUCTIONS);
   assert.deepEqual(client.getServerVersion(),resolveServerPresentation(env).info);
   assert.equal(client.getServerCapabilities().extensions,undefined);
-  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_discover','apiosk_execute']);
+  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute']);
   for(const tool of tools) assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);
   const {resources}=await client.listResources();assert.equal(resources.length,1);
   const doc=await client.readResource({uri:resources[0].uri});assert.equal(doc.contents[0].text,V2_INSTRUCTIONS);

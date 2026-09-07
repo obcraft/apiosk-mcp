@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
-test('v2 exposes exactly two tools while legacy stays unchanged',async()=>{
- const v2=createApioskMcpRuntime({env});assert.deepEqual((await v2.listTools()).map(t=>t.name),['apiosk_discover','apiosk_execute']);
+test('v2 exposes three tools while legacy stays unchanged',async()=>{
+ const v2=createApioskMcpRuntime({env});assert.deepEqual((await v2.listTools()).map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute']);
  assert.equal((await createApioskMcpRuntime({env:{}}).listTools()).length,11);
 });
 test('v2 forwards state exactly and stable action idempotency through authenticated transport',async()=>{
@@ -46,4 +46,18 @@ test('transport errors do not expose upstream credentials and preserve recovery 
  const response=await runtime.callTool('apiosk_execute',{recover_task_ref:'00000000-0000-4000-8000-000000000001'});
  assert.doesNotMatch(JSON.stringify(response),/secret-in-upstream-error/);
  assert.equal(response.structuredContent.recover_task_ref,'00000000-0000-4000-8000-000000000001');
+});
+
+test('source browsing is an authenticated GET with filters and no purchase body', async () => {
+ let request;
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{request={url,...options};return Response.json({protocol_version:'2',sources:[],total:0,next_offset:null});}});
+ const tool=(await runtime.listTools()).find(t=>t.name==='apiosk_sources');
+ assert.equal(tool.annotations.readOnlyHint,true);
+ const response=await runtime.callTool('apiosk_sources',{search:'company & data',category:'finance',capability:'company.accounts',offset:20,limit:20});
+ assert.equal(response.isError,undefined);
+ assert.equal(request.method,'GET');assert.equal(request.body,undefined);
+ assert.equal(request.url.pathname,'/v2/sources');assert.equal(request.url.searchParams.get('search'),'company & data');
+ assert.equal(request.url.searchParams.get('offset'),'20');assert.equal(request.url.searchParams.get('capability'),'company.accounts');assert.equal(request.url.searchParams.has('request_id'),false);
+ assert.equal((await runtime.callTool('apiosk_sources',{limit:51})).isError,true);
+ assert.equal((await runtime.callTool('apiosk_sources',{approved:true})).isError,true);
 });
