@@ -265,7 +265,7 @@ test('choosing a named company resumes an approved plan even after the active wa
 test('annual account fields render nested values without inventing a currency or hiding zero and negative values',async()=>{
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],result:{data:{opendataFields:[{key:'FinancialYear',value:'2020'},{key:'IncomeStatement',opendataFields:[{key:'ResultAfterTax',value:'-5166000'},{key:'IncomeTaxExpense',value:0}]}]}}}});
  const rows=h.nodes.get('sections').querySelectorAll('div').filter(n=>n.className==='result-row');
- assert.deepEqual(rows.map(row=>row.children.map(n=>n.textContent)),[['Financial Year','2020'],['Result After Tax','-5.166.000'],['Income Tax Expense','0']]);
+ assert.deepEqual(rows.map(row=>row.children.map(n=>n.textContent)),[['Financial Year','2020'],['Result After Tax','-5,166,000'],['Income Tax Expense','0']]);
 });
 
 test('reopening a card restores saved results with one free recovery and never runs a paid step or sends a draft',async()=>{

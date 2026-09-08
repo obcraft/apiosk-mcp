@@ -13,7 +13,7 @@ export function formatSourceValue(value, key = '', currency = null) {
   if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return raw;
   const negative = raw.startsWith('-'), unsigned = negative ? raw.slice(1) : raw;
   const [whole, fraction] = unsigned.split('.');
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (fraction == null ? '' : ',' + fraction);
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (fraction == null ? '' : '.' + fraction);
   const monetary = /^(Assets|Liabilities|Equity|Receivables|Cash|Property|Provisions|Share|RetainedEarnings|FinancialIncome|IncomeTax|Result|Depreciation|EmployeeBenefits|Operating|GrossMargin|Impairment|SumOfExpenses|Revenue|Profit|Turnover|Amount|Balance|Price|Cost|Tax)/i.test(label);
   const code = monetary ? sourceCurrency(currency) : null;
   const symbol = code && ({ EUR: '€', USD: '$', GBP: '£' }[code] || code);
