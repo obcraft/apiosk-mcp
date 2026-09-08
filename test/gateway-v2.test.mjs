@@ -4,7 +4,7 @@ import { createApioskMcpRuntime } from '../src/runtime.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
 test('v2 exposes three tools while legacy stays unchanged',async()=>{
  const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute']);
- for(const tool of tools){assert.equal(tool._meta.ui.resourceUri,'ui://apiosk/gateway-v2-card-v5.html');assert.equal(tool._meta['openai/outputTemplate'],'ui://apiosk/gateway-v2-card-v5.html');assert.equal(tool.outputSchema.type,'object')}
+ for(const tool of tools){assert.equal(tool._meta.ui.resourceUri,'ui://apiosk/gateway-v2-card-v6.html');assert.equal(tool._meta['openai/outputTemplate'],'ui://apiosk/gateway-v2-card-v6.html');assert.equal(tool.outputSchema.type,'object')}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);

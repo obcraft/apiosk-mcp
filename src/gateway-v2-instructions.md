@@ -34,7 +34,7 @@ Copy the newest state unchanged, including signature, revision, expiry and focus
 | --- | --- |
 | `ready` | Show the proposal steps in ordinary language and its one total price ceiling. Use the approval link before paid work. Continue an already approved plan with its offered action. |
 | `needs_input` | Ask only for the value requested by `supply_input`. Follow its input schema exactly, usually `{"value": <user value>}`. |
-| `needs_selection` | Show the returned candidates and ask which entity is intended. Use `select_entity` with `{"entity_ref": <returned reference>}`. Do not guess the first match. |
+| `needs_selection` | If the user only requested a search/list and the result already answers it, present the returned matches and pagination without forcing a selection. Otherwise show the returned candidates by name and ask which entity is intended. Use `select_entity` with `{"entity_ref": <returned reference>}`. Do not guess the first match. |
 | `requires_approval` | Show `proposal.approval_url` and wait for the person. After approval, recover current task state and continue with the current action and quote reference. |
 | `running` | Use only the offered poll action, waiting at least `retry_after_ms`. After a few unchanged polls, report that work is pending and retain the task reference for later. Never buy again to check progress. |
 | `succeeded` | Answer from returned evidence. Use offered result reads if details are needed. |
@@ -70,3 +70,5 @@ Read billing status separately from result status. Funding is the existing Apios
 When `context_view.single_call_mode` is false, preserve every dependency as a separate service step. If step 2 requires a value produced by step 1, explain that handoff clearly and use the returned value; do not ask the person to know or select an opaque identifier unless the gateway returns a genuine ambiguous match selection.
 
 When `context_view.single_call_mode` is true, only one direct source call is supported per question. Multi-step research and automatic related-service continuation are paused. Present the returned source JSON, attribution, and service status. A company search can return multiple matches as JSON; do not ask the person to choose an unexplained registration number or auto-select one. If more calls would be required, explain the missing identifier and offer a standalone search question. For existing multi-step tasks, read available results; do not try to bypass the paused execution actions.
+
+After approval, recover the SAME task to read its current consent and next action. Continue automatically when the current quote has saved authorization. Never ask for approval twice or start a new discovery to refresh a task. When a card has already completed the request, read and summarize its saved result, including pagination; do not repeat the purchase.

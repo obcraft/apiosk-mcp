@@ -9,15 +9,22 @@ import { APIO_V2_CARD_HTML } from '../src/gateway-v2-card.mjs';
 import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
-  const sent=[],listeners=new Map(),nodes=new Map();
+  const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
   const el=(name='div')=>({tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},replaceChildren(...c){this.children=c},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').includes(c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
   const document={documentElement:{scrollWidth:320,scrollHeight:200},getElementById(id){if(!nodes.has(id))nodes.set(id,el());return nodes.get(id)},createElement:el};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
-  const ctx=vm.createContext({window,document,URL,Intl,console,setTimeout:()=>1,clearTimeout(){},ResizeObserver:class{observe(){}}});
+  const ctx=vm.createContext({window,document,URL,Intl,console,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
   if(html)for(const s of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(s[1],ctx);else vm.runInContext(APIOSK_UI_BRIDGE,ctx);
   return {
     sent,nodes,window,
+    async tick(ms) {
+      const entry=[...timers].find(([,t])=>t.ms===ms);
+      if(!entry)return false;
+      timers.delete(entry[0]);entry[1].fn();
+      for(let i=0;i<12;i++)await Promise.resolve();
+      return true;
+    },
     async message(data,source=parent) {
       listeners.get('message')?.({source,data});
       await Promise.resolve();await Promise.resolve();
@@ -135,4 +142,35 @@ test('Claude approvals open Apiosk without attempting an in-card purchase',async
   assert.equal(new URL(link.params.url).origin,'https://app.apiosk.com');
   await h.message({jsonrpc:'2.0',id:link.id,result:{}});await approval;
   assert.ok(!h.sent.some(m=>m.method==='tools/call'));assert.match(h.nodes.get('status').textContent,/Nothing was spent here/);
+});
+
+const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};
+test('v2 card observes approval then executes once with the saved quote and publishes the result',async()=>{
+ const calls=[],contexts=[];
+ const approved={...v2Ready,billing:{...v2Ready.billing,authorization_active:true}};
+ const done={...approved,status:'succeeded',next_actions:[],result:{data:{resultaten:[{naam:"Tony's Chocolonely",kvkNummer:'34241705'}],totaal:16,pagina:1}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.recover_task_ref?approved:done}},setWidgetState:value=>contexts.push(value)});
+ assert.equal(calls.length,0);
+ await h.tick(2000);
+ assert.equal(calls[0].args.recover_task_ref,'task');
+ await h.tick(350);
+ assert.equal(calls.length,2);
+ assert.equal(calls[1].args.quote_ref,'quote');assert.equal(calls[1].args.idempotency_key,'run');
+ assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(contexts.at(-1).result.status,'succeeded');
+ assert.equal(await h.tick(350),false);
+});
+test('v2 card never executes absent, mismatched or disabled consent',async()=>{
+ for(const changes of [{},{billing:{authorization_active:true,quote_ref:'old'}},{billing:{authorization_active:true,quote_ref:'quote'},context_view:{execution_enabled:false}}]){
+  const calls=[];const data={...v2Ready,...changes};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push(args);return{structuredContent:data}}});
+  await h.tick(350);await h.tick(2000);
+  assert.ok(calls.every(args=>args.recover_task_ref==='task'));
+ }
+});
+test('v2 card never automatically replays an interrupted paid action',async()=>{
+ let paid=0;
+ const data={...v2Ready,billing:{authorization_active:true,quote_ref:'quote'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async()=>{paid++;throw new Error('Connection interrupted')}});
+ await h.tick(350);await h.tick(350);await h.tick(2000);
+ assert.equal(paid,1);assert.match(h.nodes.get('feedback-text').textContent,/Connection interrupted/);
 });
