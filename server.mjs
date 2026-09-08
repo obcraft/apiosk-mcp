@@ -133,9 +133,6 @@ function renderMcpWelcomeHtml(mcpUrl) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex" />
-<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<link rel="alternate icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
-<link rel="apple-touch-icon" href="/brand/mark-light-20260905-transparent.png" />
 <title>Apiosk Connect</title>
 ${BRAND_LINKS}
 <style>
@@ -251,9 +248,9 @@ app.get(OPENAI_APPS_CHALLENGE_PATH_PATTERN, (req, res) => {
 // Public favicon discovery complements MCP initialize metadata for hosts
 // that resolve connector branding from the server's origin.
 registerBrandRoutes(app);
-app.get("/", (_req, res) => {
+app.get("/", (req, res) => {
   res.setHeader("cache-control", "public, max-age=0, must-revalidate");
-  res.type("html").send(renderMcpWelcomeHtml("https://mcp.apiosk.com/mcp"));
+  return sendMcpWelcome(req, res);
 });
 
 // Preserve the original URL for already-installed connectors.
@@ -261,22 +258,6 @@ app.get("/logo-optimized-light.png", (req, res) => {
   res.setHeader("cache-control", "public, max-age=0, must-revalidate");
   res.type("png").sendFile(fileURLToPath(new URL("./logo-optimized-light.png", import.meta.url)));
 });
-
-// Connector directories do not all use MCP initialize metadata for artwork.
-// Keep the conventional origin-level favicon URLs available as a fallback so
-// hosts that crawl the connector URL can still resolve the real Apiosk mark.
-for (const asset of [
-  { pathname: "/favicon.svg", filename: "favicon.svg", type: "image/svg+xml" },
-  { pathname: "/favicon.ico", filename: "favicon.ico", type: "image/x-icon" },
-  { pathname: "/favicon-dark.ico", filename: "favicon-dark.ico", type: "image/x-icon" },
-]) {
-  app.get(asset.pathname, (_req, res) => {
-    res.setHeader("cache-control", "public, max-age=300");
-    res.type(asset.type).sendFile(
-      fileURLToPath(new URL(`./assets/brand/${asset.filename}`, import.meta.url))
-    );
-  });
-}
 
 // Only the declared, versioned brand files are exposed.
 for (const icon of SERVER_INFO.icons) {
@@ -425,10 +406,6 @@ app.get("/health", async (req, res) => {
     });
   }
 });
-
-// The MCP URL is /mcp, but connector crawlers commonly inspect the origin.
-// Serve the same branded, machine-readable welcome at both locations.
-app.get("/", (req, res) => sendMcpWelcome(req, res));
 
 app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
   const server = createApioskMcpServer({ runtime });
