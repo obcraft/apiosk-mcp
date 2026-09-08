@@ -10,7 +10,7 @@ import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
-  const el=(name='div')=>({tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},replaceChildren(...c){this.children=c},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').includes(c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
+  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},replaceChildren(...c){this.children=c},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').includes(c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
   const document={documentElement:{scrollWidth:320,scrollHeight:200},getElementById(id){if(!nodes.has(id))nodes.set(id,el());return nodes.get(id)},createElement:el};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
@@ -74,8 +74,8 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   const plan=harness(APIO_V2_CARD_HTML);await plan.initialize();
   await plan.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'requires_approval',proposal:{label:'Your plan',currency:'USDC',max_total_atomic:'97826',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.profile'],step_details:[{title:'Retrieve company profile',status:'pending',source:{name:'Global Company Registry'}}]},context_view:{},billing:{currency:'USD',total_charged:'0',balance_available:'15101060'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}],errors:[],state:{state_ref:'task',revision:1}}}});
   const planSection=plan.nodes.get('sections').children[0];
-  assert.equal(planSection.children[0].children[0].textContent,'Your plan');
-  assert.equal(planSection.children.at(-1).children[0].textContent,'Approve up to 0.097826 USDC');
+  assert.equal(planSection.children[0].children[0].textContent,'Data request');
+  assert.equal(planSection.children.at(-1).children[0].textContent,'Approve up to 0.097826 USD');
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
 });
 
@@ -332,4 +332,17 @@ test('a stale host notification with different request metadata cannot overwrite
  await h.globals({toolOutput:saved});await h.window.apiosk.context(saved);
  await h.globals({toolOutput:{...v2Ready,request_id:'resent-initial-response'}});
  assert.equal(h.nodes.get('title').textContent,'Source result');
+});
+
+test('historic token quotes render exact dollars beside the request title and one free result control',async()=>{
+ const calls=[]; const data={...v2Ready,status:'succeeded',proposal:{...v2Ready.proposal,max_total_atomic:'97826'},result:{data:{opendataFields:[{key:'FinancialYear',value:'2020'}]}},next_actions:[{action_id:'a',kind:'read_result',label:'Lees het opgeslagen resultaat'},{action_id:'b',kind:'read_result',label:'Lees het opgeslagen resultaat'}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:data}}});
+ const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
+ const sections=h.nodes.get('sections'),header=sections.children[0].children[0];
+ assert.ok(flatten(header).includes('Data request'));
+ assert.ok(flatten(header).includes('0.097826 USD'));
+ assert.doesNotMatch(flatten(sections).join(' '),/USDC|Lees het|Your plan/);
+ const buttons=sections.querySelectorAll('button').filter(b=>b.textContent==='View saved result');
+ assert.equal(buttons.length,1);await buttons[0].onclick();
+ assert.deepEqual(calls.map(c=>c.name),['apiosk_status']);assert.equal(calls[0].args.task_ref,'task');
 });

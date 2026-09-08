@@ -12,10 +12,11 @@ export const V2_DESCRIPTION = "Ask a data question, review one plan and total pr
 export const V2_RESOURCE = { uri: "apiosk://v2/host-contract", name: "Apiosk v2 chatbot instructions", mimeType: "text/markdown" };
 const failure = value => ({ ...content(value), isError: true });
 const schemes = [{ type: "oauth2", scopes: ["mcp:tools"] }];
+const displayCurrency = currency => !currency || currency === "USDC" ? "USD" : currency;
 const amountText = (atomic, currency) => {
   if (!/^[0-9]+$/.test(String(atomic))) return null;
   const value = BigInt(atomic);
-  return `${value / 1000000n}.${(value % 1000000n).toString().padStart(6, '0').replace(/0+$/, '').padEnd(2, '0')} ${currency}`;
+  return `${value / 1000000n}.${(value % 1000000n).toString().padStart(6, '0').replace(/0+$/, '').padEnd(2, '0')} ${displayCurrency(currency)}`;
 };
 const errorFields = {
   error_code: { type: "string" }, message: { type: "string" },
@@ -146,9 +147,16 @@ export function createV2Runtime(options = {}) {
           notice: "Browsing is free. Catalog descriptions help choose a source; Apiosk checks the exact question and price before any purchase.",
           };
         }
+        if (!browsing) {
+          result = { ...result,
+            ...(result.proposal && { proposal: { ...result.proposal, label: "Data request", currency: displayCurrency(result.proposal.currency) } }),
+            ...(result.billing && { billing: { ...result.billing, currency: displayCurrency(result.billing.currency) } }),
+            ...(result.result && typeof result.result === 'object' && !Array.isArray(result.result) && result.result.currency === 'USDC' && { result: { ...result.result, currency: 'USD' } }),
+          };
+        }
         const reply = content(result);
         if (!browsing) {
-          const maximum = amountText(result.proposal?.max_total_atomic, result.proposal?.currency || 'USDC');
+          const maximum = amountText(result.proposal?.max_total_atomic, result.proposal?.currency || 'USD');
           const charged = amountText(result.billing?.total_charged, result.billing?.currency || 'USD');
           const prices = [maximum && `Maximum total price: ${maximum}.`, charged && `Actual charge so far: ${charged}.`].filter(Boolean).join(' ');
           if (prices) reply.content.unshift({ type: 'text', text: prices });

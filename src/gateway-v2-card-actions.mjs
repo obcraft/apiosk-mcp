@@ -22,7 +22,7 @@ function renderActions(data){
   if(!approved&&enabled&&Date.now()<watchUntil&&Date.parse(data.proposal?.expires_at)>Date.now())pollTimer=setTimeout(()=>{pollTimer=null;refreshTask()},2000);
  }
  if(poll){const wait=Math.max(350,Number(data.retry_after_ms)||900);pollTimer=setTimeout(()=>{pollTimer=null;callAction(poll)},wait)}
- if(read.length||cancel||poll){const s=el('section','section controls'),wrap=el('div','actions');sections.append(s);if(poll){const check=el('button','quiet','Check status');check.onclick=refreshTask;wrap.append(check)}for(const a of read.slice(0,2))wrap.append(actionButton(a,a.label||'View result'));if(cancel&&(run||poll))wrap.append(actionButton(cancel,'Stop remaining steps'));s.append(wrap)}
+ if(read.length||cancel||poll){const s=el('section','section controls'),wrap=el('div','actions');sections.append(s);if(poll){const check=el('button','quiet','Check status');check.onclick=refreshTask;wrap.append(check)}if(read.length){const view=el('button','quiet','View saved result');view.onclick=()=>refreshTask();wrap.append(view)}if(cancel&&(run||poll))wrap.append(actionButton(cancel,'Stop remaining steps'));s.append(wrap)}
 }
 
 `;

@@ -109,7 +109,16 @@ test('model-facing prices preserve sub-cent units and include free recovery for 
  const id='00000000-0000-4000-8000-000000000001';
  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',status:'ready',state:{state_ref:id},proposal:{max_total_atomic:'76087',currency:'USDC'},billing:{total_charged:'23',currency:'USD'},next_actions:[],errors:[]})});
  const reply=await runtime.callTool('apiosk_discover',{question:'Annual accounts'});
- assert.equal(reply.content[0].text,'Maximum total price: 0.076087 USDC. Actual charge so far: 0.000023 USD.');
+ assert.equal(reply.content[0].text,'Maximum total price: 0.076087 USD. Actual charge so far: 0.000023 USD.');
  assert.match(reply.content.at(-1).text,new RegExp(id));assert.match(reply.content.at(-1).text,/This read is free and never buys or approves/);
  assert.equal(reply.structuredContent.billing.total_charged,'23');
+});
+
+test('historic billing metadata is fiat-only without changing source currency, signed state or approval ceiling',async()=>{
+ const original={protocol_version:'2',status:'ready',state:{state_ref:'task',state_token:'signed'},proposal:{currency:'USDC',max_total_atomic:'9007199254740993'},billing:{currency:'USDC',total_charged:'23'},result:{currency:'USDC',data:{currency:'EUR',amount:'123.45'}},next_actions:[],errors:[]};
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(original)});
+ const reply=await runtime.callTool('apiosk_discover',{question:'Annual accounts'});
+ assert.equal(reply.structuredContent.proposal.currency,'USD');assert.equal(reply.structuredContent.billing.currency,'USD');assert.equal(reply.structuredContent.result.currency,'USD');
+ assert.deepEqual(reply.structuredContent.result.data,original.result.data);assert.deepEqual(reply.structuredContent.state,original.state);assert.equal(reply.structuredContent.proposal.max_total_atomic,original.proposal.max_total_atomic);
+ assert.match(reply.content[0].text,/9007199254\.740993 USD/);
 });
