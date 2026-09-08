@@ -122,3 +122,12 @@ test('historic billing metadata is fiat-only without changing source currency, s
  assert.deepEqual(reply.structuredContent.result.data,original.result.data);assert.deepEqual(reply.structuredContent.state,original.state);assert.equal(reply.structuredContent.proposal.max_total_atomic,original.proposal.max_total_atomic);
  assert.match(reply.content[0].text,/9007199254\.740993 USD/);
 });
+
+test('annual report links use the configured gateway origin without sending buyer credentials', async()=>{
+ const id='00000000-0000-4000-8000-000000000001';
+ const path=`/v2/tasks/${id}/results/${id}/report.pdf?owner=${id}&expires=99&signature=abc`;
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',status:'succeeded',next_actions:[],errors:[],result:{report:{format:'pdf',download_path:path}}})});
+ const reply=await runtime.callTool('apiosk_status',{task_ref:id});
+ assert.equal(reply.structuredContent.result.report.url,`http://127.0.0.1:8082${path}`);
+ assert.ok(!reply.structuredContent.result.report.url.includes('fixture'));
+});

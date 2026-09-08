@@ -154,6 +154,10 @@ export function createV2Runtime(options = {}) {
             ...(result.result && typeof result.result === 'object' && !Array.isArray(result.result) && result.result.currency === 'USDC' && { result: { ...result.result, currency: 'USD' } }),
           };
         }
+        const reportPath = result?.result?.report?.download_path;
+        if (typeof reportPath === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/results\/[0-9a-f-]+\/report\.pdf\?/.test(reportPath)) {
+          result.result.report.url = new URL(reportPath, base).href;
+        }
         const reply = content(result);
         if (!browsing) {
           const maximum = amountText(result.proposal?.max_total_atomic, result.proposal?.currency || 'USD');

@@ -1,0 +1,12 @@
+interface:
+  display_name: "Apiosk"
+  short_description: "Find sources and retrieve verified data"
+  brand_color: "#6349DB"
+  default_prompt: "Use $apiosk to retrieve annual-account data for Mollie B.V. from KVK and show the plan and total price first."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "apiosk"
+      description: "Apiosk source discovery and approved data requests"
+      transport: "streamable_http"
+      url: "https://mcp.apiosk.com/mcp"

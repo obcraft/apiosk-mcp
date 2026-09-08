@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Apiosk</title>
+  <rect width="512" height="512" fill="#171717"/>
+  <g transform="translate(71.68 70.96) scale(.72)">
+    <path fill="#fff" fill-rule="evenodd" d="M66 180C66 89 148 40 267 40C399 40 464 83 464 194V470H362V416C326 454 277 474 216 474C114 474 48 433 48 350C48 263 117 220 255 220H360V195C360 146 331 122 265 122C210 122 177 139 172 180ZM360 287H268C190 287 153 305 153 344C153 378 180 396 225 396C299 396 360 351 360 304Z"/>
+  </g>
+</svg>

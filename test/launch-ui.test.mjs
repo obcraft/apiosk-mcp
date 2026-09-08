@@ -346,3 +346,12 @@ test('historic token quotes render exact dollars beside the request title and on
  assert.equal(buttons.length,1);await buttons[0].onclick();
  assert.deepEqual(calls.map(c=>c.name),['apiosk_status']);assert.equal(calls[0].args.task_ref,'task');
 });
+
+test('annual report download opens the saved PDF without a paid tool call',async()=>{
+ const opened=[],calls=[];
+ const url='https://apiosk-gateway-v2.fly.dev/v2/tasks/task/results/result/report.pdf?signature=fixture';
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],result:{data:{opendataFields:[]},report:{format:'pdf',url}}},openExternal:({href})=>opened.push(href),callTool:async(...args)=>calls.push(args)});
+ const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download jaarrekeningrapport (PDF)');
+ assert.ok(button); await button.onclick();
+ assert.deepEqual(opened,[url]); assert.deepEqual(calls,[]);
+});
