@@ -174,3 +174,13 @@ test('v2 card never automatically replays an interrupted paid action',async()=>{
  await h.tick(350);await h.tick(350);await h.tick(2000);
  assert.equal(paid,1);assert.match(h.nodes.get('feedback-text').textContent,/Connection interrupted/);
 });
+
+test('v2 card preserves task recovery when a tool returns a transport error envelope',async()=>{
+ const calls=[];
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push(args);return{structuredContent:{error_code:'gateway.unavailable',message:'Recover the saved task'}}}});
+ await h.tick(2000);
+ const refresh=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Check status');
+ assert.ok(refresh);await refresh.onclick();
+ assert.equal(calls.length,2);assert.equal(calls[1].recover_task_ref,'task');
+ assert.match(h.nodes.get('feedback-text').textContent,/Recover the saved task/);
+});
