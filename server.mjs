@@ -229,6 +229,24 @@ const hostedOAuth = createHostedOAuthSupport({
 });
 const mcpAuthMiddleware = hostedOAuth.createMcpAuthMiddleware(runtime);
 
+// Operational evidence without buyer prompts, credentials, OAuth codes or
+// result bodies. In particular distinguish a host timeout from an auth error.
+app.use((req, res, next) => {
+  const path = req.path;
+  if (!["/mcp", "/messages", "/token", "/authorize", "/register", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp"].includes(path)) return next();
+  const started = Date.now();
+  res.once("finish", () => console.info(JSON.stringify({
+    event: "mcp_request", path, method: req.method,
+    rpc_method: ["initialize", "tools/list", "tools/call", "resources/list", "resources/read", "notifications/initialized"].includes(req.body?.method) ? req.body.method : undefined,
+    client_name: req.body?.method === "initialize" && /^[a-zA-Z0-9 ._/-]{1,80}$/.test(req.body?.params?.clientInfo?.name || "") ? req.body.params.clientInfo.name : undefined,
+    client_family: /openai|chatgpt/i.test(req.headers['user-agent'] || '') ? 'openai' : /claude|anthropic/i.test(req.headers['user-agent'] || '') ? 'anthropic' : 'other',
+    has_bearer: /^Bearer /i.test(req.headers.authorization || ''),
+    ui_resource: req.body?.method === 'resources/read' && /^ui:\/\/apiosk\/gateway-v2-card-v[0-9]+(?:-chatgpt)?\.html$/.test(req.body?.params?.uri || '') ? req.body.params.uri : undefined,
+    status: res.statusCode, duration_ms: Date.now() - started,
+  })));
+  next();
+});
+
 app.use(hostedOAuth.metadataRouter);
 app.use(new URL(hostedOAuth.oauthMetadata.authorization_endpoint).pathname, hostedOAuth.authorizationRouter);
 app.use(new URL(hostedOAuth.oauthMetadata.token_endpoint).pathname, hostedOAuth.tokenRouter);
@@ -408,7 +426,7 @@ app.get("/health", async (req, res) => {
 });
 
 app.post("/mcp", mcpAuthMiddleware, async (req, res) => {
-  const server = createApioskMcpServer({ runtime });
+  const server = createApioskMcpServer({ runtime, legacyUiMime: /openai|chatgpt/i.test(req.headers["user-agent"] || "") });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });

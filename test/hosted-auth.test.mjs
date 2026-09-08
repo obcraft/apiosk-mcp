@@ -103,6 +103,7 @@ test("authorize() hands off to the agent gateway, never renders a local sign-in 
   // `name`, not `app_name`: that is what the gateway's `startAuthorization`
   // reads and carries to the approval screen as the suggested connection name.
   assert.equal(location.searchParams.get("name"), "ChatGPT");
+  assert.equal(location.searchParams.get("provider"), "openai");
   // Required by the gateway, which refuses `plain` rather than downgrading.
   assert.equal(location.searchParams.get("code_challenge_method"), "S256");
   // A fresh, 43-char S256 PKCE challenge for the OUTER (portal-facing) leg —
@@ -466,4 +467,24 @@ test("verifyAccessToken accepts an Apiosk connect token directly, for headless a
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('v2 challenges before anonymous initialization so hosts configure OAuth on connection', async () => {
+  const support = createTestSupport({env:{...TEST_ENV,APIOSK_GATEWAY_V2_URL:'https://gateway.apiosk.test'}});
+  const middleware = support.createMcpAuthMiddleware({isToolProtected:async()=>true});
+  for (const method of ['initialize','tools/list','resources/list','tools/call']) {
+    const req={headers:{},path:'/mcp',body:{method,params:{name:'apiosk_sources'}}};
+    const res=createMockResponse(req); let passed=false;
+    await middleware(req,res,()=>{passed=true});
+    assert.equal(passed,false);assert.equal(res.statusCode,401);
+    assert.match(res.headers.get('www-authenticate'),/resource_metadata=.*oauth-protected-resource\/mcp/);
+  }
+});
+
+test('hosted OAuth defaults to DCR rather than unavailable external client metadata', () => {
+  const support=createTestSupport();
+  assert.equal(support.oauthMetadata.client_id_metadata_document_supported,false);
+  assert.equal(support.oauthMetadata.registration_endpoint,'https://mcp.apiosk.test/register');
+  const optIn=createTestSupport({env:{...TEST_ENV,APIOSK_MCP_CIMD_ENABLED:'1'}});
+  assert.equal(optIn.oauthMetadata.client_id_metadata_document_supported,true);
 });

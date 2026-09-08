@@ -9,7 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { V2_INSTRUCTIONS, V2_DESCRIPTION, V2_RESOURCE } from "./gateway-v2.mjs";
-import { APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_CARD_HTML, APIO_V2_CARD_META } from "./gateway-v2-card.mjs";
+import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_CARD_HTML, APIO_V2_CARD_META } from "./gateway-v2-card.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
@@ -212,6 +212,10 @@ export function createApioskMcpServer(options = {}) {
    * one per host.
    */
   function uiMimeType() {
+    // Stateless HTTP loses initialize capabilities between requests. Keep
+    // the Apps SDK MIME for OpenAI clients that still fetch legacy templates.
+    // This changes resource formatting only; authentication stays identical.
+    if (gatewayV2) return options.legacyUiMime ? "text/html+skybridge" : "text/html;profile=mcp-app";
     const declared = server.getClientCapabilities()?.extensions?.["io.modelcontextprotocol/ui"];
     return declared ? "text/html;profile=mcp-app" : "text/html+skybridge";
   }
@@ -255,7 +259,7 @@ export function createApioskMcpServer(options = {}) {
       name: "Apiosk Gateway v2 interactive card",
       mimeType: uiMimeType(),
       _meta: APIO_V2_CARD_META,
-    }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
+    }, { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: APIO_V2_CARD_META }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
       uri,
       name: "Apiosk Gateway v2 interactive card (compatible)",
       mimeType: uiMimeType(),
@@ -274,6 +278,7 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (gatewayV2) {
       if (request.params.uri === "apiosk://v2/host-contract") return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
+      if (request.params.uri === APIO_V2_CHATGPT_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: APIO_V2_CARD_HTML, _meta: APIO_V2_CARD_META }] };
       if (request.params.uri === APIO_V2_CARD_URI || APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: APIO_V2_CARD_HTML, _meta: APIO_V2_CARD_META }] };
       throw new Error("Unknown v2 resource");
     }

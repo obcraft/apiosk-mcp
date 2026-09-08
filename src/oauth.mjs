@@ -526,6 +526,14 @@ class ApioskHostedOAuthProvider {
   async authorize(client, params, res) {
     const verifier = crypto.randomBytes(48).toString("base64url");
     const challenge = crypto.createHash("sha256").update(verifier).digest("base64url");
+    // Display the runtime that owns the validated callback, rather than the
+    // shared Apiosk transport client. Client-supplied names are not identity.
+    const callback = new URL(params.redirectUri);
+    const provider = callback.protocol === "https:" ? ({
+      "claude.ai": "anthropic",
+      "chatgpt.com": "openai",
+      "chat.openai.com": "openai",
+    })[callback.hostname] : undefined;
 
     const handoffState = buildIssuedToken(
       this.secret,
@@ -557,6 +565,7 @@ class ApioskHostedOAuthProvider {
         code_challenge_method: "S256",
         state: handoffState,
         name: trimString(client.client_name) || undefined,
+        provider,
       }
     );
 
@@ -1093,7 +1102,12 @@ export function createHostedOAuthSupport({
     resourceName,
     serviceDocumentationUrl: new URL("https://apiosk.com"),
   });
-  oauthMetadata.client_id_metadata_document_supported = true;
+  // Claude prefers CIMD when advertised. Its metadata origin currently
+  // challenges Fly egress with HTTP 403, which makes a healthy MCP endpoint
+  // fail sign-in as invalid_client. DCR is local, durable through signed client
+  // IDs, and supported by both hosts. Only advertise CIMD after deployment-
+  // side reachability has been verified.
+  oauthMetadata.client_id_metadata_document_supported = env.APIOSK_MCP_CIMD_ENABLED === "1";
 
   const serviceDocumentationUrl = new URL("https://apiosk.com");
 
@@ -1169,6 +1183,19 @@ export function createHostedOAuthSupport({
 
         const requestBody = req.body;
         const method = trimString(requestBody?.method);
+        // Every v2 tool uses the connected account. Challenge during the
+        // initial handshake too, so hosts do not install it as an anonymous
+        // connector and discover the sign-in requirement only on first use.
+        if (env.APIOSK_GATEWAY_V2_URL && method && !req.auth) {
+          writeAuthChallenge(res, {
+            status: 401,
+            code: "invalid_token",
+            message: "Connect your Apiosk account once to use this connector.",
+            resourceMetadataUrl: challengeResourceMetadataUrl,
+          });
+          return;
+        }
+
         if (method !== "tools/call") {
           next();
           return;

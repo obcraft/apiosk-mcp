@@ -18,6 +18,11 @@ function harness(html=null,openai=null) {
   if(html)for(const s of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(s[1],ctx);else vm.runInContext(APIOSK_UI_BRIDGE,ctx);
   return {
     sent,nodes,window,
+    async globals(globals) {
+      Object.assign(window.openai,globals);
+      listeners.get('openai:set_globals')?.({detail:{globals}});
+      for(let i=0;i<12;i++)await Promise.resolve();
+    },
     async tick(ms) {
       const entry=[...timers].find(([,t])=>t.ms===ms);
       if(!entry)return false;
@@ -145,18 +150,75 @@ test('Claude approvals open Apiosk without attempting an in-card purchase',async
 });
 
 const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};
+test('in-chat approval requires a click, uses the exact displayed cap once and continues without an external link',async()=>{
+ const calls=[];let release,links=0;
+ const data={...v2Ready,context_view:{execution_enabled:true,approval_mode:'chatbot'}};
+ const approved={...data,billing:{...data.billing,authorization_active:true}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal(){links++},callTool:async(name,args)=>{calls.push({name,args});if(name==='apiosk_approve')await new Promise(resolve=>{release=resolve});return{structuredContent:name==='apiosk_approve'?approved:{...approved,status:'succeeded',next_actions:[],result:{data:{name:'Example'}}}}}});
+ await h.tick(350);await h.tick(2000);assert.equal(calls.length,0);
+ const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to'));
+ const pending=button.onclick();await button.onclick();assert.equal(calls.length,1);
+ assert.equal(calls[0].name,'apiosk_approve');assert.equal(calls[0].args.max_total_atomic,'21739');assert.equal(calls[0].args.quote_ref,'quote');assert.equal(calls[0].args.state.state_ref,'task');
+ release();await pending;await h.tick(350);
+ assert.equal(calls.length,2);assert.equal(calls[1].name,'apiosk_execute');assert.equal(calls[1].args.idempotency_key,'run');assert.equal(links,0);assert.equal(h.nodes.get('title').textContent,'Source result');
+});
+test('ChatGPT global updates cannot replace an approved result with the original plan or cancel its next step',async()=>{
+ const calls=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const approved={...data,billing:{authorization_active:true,quote_ref:'quote'}};
+ const done={...approved,status:'succeeded',next_actions:[],result:{data:{name:'Saved company'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push(name);return{structuredContent:name==='apiosk_approve'?approved:done}}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ await h.globals({theme:'dark'});
+ await h.globals({toolOutput:JSON.parse(JSON.stringify(data))});
+ await h.globals({toolOutput:{...data,request_id:'resent-original-plan'}});
+ await h.tick(350);
+ assert.deepEqual(calls,['apiosk_approve','apiosk_execute']);
+ await h.globals({widgetState:{result:done}});
+ await h.globals({toolOutput:JSON.parse(JSON.stringify(data))});
+ assert.equal(h.nodes.get('title').textContent,'Source result');
+ assert.equal(h.nodes.get('sections').querySelectorAll('button').some(b=>b.textContent.startsWith('Approve up to')),false);
+});
+test('in-chat approval never buys after a refused or mismatched approval response or expired quote',async()=>{
+ for(const response of [{error_code:'approval_refused',message:'Limit exceeded'},{...v2Ready,billing:{authorization_active:true,quote_ref:'other'}}]){
+  const calls=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name)=>{calls.push(name);return{structuredContent:response}}});
+  await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+  await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve']);
+ }
+ let calls=0;const data={...v2Ready,context_view:{approval_mode:'chatbot'},proposal:{...v2Ready.proposal,expires_at:'2000-01-01'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async()=>{calls++}});
+ const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Quote expired'));
+ assert.equal(button.disabled,true);await button.onclick();assert.equal(calls,0);
+});
+test('Claude receives result context without an unsolicited composer draft or second confirmation',async()=>{
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize('Claude');
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:v2Ready}});
+ const read={...v2Ready,status:'succeeded',next_actions:[],result:{data:{name:'Example'}}};
+ const refreshing=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Check status').onclick();
+ const call=h.sent.find(m=>m.method==='tools/call');
+ await h.message({jsonrpc:'2.0',id:call.id,result:{structuredContent:read}});await refreshing;
+ const context=h.sent.find(m=>m.method==='ui/update-model-context');assert.ok(context);assert.equal(JSON.parse(context.params.content[0].text).result.data.name,'Example');
+ await h.message({jsonrpc:'2.0',id:context.id,result:{}});
+ assert.equal(h.sent.some(m=>m.method==='ui/message'),false);assert.equal(h.nodes.get('title').textContent,'Source result');
+});
 test('v2 card observes approval then executes once with the saved quote and publishes the result',async()=>{
- const calls=[],contexts=[];
+ const calls=[],contexts=[],messages=[];
  const approved={...v2Ready,billing:{...v2Ready.billing,authorization_active:true}};
  const done={...approved,status:'succeeded',next_actions:[],result:{data:{resultaten:[{naam:"Tony's Chocolonely",kvkNummer:'34241705'}],totaal:16,pagina:1}}};
- const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.recover_task_ref?approved:done}},setWidgetState:value=>contexts.push(value)});
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,openExternal(){},callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.task_ref?approved:done}},setWidgetState:value=>contexts.push(value),sendFollowUpMessage:async value=>messages.push(value)});
  assert.equal(calls.length,0);
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
  await h.tick(2000);
- assert.equal(calls[0].args.recover_task_ref,'task');
+ assert.equal(calls[0].args.task_ref,'task');
  await h.tick(350);
  assert.equal(calls.length,2);
  assert.equal(calls[1].args.quote_ref,'quote');assert.equal(calls[1].args.idempotency_key,'run');
- assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(contexts.at(-1).result.status,'succeeded');
+ assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(contexts.at(-1).privateContent.apioskResult.status,'succeeded');
+ assert.equal(messages.length,1);assert.match(messages[0].prompt,/Do not purchase/);
+ assert.match(messages[0].prompt,/only a brief completion note and source citation/);
+ assert.match(messages[0].prompt,/Do not repeat the card's figures, tables, JSON, charges/);
+ assert.match(messages[0].prompt,/only when the actual user explicitly asks/);
+ assert.doesNotMatch(messages[0].prompt,/Include actual charges and any missing data/);
  assert.equal(await h.tick(350),false);
 });
 test('v2 card never executes absent, mismatched or disabled consent',async()=>{
@@ -164,13 +226,14 @@ test('v2 card never executes absent, mismatched or disabled consent',async()=>{
   const calls=[];const data={...v2Ready,...changes};
   const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push(args);return{structuredContent:data}}});
   await h.tick(350);await h.tick(2000);
-  assert.ok(calls.every(args=>args.recover_task_ref==='task'));
+  assert.ok(calls.every(args=>args.task_ref==='task'));
  }
 });
 test('v2 card never automatically replays an interrupted paid action',async()=>{
  let paid=0;
  const data={...v2Ready,billing:{authorization_active:true,quote_ref:'quote'}};
- const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async()=>{paid++;throw new Error('Connection interrupted')}});
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(_name,args)=>{if(args.task_ref)return{structuredContent:data};paid++;throw new Error('Connection interrupted')}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Continue approved request').onclick();
  await h.tick(350);await h.tick(350);await h.tick(2000);
  assert.equal(paid,1);assert.match(h.nodes.get('feedback-text').textContent,/Connection interrupted/);
 });
@@ -178,9 +241,95 @@ test('v2 card never automatically replays an interrupted paid action',async()=>{
 test('v2 card preserves task recovery when a tool returns a transport error envelope',async()=>{
  const calls=[];
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push(args);return{structuredContent:{error_code:'gateway.unavailable',message:'Recover the saved task'}}}});
- await h.tick(2000);
  const refresh=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Check status');
- assert.ok(refresh);await refresh.onclick();
- assert.equal(calls.length,2);assert.equal(calls[1].recover_task_ref,'task');
+ assert.ok(refresh);await refresh.onclick();await refresh.onclick();
+ assert.equal(calls.length,2);assert.equal(calls[1].task_ref,'task');
  assert.match(h.nodes.get('feedback-text').textContent,/Recover the saved task/);
+});
+test('passive copies of an approved card do not compete with the active card',async()=>{
+ let calls=0;const data={...v2Ready,billing:{authorization_active:true,quote_ref:'quote'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async()=>{calls++;return{structuredContent:data}}});
+ await h.tick(350);await h.tick(2000);assert.equal(calls,0);
+});
+
+test('choosing a named company resumes an approved plan even after the active watch expired',async()=>{
+ const calls=[];const data={...v2Ready,status:'needs_selection',billing:{authorization_active:true,quote_ref:'quote'},context_view:{candidates:[{entity_ref:'mollie',label:'Mollie B.V.',facts:[{type:'company_registry.kvknummer',value:'30204462'}]},{entity_ref:'other',label:'Mollie B.V.',facts:[{type:'company_registry.kvknummer',value:'92327737'}]}]},next_actions:[{action_id:'select',kind:'select_entity'}]};
+ const approved={...v2Ready,billing:data.billing};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.action_id==='select'?approved:{...approved,status:'succeeded',next_actions:[]}}}});
+ await h.tick(350);assert.equal(calls.length,0);
+ const choices=h.nodes.get('sections').querySelectorAll('button');assert.ok(choices.some(b=>b.textContent==='Mollie B.V. · KVK 92327737'));
+ await choices.find(b=>b.textContent==='Mollie B.V. · KVK 30204462').onclick();await h.tick(350);
+ assert.equal(calls.length,2);assert.equal(calls[0].args.input.entity_ref,'mollie');assert.equal(calls[1].args.action_id,'run');assert.ok(calls.every(c=>c.name==='apiosk_execute'));
+});
+
+test('annual account fields render nested values without inventing a currency or hiding zero and negative values',async()=>{
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],result:{data:{opendataFields:[{key:'FinancialYear',value:'2020'},{key:'IncomeStatement',opendataFields:[{key:'ResultAfterTax',value:'-5166000'},{key:'IncomeTaxExpense',value:0}]}]}}}});
+ const rows=h.nodes.get('sections').querySelectorAll('div').filter(n=>n.className==='result-row');
+ assert.deepEqual(rows.map(row=>row.children.map(n=>n.textContent)),[['Financial Year','2020'],['Result After Tax','-5.166.000'],['Income Tax Expense','0']]);
+});
+
+test('reopening a card restores saved results with one free recovery and never runs a paid step or sends a draft',async()=>{
+ const calls=[],messages=[];const saved={...v2Ready,status:'succeeded',billing:{authorization_active:true,quote_ref:'quote',total_charged:'21739'},next_actions:[],result:{data:{name:'Saved company'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push(args);return{structuredContent:saved}},sendFollowUpMessage:value=>messages.push(value)});
+ await h.tick(100);await h.tick(350);await h.tick(2000);
+ assert.equal(calls.length,1);assert.deepEqual(Object.keys(calls[0]),['task_ref']);assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(messages.length,0);
+});
+
+test('a second host snapshot during mount cannot suppress free task recovery',async()=>{
+ const calls=[];const saved={...v2Ready,status:'succeeded',next_actions:[],result:{data:{name:'Saved company'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,callTool:async(name,args)=>{calls.push(args);return{structuredContent:saved}}});
+ await h.globals({toolOutput:{...v2Ready,request_id:'new-host-delivery'}});
+ await h.tick(100);
+ assert.equal(calls.length,1);assert.deepEqual(Object.keys(calls[0]),['task_ref']);assert.equal(h.nodes.get('title').textContent,'Source result');
+});
+
+test('Claude compatibility globals do not enable automatic composer messages after host negotiation',async()=>{
+ const messages=[];const h=harness(null,{sendFollowUpMessage:value=>messages.push(value)});await h.initialize('Claude');
+ assert.equal(h.window.apiosk.can.autoFollowUp,false);assert.equal(messages.length,0);
+});
+
+test('a stalled background recovery cannot block a card action or overwrite its newer response',async()=>{
+ const calls=[];let recover;
+ const initial={...v2Ready,next_actions:[...v2Ready.next_actions,{action_id:'cancel',kind:'cancel'}]};
+ const cancelled={...initial,state:{...initial.state,revision:2},status:'cancelled',next_actions:[]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:initial,callTool:(name,args)=>{calls.push({name,args});return name==='apiosk_status'?new Promise(resolve=>{recover=resolve}):Promise.resolve({structuredContent:cancelled})}});
+ await h.tick(100);
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Stop remaining steps').onclick();
+ assert.deepEqual(calls.map(c=>c.name),['apiosk_status','apiosk_execute']);
+ assert.equal(calls[1].args.action_id,'cancel');assert.equal(h.nodes.get('title').textContent,'Cancelled');
+ recover({structuredContent:initial});for(let i=0;i<12;i++)await Promise.resolve();
+ assert.equal(h.nodes.get('title').textContent,'Cancelled');
+});
+
+test('ChatGPT persists its returned result even when the host also supports MCP model context',async()=>{
+ const states=[];const h=harness(null,{setWidgetState:v=>states.push(v)});await h.initialize('ChatGPT');
+ const saved={...v2Ready,state:{...v2Ready.state,revision:2},status:'succeeded',next_actions:[],result:{data:{FinancialYear:'2020'}}};
+ const updating=h.window.apiosk.context(saved);
+ assert.equal(states.length,1);assert.equal(states[0].privateContent.apioskResult.result.data.FinancialYear,'2020');
+ const context=h.sent.find(m=>m.method==='ui/update-model-context');assert.ok(context);await h.message({jsonrpc:'2.0',id:context.id,result:{}});await updating;
+ let calls=0;const reopened=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,widgetState:states[0],callTool:async()=>{calls++;return{structuredContent:saved}}});
+ assert.equal(reopened.nodes.get('title').textContent,'Source result');
+ await reopened.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:v2Ready}});
+ assert.equal(reopened.nodes.get('title').textContent,'Source result');await reopened.tick(350);assert.equal(calls,0);await reopened.tick(100);assert.equal(calls,1);
+});
+test('persisted widget views cannot replace another task or a newer server revision',()=>{
+ for(const state of [{state_ref:'another-task',revision:20},{state_ref:'task',revision:0}]){
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready,widgetState:{privateContent:{apioskResult:{...v2Ready,state,status:'succeeded',next_actions:[]}}}});
+  assert.notEqual(h.nodes.get('title').textContent,'Source result');
+ }
+});
+
+test('a host returning text blocks without structuredContent preserves the JSON after formatted pricing',async()=>{
+ const cancelled={...v2Ready,state:{...v2Ready.state,revision:2},status:'cancelled',next_actions:[]};
+ const h=harness(null,{callTool:async()=>({content:[{type:'text',text:'Actual charge so far: 0.00 USD.'},{type:'text',text:JSON.stringify(cancelled)}]})});
+ const result=await h.window.apiosk.callTool('apiosk_status',{task_ref:'task'});
+ assert.equal(result.status,'cancelled');assert.equal(result.state.revision,2);
+});
+
+test('a stale host notification with different request metadata cannot overwrite a locally returned revision',async()=>{
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:v2Ready});
+ const saved={...v2Ready,state:{...v2Ready.state,revision:2},status:'succeeded',next_actions:[],result:{data:{name:'Saved company'}}};
+ await h.globals({toolOutput:saved});await h.window.apiosk.context(saved);
+ await h.globals({toolOutput:{...v2Ready,request_id:'resent-initial-response'}});
+ assert.equal(h.nodes.get('title').textContent,'Source result');
 });

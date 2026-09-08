@@ -36,11 +36,14 @@
  */
 export const APIOSK_UI_BRIDGE = `
 (()=>{
-const listeners=[],inputListeners=[];let data=null,input=null,pending=new Map(),rpcId=0,mcp=false,host={};
-function emit(v){if(v==null)return;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
+const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,pending=new Map(),rpcId=0,mcp=false,host={};
+// Hosts may resend the original tool snapshot when widget state or layout
+// changes. Replaying it would overwrite a newer in-card tool response and
+// cancel the execution timer immediately after approval.
+function emit(v){if(v==null)return;v=restoredView(v);if(localState?.state_ref===v?.state?.state_ref&&Number(v?.state?.revision)<=Number(localState?.revision))return;if(data?.state?.state_ref&&data.state.state_ref===v?.state?.state_ref&&Number(v.state.revision)<Number(data.state.revision))return;let key;try{key=JSON.stringify(v)}catch(e){}if(key!==undefined&&key===dataKey)return;dataKey=key;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
 function emitInput(v){if(v==null)return;input=v;for(const fn of inputListeners){try{fn(v)}catch(e){}}}
 function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;
- if(Array.isArray(r.content)&&r.content[0]&&r.content[0].text){try{return JSON.parse(r.content[0].text)}catch(e){return r}}}
+ if(Array.isArray(r.content))for(const block of r.content){if(block?.type==='text'&&typeof block.text==='string'){try{const value=JSON.parse(block.text);if(value&&typeof value==='object')return value}catch(e){}}}}
  return r}
 // ---- MCP Apps (SEP-1865): JSON-RPC over postMessage to the host frame -------
 function send(msg){try{window.parent.postMessage(msg,'*')}catch(e){}}
@@ -56,14 +59,20 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  if(msg.method==='ui/notifications/tool-result'){emit(unwrap(msg.params));return}
  if(msg.method==='ui/notifications/tool-cancelled'){emit({status:'cancelled'});return}});
 // ---- OpenAI Apps SDK: globals plus an event ---------------------------------
+function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result;
+ // Keep the last server-returned view for this card across remounts. This is
+ // a display cache only: the card still recovers server state and never starts
+ // a paid step from mounting or from persisted widget state.
+ if(saved?.state?.state_ref&&saved.state.state_ref===raw?.state?.state_ref&&Number(saved.state.revision)>=Number(raw.state.revision))return saved;
+ return raw}
 function openaiData(){const o=window.openai;return o?(o.toolOutput??o.structuredContent??null):null}
-window.addEventListener('openai:set_globals',e=>{const d=e.detail;
- emitInput((d&&d.globals&&d.globals.toolInput)??(d&&d.toolInput)??(window.openai&&window.openai.toolInput));
- emit((d&&d.globals&&d.globals.toolOutput)??(d&&d.toolOutput)??openaiData())});
+window.addEventListener('openai:set_globals',e=>{const g=e.detail?.globals??e.detail;
+ if(g&&Object.prototype.hasOwnProperty.call(g,'toolInput'))emitInput(g.toolInput);
+ if(g&&Object.prototype.hasOwnProperty.call(g,'toolOutput'))emit(g.toolOutput)});
 // ---- one surface over both ---------------------------------------------------
 const api={
  get data(){return data},
- can:{callTool:false,say:false,openLink:false,purchase:false},
+ can:{callTool:false,say:false,openLink:false,purchase:false,autoFollowUp:false},
  onInput(fn){inputListeners.push(fn);if(input!=null){try{fn(input)}catch(e){}}},
  onData(fn){listeners.push(fn);if(data!=null){try{fn(data)}catch(e){}}},
  async callTool(name,args){
@@ -80,10 +89,14 @@ const api={
    await window.openai.sendFollowUpMessage({prompt:text,scrollToBottom:true});return true}
   if(mcp){try{const result=await rpc('ui/message',{role:'user',content:[{type:'text',text}]});return !result?.isError}catch(e){return false}}
   return false},
- async context(value){
-  if(mcp&&host.updateModelContext){await rpc('ui/update-model-context',{structuredContent:value});return true}
-  if(window.openai&&window.openai.setWidgetState){window.openai.setWidgetState({result:value});return true}
-  return false},
+  async context(value){
+  // In-card tool responses are newer than the original host snapshot, even
+  // when saving consent did not change the task revision. Explicit server
+  // refreshes still render directly; this guard only rejects host replays.
+  if(value?.state){data=value;localState=value.state;try{dataKey=JSON.stringify(value)}catch(e){}}
+  let stored=false;if(window.openai?.setWidgetState){try{window.openai.setWidgetState({...window.openai.widgetState,modelContent:{status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing},privateContent:{...window.openai.widgetState?.privateContent,apioskResult:value}});stored=true}catch(e){}}
+  if(mcp&&host.updateModelContext){const summary={status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,result:value?.result,errors:value?.errors};let contextText=JSON.stringify(summary);if(contextText.length>24000)contextText=JSON.stringify({status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,note:'Read the saved task to retrieve its result.'});await rpc('ui/update-model-context',{content:[{type:'text',text:contextText}],structuredContent:value});return true}
+  return stored},
  // Cards grow when a list renders. A host sizing an iframe once shows the first
  // two rows of six and no scrollbar.
  resize(){const width=Math.ceil(document.documentElement.scrollWidth),height=Math.ceil(document.documentElement.scrollHeight);
@@ -91,14 +104,14 @@ const api={
   if(mcp)send({jsonrpc:'2.0',method:'ui/notifications/size-changed',params:{width,height}})}};
 window.apiosk=api;
 (async()=>{
- if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool};emitInput(window.openai.toolInput);emit(openaiData())}
+ if(window.openai){api.can={callTool:!!window.openai.callTool,say:!!window.openai.sendFollowUpMessage,openLink:!!window.openai.openExternal,purchase:!!window.openai.callTool,autoFollowUp:!!window.openai.sendFollowUpMessage};emitInput(window.openai.toolInput);emit(openaiData())}
  if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>api.resize()).observe(document.documentElement);
  if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>api.resize());else setTimeout(()=>api.resize(),0);
  if(window.parent===window)return;
  try{
   const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
   mcp=true;host=(result&&result.hostCapabilities)||{};
-  api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||'')};
+  api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||''),autoFollowUp:!!window.openai?.sendFollowUpMessage&&!/claude/i.test(result?.hostInfo?.name||'')};
   send({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}});
  }catch(e){/* not an MCP Apps host: the OpenAI path above, or nothing */}
 })();

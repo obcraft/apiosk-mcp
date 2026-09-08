@@ -45,7 +45,7 @@
     "type":"object","additionalProperties":false,"required":["question"],
     "properties":{
       "question":{"type":"string","minLength":1,"maxLength":4000},"request_id":{"type":"string","format":"uuid"},
-      "state":{"description":"Copy the complete last state envelope unchanged when continuing an existing question. Omit it for a new question.","type":"object"},
+      "state":{"description":"Copy the complete last state envelope unchanged.","type":["object","null"]},
       "context_delta":{"type":"object","additionalProperties":false,"properties":{
         "explicit_values":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"required":["entity_ref","semantic_type","value"],"properties":{"entity_ref":{"type":"string","format":"uuid"},"semantic_type":{"type":"string"},"value":{}}}},
         "requested_focus_refs":{"type":"array","maxItems":8,"items":{"type":"string","format":"uuid"}}
