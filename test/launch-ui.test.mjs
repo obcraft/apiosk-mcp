@@ -351,7 +351,7 @@ test('annual report download opens the saved PDF without a paid tool call',async
  const opened=[],calls=[];
  const url='https://apiosk-gateway-v2.fly.dev/v2/tasks/task/results/result/report.pdf?signature=fixture';
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],result:{data:{opendataFields:[]},report:{format:'pdf',url}}},openExternal:({href})=>opened.push(href),callTool:async(...args)=>calls.push(args)});
- const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download jaarrekeningrapport (PDF)');
+ const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download annual report (PDF)');
  assert.ok(button); await button.onclick();
  assert.deepEqual(opened,[url]); assert.deepEqual(calls,[]);
 });
