@@ -10,11 +10,11 @@ import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
-  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},replaceChildren(...c){this.children=c},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').includes(c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
+  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
   const document={documentElement:{scrollWidth:320,scrollHeight:200},getElementById(id){if(!nodes.has(id))nodes.set(id,el());return nodes.get(id)},createElement:el};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
-  const ctx=vm.createContext({window,document,URL,Intl,console,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
+  const ctx=vm.createContext({window,document,URL,Intl,console,setInterval:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms,repeat:true});return id},clearInterval(id){timers.delete(id)},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
   if(html)for(const s of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(s[1],ctx);else vm.runInContext(APIOSK_UI_BRIDGE,ctx);
   return {
     sent,nodes,window,
@@ -26,7 +26,7 @@ function harness(html=null,openai=null) {
     async tick(ms) {
       const entry=[...timers].find(([,t])=>t.ms===ms);
       if(!entry)return false;
-      timers.delete(entry[0]);entry[1].fn();
+      if(!entry[1].repeat)timers.delete(entry[0]);entry[1].fn();
       for(let i=0;i<12;i++)await Promise.resolve();
       return true;
     },
@@ -220,6 +220,21 @@ test('v2 card observes approval then executes once with the saved quote and publ
  assert.match(messages[0].prompt,/only when the actual user explicitly asks/);
  assert.doesNotMatch(messages[0].prompt,/Include actual charges and any missing data/);
  assert.equal(await h.tick(350),false);
+});
+test('v2 card restores a KVK countdown and continues the approved second report with both results',async()=>{
+ const calls=[];
+ const first={subject:{label:'HEMA'},data:{year:'2025'}},second={subject:{label:'AFAS'},data:{year:'2024'}};
+ const approved={...v2Ready,billing:{...v2Ready.billing,authorization_active:true},result:first,context_view:{results:[first]}};
+ const waiting={...approved,status:'running',retry_after_ms:60000,next_actions:[{kind:'poll',action_id:'wait'}],context_view:{results:[first],cooldown:{until:new Date(Date.now()+60000).toISOString(),message:'KVK allows one annual-accounts request per minute.'}}};
+ const done={...approved,status:'succeeded',next_actions:[],result:second,context_view:{results:[first,second],analysis:{status:'completed',observations:[],limitations:['Reporting periods differ.']}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:waiting,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.action_id==='wait'?approved:done}}});
+ const allText=()=>h.nodes.get('sections').querySelectorAll('h3,p').map(n=>n.textContent).join(' ');
+ assert.match(allText(),/Result · HEMA/);assert.match(allText(),/Next annual report in (1:00|0:59)/);
+ assert.equal(calls.length,0);
+ await h.tick(60000);await h.tick(350);
+ assert.equal(calls.length,2);assert.ok(calls.every(c=>c.name==='apiosk_execute'));
+ assert.equal(calls[1].args.quote_ref,'quote');
+ assert.match(allText(),/Result · HEMA/);assert.match(allText(),/Result · AFAS/);assert.match(allText(),/Reporting periods differ/);
 });
 test('v2 card never executes absent, mismatched or disabled consent',async()=>{
  for(const changes of [{},{billing:{authorization_active:true,quote_ref:'old'}},{billing:{authorization_active:true,quote_ref:'quote'},context_view:{execution_enabled:false}}]){

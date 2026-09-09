@@ -1,13 +1,14 @@
 import { V2_CARD_RESULT } from "./gateway-v2-card-result.mjs";
+import { V2_CARD_RESEARCH } from "./gateway-v2-card-research.mjs";
 import { V2_RESULT_READY_PROMPT } from "./result-presentation.mjs";
 import { V2_CARD_ACTIONS } from "./gateway-v2-card-actions.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v26.html";
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v27.html";
 // Separate MIME-labelled aliases of the same card. Older ChatGPT renderers
 // use outputTemplate/skybridge; MCP Apps hosts use ui.resourceUri/mcp-app.
 export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v9-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
+export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -70,6 +71,7 @@ function renderChoices(data){const select=(data.next_actions||[]).find(a=>a.kind
 function renderInput(data){const action=(data.next_actions||[]).find(a=>a.kind==='supply_input');if(!action)return;const s=section('One detail is needed'),form=el('form','field'),field=el('input');field.required=true;field.autocomplete='off';field.placeholder='Enter the requested value';const b=el('button','primary','Continue');form.append(field,b);form.onsubmit=e=>{e.preventDefault();let value=field.value.trim();const type=action.input_schema&&action.input_schema.properties&&action.input_schema.properties.value&&action.input_schema.properties.value.type;if(type==='integer'||type==='number')value=Number(value);else if(type==='boolean')value=value==='true';callAction(action,{value})};s.append(form)}
 function renderBilling(data){const b=data.billing;if(!b)return;const available=money(b.balance_available,b.currency),charged=money(b.total_charged,b.currency);if(available==null&&charged==null)return;const spent=Number(b.total_charged)>0,s=section(spent?'Payment completed':'No purchase yet'),grid=el('div','balances');if(charged!=null){const box=el('div','balance');box.append(el('span','','Spent · Apiosk balance'),el('b','',charged));grid.append(box)}if(available!=null){const box=el('div','balance');box.append(el('span','','Available balance'),el('b','',available));grid.append(box)}s.append(grid)}
 ${V2_CARD_RESULT}
+${V2_CARD_RESEARCH}
 ${V2_CARD_ACTIONS}
 function renderErrors(data){const errors=Array.isArray(data.errors)?data.errors:[];if(!errors.length)return;const s=section('Needs attention');for(const e of errors)s.append(el('div','notice error',e.message||e.code||'The request could not be completed.'))}
 function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);renderErrors(data)}window.apiosk.resize()}
