@@ -145,19 +145,14 @@ export function uiResourceMeta(description) {
 }
 
 /**
- * The shared look: system fonts, the host's own light/dark, one card shell.
- *
- * `color-scheme: light dark` with `Canvas`/`CanvasText` rather than a palette,
- * because these render inside somebody else's product and a card that brings
- * its own white background is a white rectangle in a dark conversation.
+ * Shared Apiosk light appearance, consistent across host themes.
  */
 export const APIOSK_UI_STYLE = `
 @font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-500-normal.woff2") format("woff2");font-style:normal;font-weight:500;font-display:swap}
 @font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-600-normal.woff2") format("woff2");font-style:normal;font-weight:600;font-display:swap}
-:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
-@media(prefers-color-scheme:dark){:root{--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}}
+:root{color-scheme:only light!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
 *{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:CanvasText;font-weight:500;letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
-.card{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:16px;padding:16px;background:color-mix(in srgb,Canvas 96%,transparent)}
+.card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff;color:#202228}
 .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
 h2{font-size:17px;line-height:1.25;margin:2px 0 0;font-weight:600;letter-spacing:-.025em}
 .meta,.hint,.status{font-size:12px;line-height:1.45;opacity:.72}

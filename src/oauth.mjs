@@ -237,7 +237,7 @@ function createConnectionCompletePage({ appName, clientName, redirectTarget }) {
   const clientLabel = clientName.client_name || "the app";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="color-scheme" content="only light" />
   <meta http-equiv="refresh" content="2;url=${escapeHtml(redirectTarget)}" />
   <title>Connected · ${escapeHtml(appName)}</title>
   <style>
@@ -254,7 +254,8 @@ function createConnectionCompletePage({ appName, clientName, redirectTarget }) {
     .steps{display:flex;gap:6px;margin:0 0 20px}.step{height:4px;flex:1;border-radius:99px;background:var(--success)}
     a.continue{display:block;border-radius:11px;padding:12px 15px;font-weight:600;letter-spacing:-.016em;background:var(--primary);color:var(--primary-fg);text-decoration:none;box-shadow:0 10px 22px -16px var(--primary)}
     .note{font-size:12px;color:var(--muted);margin:14px 0 0}
-  </style></head><body><div class="page"><main><picture class="brand"><source media="(prefers-color-scheme:dark)" srcset="/brand/wordmark-white-320.png"><img src="/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture>
+    :root{color-scheme:only light;--background:#f8f8fb;--foreground:#1f2028;--card:#fff;--border:#e5e7eb;--muted:#676371;--primary:#6349db;--primary-fg:#fff;--success:#057857}body{background:var(--background)}main{background:#fff;border-radius:12px;box-shadow:none}.steps{display:none}a.continue{box-shadow:none}
+  </style></head><body><div class="page"><main><picture class="brand"><img src="/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture>
     <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
     <h1>You're connected</h1>
     <p>Your Apiosk account is connected. Finishing securely in ${escapeHtml(clientLabel)}.</p>
