@@ -156,11 +156,8 @@ test("full round trip: authorize -> portal callback -> exchange -> verify", asyn
   );
 
   assert.ok(exchangeCall, "the gateway exchange must have been called");
-  assert.equal(callbackRes.statusCode, 200);
-  assert.match(callbackRes.body, /You're connected/);
-  const finalRedirectMatch = callbackRes.body.match(/window\.location\.replace\((".*?")\)/);
-  const finalRedirect = JSON.parse(finalRedirectMatch[1]);
-  const finalUrl = new URL(finalRedirect);
+  assert.equal(callbackRes.statusCode, 302);
+  const finalUrl = new URL(callbackRes.redirectedTo);
   assert.equal(`${finalUrl.origin}${finalUrl.pathname}`, "https://chatgpt.com/connector/oauth/callback");
   assert.equal(finalUrl.searchParams.get("state"), "state_round_trip");
 
@@ -235,9 +232,7 @@ test("a connection survives the upstream access token expiring", async () => {
     },
     callbackRes
   );
-  const finalUrl = new URL(
-    JSON.parse(callbackRes.body.match(/window\.location\.replace\((".*?")\)/)[1])
-  );
+  const finalUrl = new URL(callbackRes.redirectedTo);
 
   const first = await support.provider.exchangeAuthorizationCode(
     client,
@@ -425,8 +420,7 @@ test("access tokens minted for the /sse resource verify against the hosted serve
     { query: { code: "portal_code_sse", state: portalState } },
     callbackRes
   );
-  const redirectMatch = callbackRes.body.match(/window\.location\.replace\((".*?")\)/);
-  const finalUrl = new URL(JSON.parse(redirectMatch[1]));
+  const finalUrl = new URL(callbackRes.redirectedTo);
   const authorizationCode = finalUrl.searchParams.get("code");
 
   const tokens = await support.provider.exchangeAuthorizationCode(

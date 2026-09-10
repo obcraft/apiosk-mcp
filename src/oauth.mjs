@@ -690,16 +690,12 @@ class ApioskHostedOAuthProvider {
       state: params.state,
     });
 
-    res
-      .status(200)
-      .setHeader("content-type", "text/html; charset=utf-8")
-      .send(
-        createConnectionCompletePage({
-          appName: this.appName,
-          clientName: client,
-          redirectTarget,
-        })
-      );
+    // Complete the host's OAuth session using a real HTTP redirect. An HTML
+    // timer leaves mobile authentication sessions waiting for JavaScript and
+    // can race the meta refresh into a second use of a one-time code.
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    res.redirect(302, redirectTarget);
   }
 
   async challengeForAuthorizationCode(client, authorizationCode) {
