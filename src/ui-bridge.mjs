@@ -37,6 +37,8 @@
 export const APIOSK_UI_BRIDGE = `
 (()=>{
 const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,pending=new Map(),rpcId=0,mcp=false,host={};
+function applyTheme(theme){if(theme!=='light'&&theme!=='dark')return;document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}
+applyTheme(window.openai?.theme);
 // Hosts may resend the original tool snapshot when widget state or layout
 // changes. Replaying it would overwrite a newer in-card tool response and
 // cancel the execution timer immediately after approval.
@@ -55,6 +57,7 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  if(msg.id!=null&&pending.has(msg.id)){const p=pending.get(msg.id);pending.delete(msg.id);
   clearTimeout(p.timer);
   msg.error?p.reject(new Error(msg.error.message||'host error')):p.resolve(msg.result);return}
+ if(msg.method==='ui/notifications/host-context-changed'){applyTheme(msg.params?.theme);return}
  if(msg.method==='ui/notifications/tool-input'){emitInput(msg.params);return}
  if(msg.method==='ui/notifications/tool-result'){emit(unwrap(msg.params));return}
  if(msg.method==='ui/notifications/tool-cancelled'){emit({status:'cancelled'});return}});
@@ -67,6 +70,7 @@ function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateCo
  return raw}
 function openaiData(){const o=window.openai;return o?(o.toolOutput??o.structuredContent??null):null}
 window.addEventListener('openai:set_globals',e=>{const g=e.detail?.globals??e.detail;
+ if(g?.theme)applyTheme(g.theme);
  if(g&&Object.prototype.hasOwnProperty.call(g,'toolInput'))emitInput(g.toolInput);
  if(g&&Object.prototype.hasOwnProperty.call(g,'toolOutput'))emit(g.toolOutput)});
 // ---- one surface over both ---------------------------------------------------
@@ -110,7 +114,7 @@ window.apiosk=api;
  if(window.parent===window)return;
  try{
   const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
-  mcp=true;host=(result&&result.hostCapabilities)||{};
+  mcp=true;host=(result&&result.hostCapabilities)||{};applyTheme(result?.hostContext?.theme);
   api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||''),autoFollowUp:!!window.openai?.sendFollowUpMessage&&!/claude/i.test(result?.hostInfo?.name||'')};
   send({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}});
  }catch(e){/* not an MCP Apps host: the OpenAI path above, or nothing */}
@@ -145,14 +149,16 @@ export function uiResourceMeta(description) {
 }
 
 /**
- * Shared Apiosk light appearance, consistent across host themes.
+ * Embedded cards follow the chat host, falling back to the system theme.
  */
 export const APIOSK_UI_STYLE = `
 @font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-500-normal.woff2") format("woff2");font-style:normal;font-weight:500;font-display:swap}
 @font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-600-normal.woff2") format("woff2");font-style:normal;font-weight:600;font-display:swap}
-:root{color-scheme:only light!important;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
+:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
+:root[data-theme=dark]{--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}}
 *{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:CanvasText;font-weight:500;letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
-.card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff;color:#202228}
+.card{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:12px;padding:16px;background:Canvas;color:CanvasText}
 .eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
 h2{font-size:17px;line-height:1.25;margin:2px 0 0;font-weight:600;letter-spacing:-.025em}
 .meta,.hint,.status{font-size:12px;line-height:1.45;opacity:.72}

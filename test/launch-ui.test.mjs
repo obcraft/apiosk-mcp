@@ -11,7 +11,8 @@ import { executionKey, runExecute } from '../src/tools/execute.mjs';
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
   const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
-  const document={documentElement:{scrollWidth:320,scrollHeight:200},getElementById(id){if(!nodes.has(id))nodes.set(id,el());return nodes.get(id)},createElement:el};
+  const element=name=>Object.assign(el(name),{remove(){},after(){}});
+  const document={documentElement:{scrollWidth:320,scrollHeight:200,dataset:{},style:{}},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},createElement:element};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
   const ctx=vm.createContext({window,document,URL,Intl,console,setInterval:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms,repeat:true});return id},clearInterval(id){timers.delete(id)},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
@@ -349,7 +350,7 @@ test('a stale host notification with different request metadata cannot overwrite
  assert.equal(h.nodes.get('title').textContent,'Source result');
 });
 
-test('historic token quotes render exact dollars beside the request title and one free result control',async()=>{
+test('historic token quotes render exact dollars without a redundant saved-result control',async()=>{
  const calls=[]; const data={...v2Ready,status:'succeeded',proposal:{...v2Ready.proposal,max_total_atomic:'97826'},result:{data:{opendataFields:[{key:'FinancialYear',value:'2020'}]}},next_actions:[{action_id:'a',kind:'read_result',label:'Lees het opgeslagen resultaat'},{action_id:'b',kind:'read_result',label:'Lees het opgeslagen resultaat'}]};
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:data}}});
  const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
@@ -358,8 +359,8 @@ test('historic token quotes render exact dollars beside the request title and on
  assert.ok(flatten(header).includes('0.097826 USD'));
  assert.doesNotMatch(flatten(sections).join(' '),/USDC|Lees het|Your plan/);
  const buttons=sections.querySelectorAll('button').filter(b=>b.textContent==='View saved result');
- assert.equal(buttons.length,1);await buttons[0].onclick();
- assert.deepEqual(calls.map(c=>c.name),['apiosk_status']);assert.equal(calls[0].args.task_ref,'task');
+ assert.equal(buttons.length,0,'the rendered result already has its disclosure; no redundant refresh button');
+ assert.equal(calls.length,0);
 });
 
 test('annual report download opens the saved PDF without a paid tool call',async()=>{
