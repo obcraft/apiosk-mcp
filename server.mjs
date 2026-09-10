@@ -19,6 +19,7 @@ import {
   createHostedOAuthSupport,
   resolveHostedMcpUrls,
 } from "./src/oauth.mjs";
+import { registerMcpTransportCors } from "./src/transport-cors.mjs";
 import { createApioskMcpRuntime } from "./src/runtime.mjs";
 import { openSession, closeSession } from "./src/observability.mjs";
 import {
@@ -246,6 +247,10 @@ app.use((req, res, next) => {
   })));
   next();
 });
+
+// Before the transports themselves, so a preflight and a 401 challenge are
+// both answered with the headers a browser-side client needs to read.
+registerMcpTransportCors(app);
 
 app.use(hostedOAuth.metadataRouter);
 app.use(new URL(hostedOAuth.oauthMetadata.authorization_endpoint).pathname, hostedOAuth.authorizationRouter);

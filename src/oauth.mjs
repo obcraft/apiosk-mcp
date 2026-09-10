@@ -21,7 +21,7 @@ const SUPPORTED_SCOPES = [DEFAULT_SCOPE, OFFLINE_ACCESS_SCOPE];
 // transport (ChatGPT's connector) opens /sse and posts to /messages. We
 // publish protected-resource metadata for each, plus the origin root, so a
 // client's discovery probe succeeds no matter which surface it connected to.
-const TRANSPORT_RESOURCE_PATHS = ["/mcp", "/sse", "/messages"];
+export const TRANSPORT_RESOURCE_PATHS = ["/mcp", "/sse", "/messages"];
 const UUID_LIKE_CLIENT_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
