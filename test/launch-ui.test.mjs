@@ -80,6 +80,22 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
 });
 
+test('the source list says what can be executed, not how much is listed',async()=>{
+  // A seller with 980 registered endpoints and 34 accepted contracts must not
+  // read as the biggest source on the card, and a source whose resale is not
+  // authorized must not read as available. Readiness is what the gateway sends
+  // for this; a source without it (an older gateway) keeps the plain count.
+  const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',total:4,offset:0,next_offset:null,sources:[
+    {name:'Registry',category:'company data',endpoint_count:3,capabilities:['company.profile']},
+    {name:'EODHD Market Data',category:'finance',readiness:{status:'blocked',contracts:{registered_endpoints:60,supported_endpoints:0}}},
+    {name:'x402 Endpoints',category:'registers',readiness:{status:'discovery-only',contracts:{registered_endpoints:52,supported_endpoints:0}}},
+    {name:'PulseNetwork',category:'intelligence',readiness:{status:'partially-supported',contracts:{registered_endpoints:980,supported_endpoints:34}}}]}}});
+  const counts=h.nodes.get('sections').querySelectorAll('.count');
+  assert.deepEqual(counts.map(c=>c.textContent),['3 endpoints','Not purchasable','Not executable','34 of 980 usable']);
+  assert.deepEqual(counts.map(c=>c.className),['count','count unavailable','count unavailable','count']);
+});
+
 test('conversation messages use content blocks and honor host rejection',async()=>{
   const h=harness();await h.initialize();const promise=h.window.apiosk.say('Please continue');
   const message=h.sent.find(m=>m.method==='ui/message');

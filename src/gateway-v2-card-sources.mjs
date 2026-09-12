@@ -1,0 +1,17 @@
+// Runs inside the card: the source list, and what it is honest to print on it.
+export const V2_CARD_SOURCES = `
+/* A raw endpoint count is the one number on this card that can mislead: a seller
+   with 980 registered endpoints and 34 runtime-accepted contracts reads as the
+   largest source here, and a blocked one reads as available. The gateway sends
+   readiness beside every source for exactly this reason, so say what can be
+   executed rather than what is listed, and mark what cannot be bought at all.
+   A source with no readiness (an older gateway) keeps the plain count.
+   No backticks and no dollar-brace in here: this script is a template literal. */
+function coverage(source){const r=source&&source.readiness,c=(r&&r.contracts)||{},total=c.registered_endpoints!=null?c.registered_endpoints:(source&&source.endpoint_count)||0;
+ if(!r||!r.status)return{label:text(total)+' endpoints',unavailable:false};
+ if(r.status==='blocked')return{label:'Not purchasable',unavailable:true};
+ const usable=c.supported_endpoints||0;
+ if(!usable)return{label:'Not executable',unavailable:true};
+ return{label:text(usable)+' of '+text(total)+' usable',unavailable:false}}
+function renderSources(data){const rows=Array.isArray(data.sources)?data.sources:[];byId('title').textContent=data.total===1?'1 matching source':text(data.total||rows.length)+' matching sources';byId('subtitle').textContent='Choose a source or narrow the search.';const s=section('Sources',text(data.offset||0)+'–'+text((data.offset||0)+rows.length)+' of '+text(data.total||rows.length)),list=el('div','sources');for(const source of rows.slice(0,8)){const row=el('div','source'),copy=el('div'),name=el('div','source-name',source.name||source.slug),meta=el('div','source-meta',[source.category,...(source.capabilities||[]).slice(0,2)].filter(Boolean).map(pretty).join(' · '));copy.append(name,meta);const reach=coverage(source);row.append(sourceLogo(source),copy,el('span','count'+(reach.unavailable?' unavailable':''),reach.label));list.append(row)}s.append(list);const actions=el('div','actions');if(Number.isInteger(data.next_offset)){const b=el('button','quiet','Next page');b.onclick=async()=>{if(busy)return;busy=true;showFeedback('Loading the next sources…');try{const args={...input,offset:data.next_offset,limit:input.limit||20};render(await window.apiosk.callTool('apiosk_sources',args))}catch(e){showFeedback(e&&e.message||'Could not load the next page.','error')}finally{busy=false}};actions.append(b)}if(actions.childNodes.length)s.append(actions)}
+`;
