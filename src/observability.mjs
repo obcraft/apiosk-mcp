@@ -12,6 +12,7 @@
 import { createHash } from "node:crypto";
 
 const DEFAULT_SUPABASE_URL = "https://api.apiosk.com";
+const physicalSchemaOrigins = new Set();
 
 function resolveConfig(env = {}) {
   const raw =
@@ -45,17 +46,32 @@ async function restWrite(env, path, body, { method = "POST", extraHeaders = {} }
   const fetchImpl = globalThis.fetch;
   if (typeof fetchImpl !== "function") return;
   try {
-    await fetchImpl(`${url}/rest/v1/${path}`, {
+    const physical = physicalSchemaOrigins.has(url);
+    const options = {
       method,
       headers: {
         apikey: key,
         authorization: `Bearer ${key}`,
         "content-type": "application/json",
         prefer: "return=minimal",
+        ...(physical ? { "Accept-Profile": "agents", "Content-Profile": "agents" } : {}),
         ...extraHeaders,
       },
       body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    };
+    const response = await fetchImpl(`${url}/rest/v1/${path}`, options);
+    // A lookup failure means no SQL ran; never retry an ambiguous write.
+    if (response?.status === 404 && (await response.clone().json()).code === "PGRST205") {
+      const schema = physical ? "public" : "agents";
+      const retried = await fetchImpl(`${url}/rest/v1/${path}`, {
+        ...options,
+        headers: { ...options.headers, "Accept-Profile": schema, "Content-Profile": schema },
+      });
+      if (retried.ok) {
+        if (physical) physicalSchemaOrigins.delete(url);
+        else physicalSchemaOrigins.add(url);
+      }
+    }
   } catch (error) {
     try {
       console.warn(
