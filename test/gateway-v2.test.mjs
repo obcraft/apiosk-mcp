@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
-import { APIO_V2_CARD_URI } from '../src/gateway-v2-card.mjs';
+import { APIO_V2_CARD_URI, APIO_V2_CARD_META } from '../src/gateway-v2-card.mjs';
+import { V2_SOURCES_PRESENTATION } from '../src/result-presentation.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
 test('v2 exposes four model tools and an app-only approval tool while legacy stays unchanged',async()=>{
  const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
@@ -94,6 +95,21 @@ test('source browsing keeps internal readiness fields out of chatbot output', as
  assert.equal(response.structuredContent.sources[0].available_in_v2,undefined);
  assert.equal(response.structuredContent.catalog_total,undefined);
  assert.doesNotMatch(response.structuredContent.notice,/available_in_v2|validated contract/i);
+});
+test('source presentation reaches cached hosts on every page without losing card or text fallback data', async () => {
+ const source={slug:'pulsenetwork',name:'Pulse Network',service_count:87,services:[{slug:'tax-pulse',name:'TaxPulse'}]};
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async(url)=>Response.json({protocol_version:'2',sources:[source],total:26,offset:Number(url.searchParams.get('offset')||0),next_offset:20,categories:[],tags:[],sectors:[],capabilities:[]})});
+ const tool=(await runtime.listTools()).find(t=>t.name==='apiosk_sources');
+ assert.ok(tool.description.includes(V2_SOURCES_PRESENTATION));
+ assert.ok(APIO_V2_CARD_META['openai/widgetDescription'].includes(V2_SOURCES_PRESENTATION));
+ for(const args of [{},{offset:20},{search:'TaxPulse'}]) {
+  const result=await runtime.callTool('apiosk_sources',args);
+  assert.equal(result.isError,undefined);
+  assert.equal(result.content.at(-1).text,V2_SOURCES_PRESENTATION);
+  assert.deepEqual(JSON.parse(result.content[0].text),result.structuredContent);
+  assert.deepEqual(result.structuredContent.sources,[source]);
+  assert.equal(result.structuredContent.total,26);
+ }
 });
 test('v2 omits optional nulls instead of forwarding chatbot placeholder values', async () => {
  let request;

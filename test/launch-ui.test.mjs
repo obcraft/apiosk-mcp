@@ -10,12 +10,12 @@ import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
-  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
+  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},setAttribute(name,value){this[name]=value},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
   const element=name=>Object.assign(el(name),{remove(){},after(){}});
   const document={documentElement:{scrollWidth:320,scrollHeight:200,dataset:{},style:{}},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},createElement:element};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
-  const ctx=vm.createContext({window,document,URL,Intl,console,setInterval:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms,repeat:true});return id},clearInterval(id){timers.delete(id)},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
+  const ctx=vm.createContext({window,document,URL,Intl,console,EventSource:openai?.EventSource,setInterval:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms,repeat:true});return id},clearInterval(id){timers.delete(id)},setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout(id){timers.delete(id)},ResizeObserver:class{observe(){}}});
   if(html)for(const s of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(s[1],ctx);else vm.runInContext(APIOSK_UI_BRIDGE,ctx);
   return {
     sent,nodes,window,
@@ -75,8 +75,11 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   const plan=harness(APIO_V2_CARD_HTML);await plan.initialize();
   await plan.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'requires_approval',proposal:{label:'Your plan',currency:'USDC',max_total_atomic:'97826',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.profile'],step_details:[{title:'Retrieve company profile',status:'pending',source:{name:'Global Company Registry'}}]},context_view:{},billing:{currency:'USD',total_charged:'0',balance_available:'15101060'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}],errors:[],state:{state_ref:'task',revision:1}}}});
   const planSection=plan.nodes.get('sections').children[0];
-  assert.equal(planSection.children[0].children[0].textContent,'Data request');
-  assert.equal(planSection.children.at(-1).children[0].textContent,'Approve up to 0.097826 USD');
+  const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
+  assert.equal(planSection.children[0].children[0].textContent,'Your plan');
+  assert.ok(flatten(planSection).includes('Approve up to 0.097826 USD'));
+  assert.ok(flatten(planSection).includes('Details'));
+  assert.ok(!flatten(planSection).includes('pending'));
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
 });
 
@@ -289,8 +292,9 @@ test('choosing a named company resumes an approved plan even after the active wa
  const approved={...v2Ready,billing:data.billing};
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:args.action_id==='select'?approved:{...approved,status:'succeeded',next_actions:[]}}}});
  await h.tick(350);assert.equal(calls.length,0);
- const choices=h.nodes.get('sections').querySelectorAll('button');assert.ok(choices.some(b=>b.textContent==='Mollie B.V. · KVK 92327737'));
- await choices.find(b=>b.textContent==='Mollie B.V. · KVK 30204462').onclick();await h.tick(350);
+ const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
+ const choices=h.nodes.get('sections').querySelectorAll('button');assert.ok(choices.some(b=>flatten(b).includes('Mollie B.V.')&&flatten(b).includes('KVK 92327737')));
+ await choices.find(b=>flatten(b).includes('KVK 30204462')).onclick();await h.tick(350);
  assert.equal(calls.length,2);assert.equal(calls[0].args.input.entity_ref,'mollie');assert.equal(calls[1].args.action_id,'run');assert.ok(calls.every(c=>c.name==='apiosk_execute'));
 });
 
@@ -326,7 +330,7 @@ test('a stalled background recovery cannot block a card action or overwrite its 
  const cancelled={...initial,state:{...initial.state,revision:2},status:'cancelled',next_actions:[]};
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:initial,callTool:(name,args)=>{calls.push({name,args});return name==='apiosk_status'?new Promise(resolve=>{recover=resolve}):Promise.resolve({structuredContent:cancelled})}});
  await h.tick(100);
- await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Stop remaining steps').onclick();
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Cancel request').onclick();
  assert.deepEqual(calls.map(c=>c.name),['apiosk_status','apiosk_execute']);
  assert.equal(calls[1].args.action_id,'cancel');assert.equal(h.nodes.get('title').textContent,'Cancelled');
  recover({structuredContent:initial});for(let i=0;i<12;i++)await Promise.resolve();
@@ -371,8 +375,8 @@ test('historic token quotes render exact dollars without a redundant saved-resul
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:data}}});
  const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
  const sections=h.nodes.get('sections'),header=sections.children[0].children[0];
- assert.ok(flatten(header).includes('Data request'));
- assert.ok(flatten(header).includes('0.097826 USD'));
+ assert.ok(flatten(header).includes('Result'));
+ assert.ok(!flatten(header).includes('0.097826 USD'));
  assert.doesNotMatch(flatten(sections).join(' '),/USDC|Lees het|Your plan/);
  const buttons=sections.querySelectorAll('button').filter(b=>b.textContent==='View saved result');
  assert.equal(buttons.length,0,'the rendered result already has its disclosure; no redundant refresh button');
@@ -393,3 +397,39 @@ test('annual report download opens the saved PDF without a paid tool call',async
   await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'failed',errors:[{code:'question_unavailable',message:'The question could not be processed.'}],next_actions:[]}}});
   assert.equal(h.nodes.get('subtitle').textContent,'Your request could not be completed.');
  });
+
+test('server execution streams results and never asks the card to execute provider steps',async()=>{
+ const calls=[],streams=[];
+ class Events { constructor(url){this.url=url;streams.push(this)} addEventListener(name,fn){this[name]=fn} close(){this.closed=true} }
+ const running={...v2Ready,status:'running',context_view:{execution_mode:'server',worker_active:true,events_url:'https://api.apiosk.com/v2/tasks/task/events?signature=fixture'},billing:{authorization_active:true,quote_ref:'quote'},next_actions:[]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:running,EventSource:Events,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:running}}});
+ assert.equal(streams.length,1);
+ const done={...running,status:'succeeded',state:{...running.state,revision:2},context_view:{...running.context_view,worker_active:false},result:{data:{answer:'Saved source result'}}};
+ streams[0].task({data:JSON.stringify(done)});
+ for(let i=0;i<12;i++)await Promise.resolve();
+ assert.equal(streams[0].closed,true);
+ assert.equal(calls.length,0);
+ assert.equal(h.nodes.get('title').textContent,'Source result');
+ assert.ok(!h.nodes.get('sections').querySelectorAll('button').some(b=>/Approve|Continue|Run next/.test(b.textContent)));
+});
+
+test('source cards keep Pulse services nested and render every source in the page',async()=>{
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+ const pulse={slug:'pulsenetwork',name:'Pulse Network',service_count:87,matching_service_count:2,services:[{slug:'taxpulse',name:'TaxPulse',description:'Tax data'},{slug:'legalpulse',name:'LegalPulse',description:'Legal data'}]};
+ const sources=[pulse,...Array.from({length:19},(_,i)=>({slug:'source-'+i,name:'Source '+i,endpoint_count:1}))];
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',total:26,offset:0,next_offset:20,sources}}});
+ assert.equal(h.nodes.get('title').textContent,'26 matching sources');
+ assert.equal(h.nodes.get('sections').querySelectorAll('.source').length,20);
+ const names=h.nodes.get('sections').querySelectorAll('.source-name').map(n=>n.textContent);
+ assert.equal(names.filter(n=>n==='Pulse Network').length,1);
+ assert.ok(!names.includes('TaxPulse'));
+ assert.equal(h.nodes.get('sections').querySelectorAll('.source-service').length,2);
+ assert.equal(h.nodes.get('sections').querySelectorAll('.count')[0].textContent,'87 services');
+});
+
+test('a single matching service stays within its parent source',async()=>{
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',total:1,offset:0,next_offset:null,sources:[{slug:'pulsenetwork',name:'Pulse Network',service_count:76,matching_service_count:1,services:[{slug:'taxpulse',name:'TaxPulse'}]}]}}});
+ assert.equal(h.nodes.get('title').textContent,'1 matching source');
+ assert.equal(h.nodes.get('sections').querySelectorAll('summary')[0].textContent,'View 1 service');
+});

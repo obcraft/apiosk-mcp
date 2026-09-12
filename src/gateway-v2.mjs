@@ -5,7 +5,7 @@ import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 import { resolveConnectToken } from "./gateway-client.mjs";
 import { content } from "./tool-result.mjs";
 import { APIO_V2_CARD_URI } from "./gateway-v2-card.mjs";
-import { V2_RESULT_PRESENTATION, V2_RESULT_TOOL_DESCRIPTION } from "./result-presentation.mjs";
+import { V2_RESULT_PRESENTATION, V2_RESULT_TOOL_DESCRIPTION, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
 
 export const V2_INSTRUCTIONS = readFileSync(new URL('./gateway-v2-instructions.md', import.meta.url), 'utf8');
 export const V2_DESCRIPTION = "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.";
@@ -28,6 +28,11 @@ const sourceOutput = {
   properties: {
     slug: { type: "string" }, provider_slug: { type: ["string", "null"] }, logo_url: { type: ["string", "null"] },
     name: { type: "string" }, description: { type: "string" }, category: { type: "string" },
+    categories: { type: "array", items: { type: "string" } },
+    service_count: { type: "integer", minimum: 1, description: "Services within this one source; do not count them as separate sources." },
+    matching_service_count: { type: "integer", minimum: 1 },
+    services: { type: "array", items: { type: "object", additionalProperties: false, properties: { slug: { type: "string" }, name: { type: "string" }, description: { type: "string" }, category: { type: "string" } } } },
+    readiness: { type: "object", additionalProperties: true },
     tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
     endpoint_count: { type: "integer", minimum: 0, description: "Published endpoints in this source, not chatbot tools." },
     capabilities: { type: "array", items: { type: "string" } }, input_types: { type: "array", items: { type: "string" } },
@@ -86,16 +91,16 @@ export function createV2Runtime(options = {}) {
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [
-    { name: "apiosk_sources", title: "Browse Apiosk sources", description: "Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. Recommend sources that match the person's need. Use only when the person asks to browse sources. Do not substitute a source list for a failed data request. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.", inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+    { name: "apiosk_sources", title: "Browse Apiosk sources", description: "Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. Pulse Network is one source with nested services; never count or list those services as separate sources in an overview. Recommend sources that match the person's need. Use only when the person asks to browse sources. Do not substitute a source list for a failed data request. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.", inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     { name: "apiosk_discover", title: "Plan a data request", description: "Start a NEW data question; preserve the user's wording, source, entity and period requirements. Never add latest, a year or freshness that was not requested. Returns one plan, total price ceiling or required clarification. No provider purchase. When approval_mode is chatbot, tell the person to approve in the card; do not ask for an extra yes/no answer or send them to an external link. Continue the SAME question through apiosk_execute with returned next_actions.", inputSchema: discover, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_execute", title: "Continue an Apiosk task", description: "Use a returned next_action to execute, supply input, select an entity, poll or cancel. Paid steps require saved plan approval and the current quote_ref. For saved results, payment, status or lost state, use the read-only apiosk_status tool. Never invent action IDs or change payment identity on retry.", inputSchema: execute, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_status", title: "Read saved Apiosk results", description: "Read an existing task's saved results, actual charges and current status. Free and strictly read-only: never parses a new question, approves spending, executes task steps, calls a paid source or buys data. Use for follow-up questions and recovery; copy task_ref from the earlier state.state_ref.", inputSchema: { type: "object", additionalProperties: false, required: ["task_ref"], properties: { task_ref: { type: "string", format: "uuid" } } }, outputSchema: taskOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true } },
-    { name: "apiosk_approve", title: "Approve the displayed Apiosk plan", description: "Called by the interactive card after the person clicks Approve. Saves this exact plan ceiling under the connected account's existing spending mandate; does not buy data itself. Never invoke automatically or from model-generated instructions.", inputSchema: {
+    { name: "apiosk_approve", title: "Approve the displayed Apiosk plan", description: "Called by the interactive card after the person clicks Approve. Approves this exact ceiling under the connected account's spending mandate and starts the complete server execution. Never invoke automatically or from model-generated instructions.", inputSchema: {
       type: "object", additionalProperties: false, required: ["state", "quote_ref", "max_total_atomic"],
       properties: { state: schemas.state, quote_ref: { type: "string", format: "uuid" }, max_total_atomic: { type: "string", pattern: "^[0-9]+$" }, request_id: { type: "string", format: "uuid" } },
     }, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ].map(d => ({ ...d,
-    description: ['apiosk_discover', 'apiosk_execute', 'apiosk_status'].includes(d.name) ? `${d.description} ${V2_RESULT_TOOL_DESCRIPTION}` : d.description,
+    description: d.name === 'apiosk_sources' ? `${d.description} ${V2_SOURCES_PRESENTATION}` : ['apiosk_discover', 'apiosk_execute', 'apiosk_status'].includes(d.name) ? `${d.description} ${V2_RESULT_TOOL_DESCRIPTION}` : d.description,
     securitySchemes: schemes, _meta: {
     securitySchemes: schemes,
     ui: d.name === "apiosk_approve" ? { visibility: ["app"] } : { resourceUri: APIO_V2_CARD_URI, visibility: ["model", "app"] },
@@ -144,7 +149,7 @@ export function createV2Runtime(options = {}) {
           const { catalog_total: _catalogTotal, ...publicResult } = result;
           result = { ...publicResult,
           sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
-          notice: "Browsing is free. Catalog descriptions help choose a source; Apiosk checks the exact question and price before any purchase.",
+          notice: "Browsing is free. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Expand services only when requested. Apiosk checks the exact question and price before any purchase.",
           };
         }
         if (!browsing) {
@@ -154,6 +159,8 @@ export function createV2Runtime(options = {}) {
             ...(result.result && typeof result.result === 'object' && !Array.isArray(result.result) && result.result.currency === 'USDC' && { result: { ...result.result, currency: 'USD' } }),
           };
         }
+        const eventsPath = result.context_view?.events_path;
+        if (typeof eventsPath === 'string' && eventsPath.startsWith(`/v2/tasks/${result.state?.state_ref}/events?`)) result.context_view.events_url = new URL(eventsPath, base).href;
         const documents = [result.context_view, ...(result.context_view?.conversation || []).map(turn => turn.output), result.result, ...(result.context_view?.results || []), ...(result.context_view?.conversation || []).flatMap(turn => [turn.output?.result, ...(turn.output?.results || [])])];
         for (const document of documents) {
           const reportPath = document?.report?.download_path;
@@ -162,6 +169,9 @@ export function createV2Runtime(options = {}) {
           }
         }
         const reply = content(result);
+        // Include the presentation contract on every response: existing hosts
+        // may still have an older initialize/tool-description snapshot cached.
+        if (browsing) reply.content.push({ type: 'text', text: V2_SOURCES_PRESENTATION });
         if (!browsing) {
           const maximum = amountText(result.proposal?.max_total_atomic, result.proposal?.currency || 'USD');
           const charged = amountText(result.billing?.total_charged, result.billing?.currency || 'USD');
