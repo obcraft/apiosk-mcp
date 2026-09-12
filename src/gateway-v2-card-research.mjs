@@ -4,6 +4,7 @@ const renderSingleResult=renderResult;
 renderResult=function(data){
  const results=data.context_view?.results?.length?data.context_view.results:data.result==null?[]:[data.result];
  for(const result of results){renderSingleResult({...data,result});const heading=sections.lastElementChild?.querySelector('h3');if(heading&&result?.subject?.label)heading.textContent='Result · '+result.subject.label}
+ const report=data.context_view?.report;if(report?.format==='pdf'&&typeof report.url==='string'&&report.url.startsWith('https://')){const s=section('Research report');const download=el('button','quiet','Download research and analysis (PDF)');download.onclick=()=>window.apiosk.openLink(report.url);s.append(download)}
  const analysis=data.context_view?.analysis;
  if(analysis){const s=section('Analysis');for(const observation of analysis.observations||[]){s.append(el('p','result',observation.text));const details=el('details');details.append(el('summary','','Source evidence'));for(const evidence of observation.evidence||[])details.append(el('p','value',(evidence.subject?.label||evidence.source?.name||'Source')+': '+text(evidence.value)+' · '+evidence.pointer));s.append(details)}for(const limitation of analysis.limitations||[])s.append(el('p','notice',limitation))}
  if(data.context_view?.analyzing)section('Analysis').append(el('p','notice','Analyzing the saved source results…'));

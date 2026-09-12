@@ -154,10 +154,10 @@ export function createV2Runtime(options = {}) {
             ...(result.result && typeof result.result === 'object' && !Array.isArray(result.result) && result.result.currency === 'USDC' && { result: { ...result.result, currency: 'USD' } }),
           };
         }
-        const documents = [result.result, ...(result.context_view?.results || []), ...(result.context_view?.conversation || []).flatMap(turn => [turn.output?.result, ...(turn.output?.results || [])])];
+        const documents = [result.context_view, ...(result.context_view?.conversation || []).map(turn => turn.output), result.result, ...(result.context_view?.results || []), ...(result.context_view?.conversation || []).flatMap(turn => [turn.output?.result, ...(turn.output?.results || [])])];
         for (const document of documents) {
           const reportPath = document?.report?.download_path;
-          if (typeof reportPath === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/results\/[0-9a-f-]+\/report\.pdf\?/.test(reportPath)) {
+          if (typeof reportPath === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/(?:results|reports)\/[0-9a-f-]+\/report\.pdf\?/.test(reportPath)) {
             document.report.url = new URL(reportPath, base).href;
           }
         }
