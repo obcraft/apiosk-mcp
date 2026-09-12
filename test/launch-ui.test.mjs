@@ -387,3 +387,9 @@ test('annual report download opens the saved PDF without a paid tool call',async
  assert.ok(button); await button.onclick();
  assert.deepEqual(opened,[url]); assert.deepEqual(calls,[]);
 });
+
+ test('failed requests never claim to be up to date',async()=>{
+  const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',status:'failed',errors:[{code:'question_unavailable',message:'The question could not be processed.'}],next_actions:[]}}});
+  assert.equal(h.nodes.get('subtitle').textContent,'Your request could not be completed.');
+ });

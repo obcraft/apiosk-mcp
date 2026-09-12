@@ -6,11 +6,11 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v31.html";
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v32.html";
 // Separate MIME-labelled aliases of the same card. Older ChatGPT renderers
 // use outputTemplate/skybridge; MCP Apps hosts use ui.resourceUri/mcp-app.
 export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v9-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
+export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -76,7 +76,7 @@ ${V2_CARD_RESULT}
 ${V2_CARD_RESEARCH}
 ${V2_CARD_ACTIONS}
 function renderErrors(data){const shown=new Set((data.proposal?.step_details||[]).map(d=>d.error?.message).filter(Boolean));const errors=(Array.isArray(data.errors)?data.errors:[]).filter(e=>{const message=e.message||e.code||'The request could not be completed.';if(shown.has(message))return false;shown.add(message);return true});if(!errors.length)return;const s=section('Needs attention');for(const e of errors)s.append(el('div','notice error',e.message||e.code||'The request could not be completed.'))}
-function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);renderErrors(data)}window.apiosk.resize()}
+function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':data.status==='failed'?'Your request could not be completed.':data.status==='needs_input'?'More information is needed to prepare your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);renderErrors(data)}window.apiosk.resize()}
 ${V2_CARD_COMPACT}
 const recoveredCards=new Set();window.apiosk.onInput&&window.apiosk.onInput(value=>{input=value||{}});window.apiosk.onData(data=>{render(data);const ref=data?.state?.state_ref;if(ref&&!recoveredCards.has(ref)){recoveredCards.add(ref);setTimeout(()=>{if(output?.state?.state_ref===ref&&!busy)void refreshTask(false)},100)}});
 </script></body></html>`;
