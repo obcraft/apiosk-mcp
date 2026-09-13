@@ -55,8 +55,11 @@ test('CBS live result card shows decoded annual figures and keeps complete JSON 
   assert.ok(values.includes('2024'));assert.ok(values.includes('2025'));
   assert.ok(values.includes('Definitief'));assert.ok(values.includes('2021=100'));
   assert.equal(sections.querySelectorAll('pre').length,1);
+  assert.ok(sections.querySelectorAll('p').some(n=>n.textContent==='+6,9%'));
+  assert.ok(sections.querySelectorAll('details').some(n=>!n.open&&n.querySelectorAll('table').length===1));
+  assert.ok(!sections.querySelectorAll('button').some(n=>n.textContent==='Check status'));
   assert.ok(sections.querySelectorAll('details').some(n=>!n.open&&n.querySelectorAll('pre').length===1));
-  assert.ok(sections.querySelectorAll('button').some(n=>n.textContent==='Bron: CBS StatLine'));
+  assert.ok(sections.querySelectorAll('button').some(n=>n.textContent==='Bron bekijken'));
   assert.equal(h.sent.filter(m=>m.method==='tools/call').length,0);
 });
 
@@ -427,7 +430,7 @@ test('annual report download opens the saved PDF without a paid tool call',async
  const opened=[],calls=[];
  const url='https://apiosk-gateway-v2.fly.dev/v2/tasks/task/results/result/report.pdf?signature=fixture';
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],result:{data:{opendataFields:[]},report:{format:'pdf',url}}},openExternal:({href})=>opened.push(href),callTool:async(...args)=>calls.push(args)});
- const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download annual report (PDF)');
+ const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download PDF');
  assert.ok(button); await button.onclick();
  assert.deepEqual(opened,[url]); assert.deepEqual(calls,[]);
 });

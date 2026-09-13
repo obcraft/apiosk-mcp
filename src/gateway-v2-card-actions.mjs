@@ -44,7 +44,7 @@ function renderActions(data){
   if(!approved&&enabled&&Date.now()<watchUntil&&Date.parse(data.proposal?.expires_at)>Date.now())pollTimer=setTimeout(()=>{pollTimer=null;refreshTask()},2000);
  }
  if(poll&&!server){const wait=Math.max(350,Number(data.retry_after_ms)||900);pollTimer=setTimeout(()=>{pollTimer=null;callAction(poll)},wait)}
- if(data.state?.state_ref||read.length||poll||(!server&&cancel)){const s=el('section','section controls'),wrap=el('div','actions');sections.append(s);if(data.state?.state_ref){const check=el('button','quiet','Check status');check.onclick=()=>refreshTask();wrap.append(check)}if(read.length){const view=el('button','quiet','View saved result');view.onclick=()=>refreshTask();wrap.append(view)}if(cancel&&(run||poll||data.context_view?.worker_active))wrap.append(actionButton(cancel,'Cancel request'));s.append(wrap)}
+ if(!(data.status==='succeeded'&&!data.context_view?.worker_active&&!(data.errors||[]).length)&&(data.state?.state_ref||read.length||poll||(!server&&cancel))){const s=el('section','section controls'),wrap=el('div','actions');sections.append(s);if(data.state?.state_ref){const check=el('button','quiet','Check status');check.onclick=()=>refreshTask();wrap.append(check)}if(read.length){const view=el('button','quiet','View saved result');view.onclick=()=>refreshTask();wrap.append(view)}if(cancel&&(run||poll||data.context_view?.worker_active))wrap.append(actionButton(cancel,'Cancel request'));s.append(wrap)}
 }
 
 `;

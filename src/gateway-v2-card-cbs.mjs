@@ -22,30 +22,35 @@ export function cbsAnnualView(data, results) {
     const size = sizes.value.find(v => v.Identifier === row.Bedrijfsgrootte);
     if (!measure?.Title || !measure.Unit || !period?.Title || !sector?.Title || !size?.Title) return null;
     rows.push({period:period.Title.trim(), measure:measure.Title, unit:measure.Unit,
-      value:typeof row.Value === 'number' && Number.isFinite(row.Value) ? row.Value : 'Niet beschikbaar',
+      code:row.Measure, value:typeof row.Value === 'number' && Number.isFinite(row.Value) ? row.Value : 'Niet beschikbaar',
       status:period.Status || 'Niet vermeld', sector:sector.Title, size:size.Title});
   }
   rows.sort((a,b) => a.period.localeCompare(b.period) || a.measure.localeCompare(b.measure));
   const scopes = [...new Set(rows.map(r => r.sector + ' · ' + r.size))];
   if (scopes.length !== 1) return null;
   const url = properties.Distributions?.find(d => /^https:\/\/(?:dataportal|opendata)\.cbs\.nl\//.test(d.AccessUrl || ''))?.AccessUrl;
-  return {records, rows, scope:scopes[0], title:properties.Title || observations.subject.label,
+  return {records, rows, subject:observations.subject.label, scope:scopes[0], title:properties.Title || observations.subject.label,
     modified:properties.Modified || properties.ModificationDate, retrieved:observations.source.retrieved_at, url};
 }
 
 export const V2_CARD_CBS = `
 ${cbsAnnualView.toString()}
 function renderCbsAnnual(view){
- const s=section(view.title);s.append(el('p','meta',view.scope));
- const wrap=el('div','cbs-table-wrap'),table=el('table','cbs-table'),head=el('tr');
- for(const label of ['Verslagjaar','Maatstaf','Waarde','Eenheid','Status'])head.append(el('th','',label));
- const thead=el('thead');thead.append(head);table.append(thead);const body=el('tbody');
- for(const row of view.rows){const tr=el('tr');for(const value of [row.period,row.measure,typeof row.value==='number'?new Intl.NumberFormat('nl-NL',{maximumFractionDigits:6}).format(row.value):row.value,row.unit,row.status])tr.append(el('td','',value));body.append(tr)}
- table.append(body);wrap.append(table);s.append(wrap);
- if(view.modified)s.append(el('p','meta','CBS bijgewerkt: '+new Date(view.modified).toLocaleDateString('nl-NL')));
- if(view.retrieved)s.append(el('p','meta','Opgehaald: '+new Date(view.retrieved).toLocaleString('nl-NL')));
- if(view.url){const link=el('button','quiet','Bron: CBS StatLine');link.onclick=()=>window.apiosk.openLink(view.url);s.append(link)}
- const full=el('details','full-result');full.append(el('summary','','Alle brongegevens'));full.append(el('pre','',JSON.stringify(view.records,null,2)));full.ontoggle=()=>window.apiosk.resize();s.append(full);
+ const s=section(view.subject||view.title);s.classList.add('answer-section');
+ const number=value=>typeof value==='number'?new Intl.NumberFormat('nl-NL',{maximumFractionDigits:6}).format(value):value;
+ const growth=view.rows.filter(r=>r.code==='M004926'&&r.unit==='%'),latest=growth.at(-1);
+ if(latest){s.append(el('p','answer-number',(typeof latest.value==='number'&&latest.value>0?'+':'')+number(latest.value)+(typeof latest.value==='number'?'%':'')));s.append(el('p','answer-caption','Omzet in '+latest.period+' ten opzichte van '+(Number(latest.period)-1)));const previous=growth.at(-2);if(previous)s.append(el('p','meta','In '+previous.period+': '+number(previous.value)+(typeof previous.value==='number'?'%':'')+' ten opzichte van '+(Number(previous.period)-1)))}
+ const states=[...new Set(view.rows.map(r=>r.status))];s.append(el('p','answer-source','CBS StatLine'+(states.length===1?' · '+states[0]:'')));
+ const links=el('div','result-links');if(view.url){const link=el('button','text-action','Bron bekijken');link.onclick=()=>window.apiosk.openLink(view.url);links.append(link)}s.append(links);
+ const full=el('details','compact-details result-details');full.append(el('summary','','Details'));full.ontoggle=()=>window.apiosk.resize();
+ full.append(el('p','meta',view.scope));
+ const wrap=el('div','cbs-table-wrap'),table=el('table','cbs-table'),head=el('tr');for(const label of ['Jaar','Maatstaf','Waarde','Eenheid','Status'])head.append(el('th','',label));const thead=el('thead');thead.append(head);table.append(thead);const body=el('tbody');
+ for(const row of view.rows){const tr=el('tr');for(const value of [row.period,row.measure,number(row.value),row.unit,row.status])tr.append(el('td','',value));body.append(tr)}table.append(body);wrap.append(table);full.append(wrap);
+ if(view.modified)full.append(el('p','meta','CBS bijgewerkt: '+new Date(view.modified).toLocaleDateString('nl-NL')));
+ if(view.retrieved)full.append(el('p','meta','Opgehaald: '+new Date(view.retrieved).toLocaleString('nl-NL')));
+ const raw=el('details','full-result');raw.append(el('summary','','Brongegevens'),el('pre','',JSON.stringify(view.records,null,2)));full.append(raw);s.append(full);
+ if(!latest)full.open=true;
+ return {section:s,details:full,links};
 }
 `;
 

@@ -10,11 +10,11 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v40.html";
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v41.html";
 // Separate MIME-labelled aliases of the same card. Older ChatGPT renderers
 // use outputTemplate/skybridge; MCP Apps hosts use ui.resourceUri/mcp-app.
 export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v9-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:39},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
+export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:40},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
