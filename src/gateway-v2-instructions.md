@@ -72,3 +72,7 @@ Use English consistently for Apiosk plan, approval, status and completion messag
 ## Combined research PDF
 
 For a request combining annual accounts, a company profile, address enrichment and analysis, send the complete question in one discovery call. PDF output is a built-in deliverable, not another provider. Preserve the profile-to-address dependency and requested sources; quote the actual combined price, never invent a target price or promise a range before discovery. After the one approval, continue all returned actions, including the analysis poll, until terminal status. Use context_view.report.url for the combined PDF; individual result.report links contain only that source result. Surface the combined download link when present, including with a visible card. If analysis or the report is unavailable, say so and retain the saved data; do not claim an individual annual-account PDF contains the requested combined analysis.
+
+## Clarification and request identity
+
+When status is needs_input, display the returned clarification (context_view.conversation's last reply) and wait for the person's actual answer. Never invent a yes or other reply. Send changed input with the saved state but omit request_id; the connector assigns a new identity. Only an exact retry of the same input may reuse a request_id. A live-update failure is not a provider failure: use apiosk_status to recover saved state.

@@ -1,3 +1,4 @@
+import { planningRetryId, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -129,6 +130,7 @@ export function createV2Runtime(options = {}) {
       try {
         const url = new URL(path, base);
         if (browsing) for (const [key, value] of Object.entries(cleanArgs)) url.searchParams.set(key, String(value));
+        const request = async () => {
         const response = await (options.fetchImpl || fetch)(url, {
           method: recover || browsing ? "GET" : "POST", redirect: "error", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
           body: recover || browsing ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(80_000),
@@ -138,7 +140,20 @@ export function createV2Runtime(options = {}) {
         if (!reader) throw new Error('No response');
         let bytes = 0; const chunks = [];
         for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.byteLength; if (bytes > 256 * 1024) { await reader.cancel(); throw new Error('Response limit'); } chunks.push(value); }
-        let result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        return { response, result };
+        };
+        let received = await request();
+        if (received?.isError) return received;
+        // Only an explicit idempotency conflict proves this input was not run.
+        // Never retry a timeout, an approval or a paid execution here.
+        if (name === "apiosk_discover" && cleanArgs.request_id && received.result?.errors?.some(e=>e.code==='request_conflict')) {
+          body.request_id = planningRetryId(body);
+          received = await request();
+          if (received?.isError) return received;
+        }
+        const {response} = received;
+        let {result} = received;
         if (!response.ok) return failure(result);
         if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
         if (browsing) {
@@ -174,6 +189,7 @@ export function createV2Runtime(options = {}) {
           const prices = [maximum && `Maximum total price: ${maximum}.`, charged && `Actual charge so far: ${charged}.`].filter(Boolean).join(' ');
           if (prices) reply.content.unshift({ type: 'text', text: prices + (result.context_view?.money_display?.fallback_reason ? ' Display currency conversion is unavailable; amounts are shown in USD.' : '') });
         }
+        if (result.status === 'needs_input') reply.content.push({type:'text',text:CLARIFICATION_GUIDANCE});
         if (!browsing && result.state?.state_ref) reply.content.push({ type: "text", text: `This is a snapshot. The interactive card can approve and execute this task after this response. Before answering ANY later follow-up about its results, payment or status, recover current evidence by calling apiosk_status with ONLY {"task_ref":"${result.state.state_ref}"}. This read is free and never buys or approves. Never conclude that nothing was bought or saved from this earlier snapshot. Preserve source values exactly. Only report a currency or unit when the source explicitly supplies it; otherwise say it was not specified. The Apiosk billing currency does not establish the currency of the source data. ${V2_RESULT_PRESENTATION}` });
         return reply;
       } catch {

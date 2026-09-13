@@ -168,3 +168,23 @@ test('combined research PDF links survive status and archived turns without anot
  assert.equal(reply.structuredContent.context_view.report.url,`http://127.0.0.1:8082${path}`);
  assert.equal(reply.structuredContent.context_view.conversation[0].output.report.url,`http://127.0.0.1:8082${path}`);
 });
+
+
+test('changed discovery input recovers an explicit request conflict once with a deterministic key',async()=>{
+ const request_id='00000000-0000-4000-8000-000000000001',calls=[];
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{
+  const body=JSON.parse(options.body);calls.push(body);
+  return Response.json({protocol_version:'2',status:body.request_id===request_id?'failed':'needs_input',next_actions:[],errors:body.request_id===request_id?[{code:'request_conflict'}]:[]});
+ }});
+ for(let i=0;i<2;i++)assert.equal((await runtime.callTool('apiosk_discover',{question:'2025 versus 2024',request_id})).structuredContent.status,'needs_input');
+ assert.equal(calls.length,4);assert.notEqual(calls[1].request_id,request_id);assert.equal(calls[1].request_id,calls[3].request_id);
+ assert.equal(calls[1].question,calls[0].question);
+});
+
+test('paid execution conflicts and ambiguous planning transport failures are never retried',async()=>{
+ let count=0;
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>{count++;return Response.json({protocol_version:'2',status:'failed',next_actions:[],errors:[{code:'request_conflict'}]})}});
+ await runtime.callTool('apiosk_execute',{recover_task_ref:'00000000-0000-4000-8000-000000000001'});assert.equal(count,1);
+ const failed=createApioskMcpRuntime({env,fetchImpl:async()=>{count++;throw Error('timeout')}});
+ await failed.callTool('apiosk_discover',{question:'Construction revenue',request_id:'00000000-0000-4000-8000-000000000001'});assert.equal(count,2);
+});

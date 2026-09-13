@@ -448,3 +448,32 @@ test('a single matching service stays within its parent source',async()=>{
  assert.equal(h.nodes.get('title').textContent,'1 matching source');
  assert.equal(h.nodes.get('sections').querySelectorAll('summary')[0].textContent,'View 1 service');
 });
+
+
+test('an idle clarification displays its question, accepts only user input and always offers status recovery',async()=>{
+ const calls=[],streams=[];
+ class Events {constructor(){streams.push(this)} close(){} addEventListener(){}}
+ const data={status:'needs_input',state:{state_ref:'task',revision:1},context_view:{execution_mode:'server',worker_active:false,events_url:'https://api.apiosk.com/v2/tasks/task/events',conversation:[{question:'Compare construction revenue',reply:'Which period should be compared?'}]},next_actions:[]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,EventSource:Events,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:data}}});
+ assert.equal(streams.length,0);assert.equal(calls.length,0);
+ assert.ok(h.nodes.get('sections').querySelectorAll('p').some(n=>n.textContent==='Which period should be compared?'));
+ const form=h.nodes.get('sections').querySelector('form'),field=form.querySelector('input');
+ await form.onsubmit({preventDefault(){}});assert.equal(calls.length,0);
+ field.value='2025 versus 2024';await form.onsubmit({preventDefault(){}});
+ assert.equal(calls[0].name,'apiosk_discover');assert.equal(calls[0].args.request_id,undefined);
+ assert.match(calls[0].args.question,/Compare construction revenue\n\nUser clarification: 2025 versus 2024/);
+ await h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Check status').onclick();
+ assert.equal(calls[1].name,'apiosk_status');assert.deepEqual(Object.keys(calls[1].args),['task_ref']);
+});
+
+test('interrupted live updates recover saved state and stale stream errors cannot overwrite completion',async()=>{
+ const calls=[],streams=[];
+ class Events {constructor(){streams.push(this)} addEventListener(name,fn){this[name]=fn} close(){this.closed=true}}
+ const running={...v2Ready,status:'running',context_view:{execution_mode:'server',worker_active:true,events_url:'https://api.apiosk.com/v2/tasks/task/events'},next_actions:[]};
+ const done={...running,status:'succeeded',state:{state_ref:'task',revision:2},context_view:{...running.context_view,worker_active:false},result:{data:{answer:'Saved'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:running,EventSource:Events,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:done}}});
+ streams[0].onerror();assert.equal(streams[0].closed,true);
+ await h.tick(2000);assert.equal(calls.length,1);assert.equal(calls[0].name,'apiosk_status');
+ assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(streams.length,1);
+ const feedback=h.nodes.get('feedback').textContent;streams[0].onerror();assert.equal(h.nodes.get('feedback').textContent,feedback);
+});
