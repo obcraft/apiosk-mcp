@@ -271,6 +271,13 @@ test('v2 card restores a KVK countdown and continues the approved second report 
  assert.equal(calls[1].args.quote_ref,'quote');
  assert.match(allText(),/Result · HEMA/);assert.match(allText(),/Result · AFAS/);assert.match(allText(),/Reporting periods differ/);
 });
+test('v2 card labels generic source waits without claiming KVK',()=>{
+ const waiting={...v2Ready,status:'running',next_actions:[],context_view:{execution_mode:'server',worker_active:true,cooldown:{until:new Date(Date.now()+60000).toISOString(),message:'Waiting for the source request to finish.'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:waiting});
+ const text=h.nodes.get('sections').querySelectorAll('h3,p').map(n=>n.textContent).join(' ');
+ assert.match(text,/Waiting for the source/);assert.match(text,/Checking again in/);
+ assert.doesNotMatch(text,/KVK|annual report/);
+});
 test('v2 card never executes absent, mismatched or disabled consent',async()=>{
  for(const changes of [{},{billing:{authorization_active:true,quote_ref:'old'}},{billing:{authorization_active:true,quote_ref:'quote'},context_view:{execution_enabled:false}}]){
   const calls=[];const data={...v2Ready,...changes};
