@@ -1,18 +1,13 @@
 // Runs inside the card: the source list, and what it is honest to print on it.
 export const V2_CARD_SOURCES = `
-/* A raw endpoint count is the one number on this card that can mislead: a seller
-   with 980 registered endpoints and 34 runtime-accepted contracts reads as the
-   largest source here, and a blocked one reads as available. The gateway sends
-   readiness beside every source for exactly this reason, so say what can be
-   executed rather than what is listed, and mark what cannot be bought at all.
-   A source with no readiness (an older gateway) keeps the plain count.
-   No backticks and no dollar-brace in here: this script is a template literal. */
-function coverage(source){const r=source&&source.readiness,c=(r&&r.contracts)||{},total=c.registered_endpoints!=null?c.registered_endpoints:(source&&source.endpoint_count)||0;
- if(!r||!r.status)return{label:text(total)+' endpoints',unavailable:false};
+/* Buyer-facing counts include only runtime-supported functions. Registered
+   endpoints belong in the integration audit, never in this overview. */
+function coverage(source){const r=source&&source.readiness,c=(r&&r.contracts)||{};
+ if(!r||!r.status)return{label:'Availability unknown',unavailable:false};
  if(r.status==='blocked')return{label:'Not purchasable',unavailable:true};
  const usable=c.supported_endpoints||0;
  if(!usable)return{label:'Not executable',unavailable:true};
- return{label:text(usable)+' of '+text(total)+' usable',unavailable:false}}
+ return{label:text(usable)+(usable===1?' available function':' available functions'),unavailable:false}}
 function renderSources(data){
  const rows=Array.isArray(data.sources)?data.sources:[];
  byId('title').textContent=data.total===1?'1 matching source':text(data.total||rows.length)+' matching sources';
