@@ -149,7 +149,7 @@ export function createV2Runtime(options = {}) {
           const { catalog_total: _catalogTotal, ...publicResult } = result;
           result = { ...publicResult,
           sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
-          notice: "Browsing is free. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Expand services only when requested. Apiosk checks the exact question and price before any purchase.",
+          notice: "Browsing is free. Only purchasable sources with executable capabilities are listed. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Expand services only when requested. Apiosk checks the exact question and price before any purchase.",
           };
         }
         if (!browsing) {
