@@ -1,3 +1,4 @@
+import { V2_CBS_STYLE } from './gateway-v2-card-cbs.mjs';
 import { V2_CARD_CLARIFICATION } from "./gateway-v2-card-clarification.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
 import { V2_CARD_EVENTS } from "./gateway-v2-card-events.mjs";
@@ -9,11 +10,11 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v39.html";
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v40.html";
 // Separate MIME-labelled aliases of the same card. Older ChatGPT renderers
 // use outputTemplate/skybridge; MCP Apps hosts use ui.resourceUri/mcp-app.
 export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v9-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38].map(version => `ui://apiosk/gateway-v2-card-v${version}.html`);
+export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:39},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -38,6 +39,7 @@ export const APIO_V2_CARD_META = (() => {
 export const APIO_V2_CARD_HTML = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${APIOSK_UI_STYLE}
+${V2_CBS_STYLE}
 :root{--apiosk:var(--apiosk-accent);--apiosk-strong:#553cc5;--apiosk-soft:var(--apiosk-accent-wash);--good:#36a577;--bad:#d56071}
 html,body{min-height:0!important;height:auto!important}body{padding:2px}.card{padding:0;overflow:hidden;border-radius:14px;box-shadow:none}.card.plan-mode>.shell{display:none}.shell{padding:12px 13px}.pill{border:1px solid color-mix(in srgb,CanvasText 12%,transparent);border-radius:999px;padding:5px 8px;font-size:10px;line-height:1;opacity:.72;text-transform:capitalize}
 .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.hero h2{font-size:18px;margin:0}.hero p{margin:5px 0 0}.hero-status{display:flex;flex-direction:column;align-items:flex-end;gap:9px}.amount{text-align:right;white-space:nowrap}.amount b{display:block;font-size:18px;font-weight:600;letter-spacing:-.025em}.amount span{display:block;margin-top:5px;font-size:10px;opacity:.6}

@@ -1,0 +1,719 @@
+{
+  "context_view": {
+    "conversation": [
+      {
+        "question": "Hoe ontwikkelde de omzet van de Nederlandse bouwsector zich in 2025 ten opzichte van 2024? Gebruik CBS-cijfers, vermeld de verslagperioden en bronlinks, en geef aan of de cijfers voorlopig of definitief zijn.",
+        "reply": null
+      }
+    ],
+    "results": [
+      {
+        "apiosk_fee_micro_usd": "2609",
+        "charged_atomic": "20000",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#PeriodenCodes(Identifier,Title,Status)",
+          "value": [
+            {
+              "Identifier": "2005JJ00",
+              "Status": "Definitief",
+              "Title": "2005"
+            },
+            {
+              "Identifier": "2006JJ00",
+              "Status": "Definitief",
+              "Title": "2006"
+            },
+            {
+              "Identifier": "2007JJ00",
+              "Status": "Definitief",
+              "Title": "2007"
+            },
+            {
+              "Identifier": "2008JJ00",
+              "Status": "Definitief",
+              "Title": "2008"
+            },
+            {
+              "Identifier": "2009JJ00",
+              "Status": "Definitief",
+              "Title": "2009"
+            },
+            {
+              "Identifier": "2010JJ00",
+              "Status": "Definitief",
+              "Title": "2010"
+            },
+            {
+              "Identifier": "2011JJ00",
+              "Status": "Definitief",
+              "Title": "2011"
+            },
+            {
+              "Identifier": "2012JJ00",
+              "Status": "Definitief",
+              "Title": "2012"
+            },
+            {
+              "Identifier": "2013JJ00",
+              "Status": "Definitief",
+              "Title": "2013"
+            },
+            {
+              "Identifier": "2014JJ00",
+              "Status": "Definitief",
+              "Title": "2014"
+            },
+            {
+              "Identifier": "2015JJ00",
+              "Status": "Definitief",
+              "Title": "2015"
+            },
+            {
+              "Identifier": "2016JJ00",
+              "Status": "Definitief",
+              "Title": "2016"
+            },
+            {
+              "Identifier": "2017JJ00",
+              "Status": "Definitief",
+              "Title": "2017"
+            },
+            {
+              "Identifier": "2018JJ00",
+              "Status": "Definitief",
+              "Title": "2018"
+            },
+            {
+              "Identifier": "2019JJ00",
+              "Status": "Definitief",
+              "Title": "2019"
+            },
+            {
+              "Identifier": "2020JJ00",
+              "Status": "Definitief",
+              "Title": "2020 "
+            },
+            {
+              "Identifier": "2021JJ00",
+              "Status": "Definitief",
+              "Title": "2021"
+            },
+            {
+              "Identifier": "2022JJ00",
+              "Status": "Definitief",
+              "Title": "2022"
+            },
+            {
+              "Identifier": "2023JJ00",
+              "Status": "Definitief",
+              "Title": "2023"
+            },
+            {
+              "Identifier": "2024JJ00",
+              "Status": "Definitief",
+              "Title": "2024"
+            },
+            {
+              "Identifier": "2025JJ00",
+              "Status": "Definitief",
+              "Title": "2025"
+            }
+          ]
+        },
+        "execution_id": "52d8615c-92ce-4274-957f-85e562034c0b",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "17391",
+        "receipt_ref": "ef4ac265-ae1d-434a-9d83-bb3a018cee03",
+        "result_ref": "58f4f1ca-a3d9-49be-9a9f-ad66abbb345d",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "1ed937e9-72eb-4228-bcfc-a25f20e6d11d",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/PeriodenCodes",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:40.455504766Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      },
+      {
+        "apiosk_fee_micro_usd": "2609",
+        "charged_atomic": "20000",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#BedrijfstakkenBranchesSBI2008Codes(Identifier,Title)",
+          "value": [
+            {
+              "Identifier": "350000",
+              "Title": "F Bouwnijverheid"
+            }
+          ]
+        },
+        "execution_id": "0204ab5e-6908-4051-b011-3879cef9f459",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "17391",
+        "receipt_ref": "896dbaab-11da-4eb7-8ba8-d21909064726",
+        "result_ref": "c9c6d727-219d-4b15-b8ce-7f7f03b5f108",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "2a4e82f9-0320-4702-bc95-d4d2cb17ee05",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/BedrijfstakkenBranchesSBI2008Codes",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:40.945286353Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      },
+      {
+        "apiosk_fee_micro_usd": "2609",
+        "charged_atomic": "20000",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#MeasureCodes(Identifier,Title,Unit)",
+          "value": [
+            {
+              "Identifier": "M002987",
+              "Title": "Indexcijfers omzet",
+              "Unit": "2021=100"
+            },
+            {
+              "Identifier": "M004926",
+              "Title": "Omzetontwikkeling t.o.v. een jaar eerder",
+              "Unit": "%"
+            }
+          ]
+        },
+        "execution_id": "88020656-2666-45fb-b914-1f4fbd82baf9",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "17391",
+        "receipt_ref": "5a9ea5e2-aea8-4d5f-be33-ed7407cb9faf",
+        "result_ref": "344471bc-e859-4e6c-92f8-c30c0fd2846c",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "7ee52c76-a92b-4c5c-9a0a-8781860657e4",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/MeasureCodes",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:41.701217524Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      },
+      {
+        "apiosk_fee_micro_usd": "2609",
+        "charged_atomic": "20000",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#BedrijfsgrootteCodes(Identifier,Title)",
+          "value": [
+            {
+              "Identifier": "WP19077",
+              "Title": "Totaal 1 of meer werkzame personen"
+            }
+          ]
+        },
+        "execution_id": "b3d48b77-891c-4b3d-a27c-9f62fc6a6ff8",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "17391",
+        "receipt_ref": "fb35383e-29b8-41b3-ba49-341ac2746de1",
+        "result_ref": "40601e72-1044-4cda-b0c9-d0037a9dcbee",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "05cae6cb-2c47-4897-b344-9293562ef77a",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/BedrijfsgrootteCodes",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:45.825054156Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      },
+      {
+        "apiosk_fee_micro_usd": "2609",
+        "charged_atomic": "20000",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#Properties",
+          "Authority": "https://standaarden.overheid.nl/owms/terms/Centraal_Bureau_voor_de_Statistiek",
+          "Catalog": "CBS",
+          "ContactPoint": "infoservice@cbs.nl",
+          "DatasetType": "Numeric",
+          "Description": "Deze tabel bevat cijfers over de omzetontwikkeling van de bouwnijverheid. De ontwikkeling wordt weergegeven als procentuele verandering ten opzichte van dezelfde periode in het voorafgaande jaar en door middel van indexcijfers met als basisjaar 2021. De gegevens kunnen worden uitgesplitst naar bedrijfsgrootte en branches volgens de Standaard Bedrijfsindeling 2008 (SBI 2008).\r\n\r\nGegevens beschikbaar vanaf januari 2005. \r\n\r\nStatus van de cijfers:\r\nDe cijfers over januari t/m juni 2026 zijn voorlopig en de overige perioden zijn definitief.\r\n\r\nWijzigingen per 20 augustus 2026:\r\nDe cijfers van juni en het tweede kwartaal van 2026 zijn toegevoegd en de cijfers van april en mei 2026 zijn eventueel bijgesteld.\r\n\r\nWanneer komen er nieuwe cijfers?\r\nDe voorlopige uitkomsten publiceert het CBS als regel binnen zes tot acht weken na afloop van de verslagmaand. Tot uiterlijk 75 dagen na afloop van een kwartaal kunnen de voorlopige cijfers wijzigen als gevolg van nagekomen informatie van respondenten. Daarna wijzigen de cijfers niet totdat, uiterlijk vijf maanden na afloop van het jaar, de laatste nagekomen informatie wordt verwerkt. Daarna zijn alle verslagmaanden van dat jaar 'definitief'. Tot die tijd wordt de status 'voorlopig' aangehouden voor de uitkomsten.\r\n\r\nNa publicatie van definitieve uitkomsten past het CBS de uitkomsten alleen aan als er grote bijstellingen en/of correcties noodzakelijk zijn.\r\n\r\n\r\n",
+          "Distributions": [
+            {
+              "AccessUrl": "https://dataportal.cbs.nl/detail/CBS/85809NED",
+              "DownloadUrl": "https://datasets.cbs.nl/csv/CBS/nl/85809NED",
+              "Format": "csv",
+              "Language": "nl",
+              "MediaType": "csv"
+            },
+            {
+              "AccessUrl": "https://dataportal.cbs.nl/detail/CBS/85809NED",
+              "DownloadUrl": "https://datasets.cbs.nl/odata/v1/CBS/85809NED",
+              "Format": "odata",
+              "Language": "nl",
+              "MediaType": "odata"
+            }
+          ],
+          "Frequency": "Per maand",
+          "GraphTypes": "Table,Bar,Line",
+          "Identifier": "85809NED",
+          "Language": "nl",
+          "License": "https://creativecommons.org/licenses/by/4.0/",
+          "LongDescription": "INHOUDSOPGAVE\r\n\r\n1. Toelichting\r\n2. Definities en verklaring van symbolen\r\n3. Koppelingen naar relevante tabellen en artikelen\r\n4. Bronnen en methoden\r\n5. Meer informatie\r\n\r\n\r\n1. TOELICHTING\r\n\r\nDeze tabel bevat cijfers over de omzetontwikkeling van de bouwnijverheid. De ontwikkeling wordt weergegeven als procentuele verandering ten opzichte van dezelfde periode in het voorafgaande jaar en door middel van indexcijfers met als basisjaar 2021. De gegevens kunnen worden uitgesplitst naar bedrijfsgrootte en branches volgens de Standaard Bedrijfsindeling 2008 (SBI 2008).\r\n\r\nGegevens beschikbaar vanaf januari 2005. \r\n\r\nStatus van de cijfers:\r\nDe cijfers over januari t/m juni 2026 zijn voorlopig en de overige perioden zijn definitief.\r\n\r\nWijzigingen per 20 augustus 2026:\r\nDe cijfers van juni en het tweede kwartaal van 2026 zijn toegevoegd en de cijfers van april en mei 2026 zijn eventueel bijgesteld.\r\n\r\nWanneer komen er nieuwe cijfers?\r\nDe voorlopige uitkomsten publiceert het CBS als regel binnen zes tot acht weken na afloop van de verslagmaand. Tot uiterlijk 75 dagen na afloop van een kwartaal kunnen de voorlopige cijfers wijzigen als gevolg van nagekomen informatie van respondenten. Daarna wijzigen de cijfers niet totdat, uiterlijk vijf maanden na afloop van het jaar, de laatste nagekomen informatie wordt verwerkt. Daarna zijn alle verslagmaanden van dat jaar 'definitief'. Tot die tijd wordt de status 'voorlopig' aangehouden voor de uitkomsten.\r\n\r\nNa publicatie van definitieve uitkomsten past het CBS de uitkomsten alleen aan als er grote bijstellingen en/of correcties noodzakelijk zijn.\r\n\r\n\r\n2. DEFINITIES EN VERKLARING VAN SYMBOLEN\r\n\r\nDefinities:\r\n\r\nOmzet\r\nDe opbrengst uit verkoop van goederen en diensten aan derden, exclusief btw. De omzet omvat zowel de opbrengst uit hoofdactiviteit als uit nevenactiviteiten. Derden zijn consumenten en bedrijven buiten het (Nederlandse deel van het) eigen concernverband.\r\n\r\nIndexcijfer \r\nGeeft de verhouding weer tussen de waarde van een bepaalde variabele (bijv. omzet) in een bepaalde periode en de waarde van diezelfde variabele in de basisperiode. Deze basisperiode heeft het indexcijfer 100.\r\n\r\nOntwikkeling\r\nDe procentuele ontwikkeling van een bepaalde periode (maand, kwartaal, jaar) ten opzichte van dezelfde periode in het daaraan voorafgaande jaar. Het CBS berekent de ontwikkeling aan de hand van niet-afgeronde indexcijfers. \r\n\r\nBedrijfsgrootte (werkzame personen)\r\nHet aantal werkzame personen bij een bedrijf is het aantal werknemers op de eigen loonlijst, verminderd met het uitgeleende personeel en vermeerderd met het ingeleend personeel, ingehuurde uitzendkrachten/gedetacheerden en overige werkzame personen zoals medewerkende eigenaren en vennoten.\r\n\r\nStandaard Bedrijfsindeling 2008 (SBI 2008):\r\nDe Nederlandse hiërarchische indeling van economische activiteiten die door het CBS wordt gebruikt om bedrijfseenheden in te delen naar hun hoofdactiviteit. De SBI 2008 is de versie die vanaf 2008 gebruikt wordt.\r\n“Bedrijfstak” of “branche” zijn gangbare termen voor groepen van bedrijven met dezelfde hoofdactiviteit. Het CBS hanteert voor de indeling van bedrijven naar hoofdactiviteit de zogenoemde Standaard Bedrijfsindeling (SBI). Bedrijven in een bedrijfstak of branche kunnen naast deze activiteit ook andere activiteiten (nevenactiviteiten) uitoefenen. De SBI 2008 kent meerdere niveaus die aangegeven worden door maximaal vijf cijfers. Het niveau van vier cijfers komt vrijwel overeen met de indeling van de Europese Unie (NACE). De eerste twee cijfers komen overeen met die van de indeling van Verenigde Naties (ISIC).\r\n\r\nVerklaring van symbolen:\r\n\r\nniets (blanco) : het cijfer kan op logische gronden niet voorkomen\r\n. : het cijfer is onbekend, onvoldoende betrouwbaar of geheim\r\n* : voorlopige cijfers\r\n** : nader voorlopige cijfers\r\n\r\n\r\n3. KOPPELINGEN NAAR RELEVANTE TABELLEN EN ARTIKELEN\r\n\r\nRelevante tabellen:\r\n\r\nMaandcijfers over de volume-ontwikkeling van de toegevoegde waarde in basisprijzen van de bouwnijverheid zijn te vinden in de tabel:\r\n<a href='https://opendata.cbs.nl/statline/#/CBS/nl/dataset/85808NED/table?ts=1712728004819'>Bouwnijverheid; toegevoegde waarde in basisprijzen, volume-index 2021.</a>\r\n\r\nJaarcijfers voor de bedrijfstak bouwnijverheid met uitkomsten over werkgelegenheid en winst- en verliesrekening zijn te vinden in de tabel\r\n<a href='https://opendata.cbs.nl/statline/#/CBS/nl/dataset/81156NED'>Bedrijfsleven; arbeids- en financiële gegevens, per branche, SBI 2008</a>.\r\n\r\nRelevante artikelen:\r\n\r\nMeer informatie is te vinden op de themapagina <a href='https://www.cbs.nl/nl-nl/economie/bouwen-en-wonen'>Bouwen en wonen.</a>\r\n\r\n\r\n4. BRONNEN EN METHODEN\r\n\r\nEr is een basisverlegging doorgevoerd. Meer informatie over deze basisverlegging is te vinden in het document <a href='https://www.cbs.nl/nl-nl/onze-diensten/methoden/onderzoeksomschrijvingen/aanvullende-onderzoeksomschrijvingen/basisverlegging-omzet-en-prijzenstatistieken-2024'>Basisverlegging omzet- en prijzenstatistieken 2024.</a>\r\n\r\nDe onderzoeksmethode van deze tabel is te vinden in de <a href='https://www.cbs.nl/nl-nl/onze-diensten/methoden/onderzoeksomschrijvingen/korte-onderzoeksbeschrijvingen/omzetontwikkeling '>onderzoeksbeschrijving Omzetontwikkeling.</a>\r\n\r\nVoor informatie over de Standaard Bedrijfsindeling zie <a href='https://www.cbs.nl/nl-nl/onze-diensten/methoden/classificaties/activiteiten/sbi-2008-standaard-bedrijfsindeling-2008 '>SBI 2008- Standaard Bedrijfsindeling 2008</a>.\r\n\r\n\r\n5. MEER INFORMATIE\r\n\r\n<a href='https://www.cbs.nl/nl-nl/over-ons/contact/infoservice'>Infoservice</a>\r\n\r\nCopyright © Centraal Bureau voor de Statistiek, Den Haag/Heerlen\r\n\r\nVerveelvoudiging is toegestaan, mits het CBS als bron wordt vermeld.\r\n\r\n",
+          "ModificationDate": "2026-08-20T00:00:00+02:00",
+          "Modified": "2026-08-20T00:00:00+02:00",
+          "ObservationCount": 19824,
+          "ObservationsModified": "2026-08-20T00:00:00+02:00",
+          "Provenance": [
+            {
+              "Title": "Basisverlegging omzet- en prijzenstatistieken 2024.",
+              "Url": "https://www.cbs.nl/nl-nl/onze-diensten/methoden/onderzoeksomschrijvingen/aanvullende-onderzoeksomschrijvingen/basisverlegging-omzet-en-prijzenstatistieken-2024"
+            },
+            {
+              "Title": "onderzoeksbeschrijving Omzetontwikkeling.",
+              "Url": "https://www.cbs.nl/nl-nl/onze-diensten/methoden/onderzoeksomschrijvingen/korte-onderzoeksbeschrijvingen/omzetontwikkeling"
+            },
+            {
+              "Title": "SBI 2008- Standaard Bedrijfsindeling 2008",
+              "Url": "https://www.cbs.nl/nl-nl/onze-diensten/methoden/classificaties/activiteiten/sbi-2008-standaard-bedrijfsindeling-2008"
+            }
+          ],
+          "Publisher": "https://standaarden.overheid.nl/owms/terms/Centraal_Bureau_voor_de_Statistiek",
+          "RelatedSources": [
+            {
+              "Title": "Bouwnijverheid; toegevoegde waarde in basisprijzen, volume-index 2021.",
+              "Url": "https://opendata.cbs.nl/statline/#/CBS/nl/dataset/85808NED/table?ts=1712728004819"
+            },
+            {
+              "Title": "Bedrijfsleven; arbeids- en financiële gegevens, per branche, SBI 2008",
+              "Url": "https://opendata.cbs.nl/statline/#/CBS/nl/dataset/81156NED"
+            },
+            {
+              "Title": "Bouwen en wonen.",
+              "Url": "https://www.cbs.nl/nl-nl/economie/bouwen-en-wonen"
+            }
+          ],
+          "ReleaseDate": "2026-08-20T00:00:00+02:00",
+          "Source": "CBS.",
+          "Status": "Regulier",
+          "Summary": "Bouwnijverheid. Omzet: indexcijfers 2021=100, ontwikkeling.\nNaar activiteit en omvang (vanaf 1, vanaf 10 en meer werkzame personen)",
+          "TemporalCoverage": "2005 - 2025, 2005 KW I - 2026 KW II. jan. 2005 - juni 2026",
+          "Title": "Bouwnijverheid; omzetontwikkeling, index 2021=100",
+          "Version": "202608200000",
+          "VersionNotes": "",
+          "VersionReason": "Actualisering"
+        },
+        "execution_id": "8e9a2b71-b3f3-48f7-9e6a-b319c9932b94",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "17391",
+        "receipt_ref": "999bb934-3e71-4914-91fb-03482062d175",
+        "result_ref": "f97f893f-09d2-46c9-848e-2844ee187387",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "82d08ea7-bb11-40c0-890b-c20334f682b5",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/Properties",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:46.471589663Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      },
+      {
+        "apiosk_fee_micro_usd": "7089",
+        "charged_atomic": "54348",
+        "coverage": "source_response",
+        "currency": "USD",
+        "data": {
+          "@odata.context": "https://datasets.cbs.nl/odata/v1/CBS/85809NED/$metadata#Observations",
+          "@odata.count": 33,
+          "value": [
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 559,
+              "Measure": "M002987",
+              "Perioden": "2025JJ00",
+              "StringValue": null,
+              "Value": 128.6,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 560,
+              "Measure": "M004926",
+              "Perioden": "2025JJ00",
+              "StringValue": null,
+              "Value": 6.9,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 525,
+              "Measure": "M002987",
+              "Perioden": "2024JJ00",
+              "StringValue": null,
+              "Value": 120.3,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 526,
+              "Measure": "M004926",
+              "Perioden": "2024JJ00",
+              "StringValue": null,
+              "Value": 3.6,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 491,
+              "Measure": "M002987",
+              "Perioden": "2023JJ00",
+              "StringValue": null,
+              "Value": 116.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 492,
+              "Measure": "M004926",
+              "Perioden": "2023JJ00",
+              "StringValue": null,
+              "Value": 6.5,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 457,
+              "Measure": "M002987",
+              "Perioden": "2022JJ00",
+              "StringValue": null,
+              "Value": 109,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 458,
+              "Measure": "M004926",
+              "Perioden": "2022JJ00",
+              "StringValue": null,
+              "Value": 9,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 423,
+              "Measure": "M002987",
+              "Perioden": "2021JJ00",
+              "StringValue": null,
+              "Value": 100,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 424,
+              "Measure": "M004926",
+              "Perioden": "2021JJ00",
+              "StringValue": null,
+              "Value": 7.3,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 389,
+              "Measure": "M002987",
+              "Perioden": "2020JJ00",
+              "StringValue": null,
+              "Value": 93.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 390,
+              "Measure": "M004926",
+              "Perioden": "2020JJ00",
+              "StringValue": null,
+              "Value": 3.4,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 355,
+              "Measure": "M002987",
+              "Perioden": "2019JJ00",
+              "StringValue": null,
+              "Value": 90.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 356,
+              "Measure": "M004926",
+              "Perioden": "2019JJ00",
+              "StringValue": null,
+              "Value": 7.5,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 321,
+              "Measure": "M002987",
+              "Perioden": "2018JJ00",
+              "StringValue": null,
+              "Value": 83.9,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 322,
+              "Measure": "M004926",
+              "Perioden": "2018JJ00",
+              "StringValue": null,
+              "Value": 10.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 287,
+              "Measure": "M002987",
+              "Perioden": "2017JJ00",
+              "StringValue": null,
+              "Value": 76.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 288,
+              "Measure": "M004926",
+              "Perioden": "2017JJ00",
+              "StringValue": null,
+              "Value": 6.1,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 253,
+              "Measure": "M002987",
+              "Perioden": "2016JJ00",
+              "StringValue": null,
+              "Value": 71.8,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 254,
+              "Measure": "M004926",
+              "Perioden": "2016JJ00",
+              "StringValue": null,
+              "Value": 6.3,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 219,
+              "Measure": "M002987",
+              "Perioden": "2015JJ00",
+              "StringValue": null,
+              "Value": 67.5,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 220,
+              "Measure": "M004926",
+              "Perioden": "2015JJ00",
+              "StringValue": null,
+              "Value": 5.7,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 185,
+              "Measure": "M002987",
+              "Perioden": "2014JJ00",
+              "StringValue": null,
+              "Value": 63.8,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 186,
+              "Measure": "M004926",
+              "Perioden": "2014JJ00",
+              "StringValue": null,
+              "Value": 2.6,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 151,
+              "Measure": "M002987",
+              "Perioden": "2013JJ00",
+              "StringValue": null,
+              "Value": 62.2,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 152,
+              "Measure": "M004926",
+              "Perioden": "2013JJ00",
+              "StringValue": null,
+              "Value": -4.7,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 117,
+              "Measure": "M002987",
+              "Perioden": "2012JJ00",
+              "StringValue": null,
+              "Value": 65.3,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 118,
+              "Measure": "M004926",
+              "Perioden": "2012JJ00",
+              "StringValue": null,
+              "Value": -7.5,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 83,
+              "Measure": "M002987",
+              "Perioden": "2011JJ00",
+              "StringValue": null,
+              "Value": 70.6,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 84,
+              "Measure": "M004926",
+              "Perioden": "2011JJ00",
+              "StringValue": null,
+              "Value": 3.9,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 49,
+              "Measure": "M002987",
+              "Perioden": "2010JJ00",
+              "StringValue": null,
+              "Value": 67.9,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 50,
+              "Measure": "M004926",
+              "Perioden": "2010JJ00",
+              "StringValue": null,
+              "Value": -9.8,
+              "ValueAttribute": "None"
+            },
+            {
+              "Bedrijfsgrootte": "WP19077",
+              "BedrijfstakkenBranchesSBI2008": "350000",
+              "Id": 16,
+              "Measure": "M002987",
+              "Perioden": "2009JJ00",
+              "StringValue": null,
+              "Value": 75.3,
+              "ValueAttribute": "None"
+            }
+          ]
+        },
+        "execution_id": "def082b2-4369-4a5e-af10-77a855dcdc55",
+        "missing_fields": [],
+        "provider_cost_micro_usd": "47259",
+        "receipt_ref": "1f6f0e92-d5dd-479d-a8e0-d28aac599355",
+        "result_ref": "e4d9a49c-79e0-472f-91ae-a182dbac44b0",
+        "source": {
+          "contract_version": 1,
+          "endpoint_id": "9fcb9248-0798-42a0-b9e4-ab1cc48231ad",
+          "logo_url": "https://cdn.cbs.nl/cdn/images/apple-touch-icon.png",
+          "name": "CBS Statistics",
+          "path": "/odata/v1/CBS/85809NED/Observations",
+          "provider": "cbs-statline",
+          "provider_slug": "apiosk-basics",
+          "retrieved_at": "2026-09-13T14:17:49.884162038Z",
+          "url": "https://www.cbs.nl/en-gb/our-services/open-data/statline-as-open-data"
+        },
+        "subject": {
+          "entity_ref": "08eaa9dc-75f8-4ef5-b452-33910085b699",
+          "label": "Nederlandse bouwsector"
+        }
+      }
+    ]
+  }
+}

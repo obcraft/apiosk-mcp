@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
 import { APIOSK_UI_BRIDGE } from '../src/ui-bridge.mjs';
 import { APIO_OFFER_CARD_HTML } from '../src/offer-card.mjs';
 import { APIO_RESULT_CANVAS_HTML } from '../src/result-canvas.mjs';
@@ -41,6 +42,23 @@ function harness(html=null,openai=null) {
     },
   };
 }
+
+test('CBS live result card shows decoded annual figures and keeps complete JSON collapsed',async()=>{
+  const data=JSON.parse(readFileSync(new URL('./fixtures/cbs-annual-ui.json',import.meta.url)));
+  Object.assign(data,{status:'succeeded',state:{state_ref:'saved-cbs'},result:data.context_view.results.at(-1)});
+  const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:data}});
+  const sections=h.nodes.get('sections'),tables=sections.querySelectorAll('table');
+  assert.equal(tables.length,1);
+  const values=tables[0].querySelectorAll('td').map(n=>n.textContent);
+  assert.ok(values.includes('128,6'));assert.ok(values.includes('6,9'));
+  assert.ok(values.includes('2024'));assert.ok(values.includes('2025'));
+  assert.ok(values.includes('Definitief'));assert.ok(values.includes('2021=100'));
+  assert.equal(sections.querySelectorAll('pre').length,1);
+  assert.ok(sections.querySelectorAll('details').some(n=>!n.open&&n.querySelectorAll('pre').length===1));
+  assert.ok(sections.querySelectorAll('button').some(n=>n.textContent==='Bron: CBS StatLine'));
+  assert.equal(h.sent.filter(m=>m.method==='tools/call').length,0);
+});
 
 test('MCP Apps negotiates the current protocol and accepts only its parent frame',async()=>{
   const h=harness();const init=h.sent[0];
