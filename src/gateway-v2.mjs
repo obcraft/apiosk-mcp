@@ -1,3 +1,4 @@
+import { formatDisplayMoney } from "./display-money.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv-provider.js";
@@ -13,11 +14,6 @@ export const V2_RESOURCE = { uri: "apiosk://v2/host-contract", name: "Apiosk v2 
 const failure = value => ({ ...content(value), isError: true });
 const schemes = [{ type: "oauth2", scopes: ["mcp:tools"] }];
 const displayCurrency = currency => !currency || currency === "USDC" ? "USD" : currency;
-const amountText = (atomic, currency) => {
-  if (!/^[0-9]+$/.test(String(atomic))) return null;
-  const value = BigInt(atomic);
-  return `${value / 1000000n}.${(value % 1000000n).toString().padStart(6, '0').replace(/0+$/, '').padEnd(2, '0')} ${displayCurrency(currency)}`;
-};
 const errorFields = {
   error_code: { type: "string" }, message: { type: "string" },
   request_id: { type: "string", format: "uuid" }, idempotency_key: { type: "string", format: "uuid" },
@@ -173,10 +169,10 @@ export function createV2Runtime(options = {}) {
         // may still have an older initialize/tool-description snapshot cached.
         if (browsing) reply.content.push({ type: 'text', text: V2_SOURCES_PRESENTATION });
         if (!browsing) {
-          const maximum = amountText(result.proposal?.max_total_atomic, result.proposal?.currency || 'USD');
-          const charged = amountText(result.billing?.total_charged, result.billing?.currency || 'USD');
+          const maximum = formatDisplayMoney(result.proposal?.max_total_atomic, result.proposal?.currency, result.context_view?.money_display, true);
+          const charged = formatDisplayMoney(result.billing?.total_charged, result.billing?.currency, result.context_view?.money_display);
           const prices = [maximum && `Maximum total price: ${maximum}.`, charged && `Actual charge so far: ${charged}.`].filter(Boolean).join(' ');
-          if (prices) reply.content.unshift({ type: 'text', text: prices });
+          if (prices) reply.content.unshift({ type: 'text', text: prices + (result.context_view?.money_display?.fallback_reason ? ' Display currency conversion is unavailable; amounts are shown in USD.' : '') });
         }
         if (!browsing && result.state?.state_ref) reply.content.push({ type: "text", text: `This is a snapshot. The interactive card can approve and execute this task after this response. Before answering ANY later follow-up about its results, payment or status, recover current evidence by calling apiosk_status with ONLY {"task_ref":"${result.state.state_ref}"}. This read is free and never buys or approves. Never conclude that nothing was bought or saved from this earlier snapshot. Preserve source values exactly. Only report a currency or unit when the source explicitly supplies it; otherwise say it was not specified. The Apiosk billing currency does not establish the currency of the source data. ${V2_RESULT_PRESENTATION}` });
         return reply;

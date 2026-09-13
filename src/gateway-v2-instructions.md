@@ -67,7 +67,7 @@ When `context_view.single_call_mode` is true, only one direct source call is sup
 
 ## Display currency and language
 
-Use English consistently for Apiosk plan, approval, status and completion messages. Translate only when explicitly requested. Apiosk prices, charges and balances are USD (or EUR only when an actual EUR amount is supplied). Never display USDC or settlement-token names in chatbot copy. Historic Apiosk `USDC` amounts use the same micro-dollar billing units and should be displayed as USD without changing the amount. Do not infer or change a source document currency from Apiosk billing. Preserve exact sub-cent amounts.
+Use English consistently for Apiosk plan, approval, status and completion messages. Translate only when explicitly requested. Display Apiosk prices, charges and balances in the account currency from `context_view.money_display`, using its published rate and the converted prices supplied in the response. Raw proposal and billing amounts remain micro USD for authorization; do not display them as the preferred currency without conversion. A missing exchange rate is explicitly reported and falls back to USD. Never display USDC or settlement-token names in chatbot copy. Historic Apiosk `USDC` amounts use the same micro-dollar billing units and should be displayed as USD without changing the amount. Do not infer or change a source document currency from Apiosk billing. Preserve exact sub-cent amounts.
 
 ## Combined research PDF
 

@@ -139,6 +139,17 @@ test('historic billing metadata is fiat-only without changing source currency, s
  assert.match(reply.content[0].text,/9007199254\.740993 USD/);
 });
 
+test('EUR account preference reaches model prices without changing the signed cap or source figures',async()=>{
+ const original={protocol_version:'2',status:'ready',state:{state_ref:'task',state_token:'signed'},context_view:{money_display:{base_currency:'USD',preferred_currency:'EUR',currency:'EUR',rate:'0.92000000',as_of_date:'2026-08-21'}},proposal:{currency:'USD',max_total_atomic:'114446'},billing:{currency:'USD',total_charged:'23000'},result:{data:{currency:'GBP',amount:'123.45'}},next_actions:[],errors:[]};
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(original)});
+ const reply=await runtime.callTool('apiosk_discover',{question:'Company check'});
+ assert.equal(reply.content[0].text,'Maximum total price: 0.105291 EUR. Actual charge so far: 0.02116 EUR.');
+ assert.deepEqual(reply.structuredContent,{...original,proposal:{...original.proposal,label:'Data request'}});
+ const tool=(await runtime.listTools()).find(t=>t.name==='apiosk_discover');
+ assert.match(tool.description,/account display currency/);
+ assert.doesNotMatch(tool.description,/Display Apiosk prices and charges in USD/);
+});
+
 test('annual report links use the configured gateway origin without sending buyer credentials', async()=>{
  const id='00000000-0000-4000-8000-000000000001';
  const path=`/v2/tasks/${id}/results/${id}/report.pdf?owner=${id}&expires=99&signature=abc`;

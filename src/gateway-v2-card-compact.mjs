@@ -11,10 +11,10 @@ renderPlan=function(data){
  const s=section(subjects.join(' · ')||p.label||'Data request');s.classList.add('request-section');planSurface=s;
  if(data.billing?.authorization_active||data.status==='running'){
   s.append(el('p','compact-status','Getting your data…'));
-  s.append(el('p','meta','Approved up to '+money(p.max_total_atomic,p.currency)));return;
+  s.append(el('p','meta','Approved up to '+money(p.max_total_atomic,p.currency,true)));return;
  }
  if(sources.length)s.append(el('p','meta',sources.length+(sources.length===1?' source':' sources')));
- const price=el('div','request-price');price.append(el('span','price-label','Maximum total'),el('strong','',money(p.max_total_atomic,p.currency)));s.append(price);
+ const price=el('div','request-price');price.append(el('span','price-label','Maximum total'),el('strong','',money(p.max_total_atomic,p.currency,true)));s.append(price);
  s.append(el('p','meta','Approve once. The entire request stays within this amount.'));
  const disclosure=el('details','compact-details'),list=el('div','compact-sources');disclosure.append(el('summary','','Details'));
  for(const source of sources)list.append(sourceLine(source));disclosure.append(list);s.append(disclosure);

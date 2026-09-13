@@ -170,6 +170,21 @@ test('Claude approvals open Apiosk without attempting an in-card purchase',async
 });
 
 const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};
+test('EUR card approval, live completion and balance display retain the original micro USD authorization',async()=>{
+ const calls=[];
+ const data={...v2Ready,context_view:{execution_enabled:true,approval_mode:'chatbot',money_display:{base_currency:'USD',currency:'EUR',rate:'0.92000000'}},proposal:{...v2Ready.proposal,max_total_atomic:'114446'}};
+ const approved={...data,billing:{...data.billing,authorization_active:true}};
+ const done={...approved,status:'succeeded',state:{...data.state,revision:3},next_actions:[],billing:{...approved.billing,currency:'USD',total_charged:'23000',balance_available:'12986468'},result:{data:{name:'Saved result'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:name==='apiosk_approve'?approved:done}}});
+ const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to'));
+ assert.equal(button.textContent,'Approve up to 0.105291 EUR');
+ await button.onclick();await h.tick(350);
+ assert.equal(calls[0].args.max_total_atomic,'114446');
+ assert.equal(calls[0].args.quote_ref,'quote');
+ assert.deepEqual(calls.map(c=>c.name),['apiosk_approve','apiosk_execute']);
+ const visible=h.nodes.get('sections').querySelectorAll('b,strong,summary,p').map(n=>n.textContent).join(' ');
+ assert.match(visible,/0.02116 EUR/);assert.match(visible,/11.947551 EUR/);assert.doesNotMatch(visible,/USD|USDC/);
+});
 test('in-chat approval requires a click, uses the exact displayed cap once and continues without an external link',async()=>{
  const calls=[];let release,links=0;
  const data={...v2Ready,context_view:{execution_enabled:true,approval_mode:'chatbot'}};
