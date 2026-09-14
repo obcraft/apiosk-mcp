@@ -27,6 +27,7 @@ function renderActions(data){
  if(run&&planSurface){
   const wrap=el('div','actions plan-actions');
   if(!approved&&enabled&&data.proposal?.approval_url){
+   if(data.billing?.workspace?.name)wrap.append(el('p','notice','Shared workspace: '+data.billing.workspace.name));
    const b=el('button','primary','Approve up to '+money(data.proposal.max_total_atomic,data.proposal.currency,true));
    if(quoteExpired(data)){b.disabled=true;b.textContent='Quote expired — request a new price';const renew=el('button','primary','Get new price');renew.onclick=()=>refreshPrice(data,renew);wrap.append(renew)}
    else{const remaining=Date.parse(data.proposal.expires_at)-Date.now();if(Number.isFinite(remaining)&&remaining>=0)approvalExpiryTimer=setTimeout(()=>{approvalExpiryTimer=null;if(output===data&&!busy){render(data);showFeedback('This quote expired. Get a new price to continue.')}},Math.min(remaining+1,2147483647))}

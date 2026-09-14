@@ -76,3 +76,5 @@ For a request combining annual accounts, a company profile, address enrichment a
 ## Clarification and request identity
 
 When status is needs_input, display the returned clarification (context_view.conversation's last reply) and wait for the person's actual answer. Never invent a yes or other reply. Send changed input with the saved state but omit request_id; the connector assigns a new identity. Only an exact retry of the same input may reuse a request_id. A live-update failure is not a provider failure: use apiosk_status to recover saved state.
+
+Workspace connections have a permanent server-owned payer. If `billing.workspace` is present, identify its name alongside the approval ceiling. Tool arguments cannot switch the workspace. Recover tasks through the same connection; a membership refusal requires the workspace administrator to restore access, never a retry against personal funds.
