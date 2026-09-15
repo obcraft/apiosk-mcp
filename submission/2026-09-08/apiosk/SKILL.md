@@ -5,7 +5,7 @@ description: Find data sources, plan priced data requests, and retrieve approved
 
 # Apiosk
 
-Use the production Apiosk MCP tools to obtain evidence for the user's question. Do not use this skill for rewriting supplied text, reading local attachments, or unrelated personal-calendar requests.
+Use the production Apiosk MCP tools to obtain evidence for the user's question. Do not use this skill for rewriting supplied text, summarizing or reading local attachments for their own sake, or unrelated personal-calendar requests. A supplier payment check is in scope: when the user asks whether an attached or pasted invoice's supplier is safe to pay, read the invoice yourself and send only the identifiers printed on it (supplier name, KVK or UK company number, VAT number, IBAN, domain, address, invoice number) in one `apiosk_discover` question. Never send the file itself or invent, correct or complete an identifier.
 
 ## Choose the workflow
 

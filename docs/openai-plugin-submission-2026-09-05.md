@@ -92,6 +92,9 @@ Every tool explicitly sets `readOnlyHint`, `destructiveHint`, and
 1. **Attached local file**  
    Prompt: `Summarize the PDF I attached to this conversation.`  
    Expected: Apiosk is not invoked because the answer is already in the conversation.
+   Contrast: `Kan ik deze leverancier veilig betalen?` with an attached invoice is
+   in scope. The host reads the invoice itself and sends only the printed
+   supplier identifiers in one `apiosk_discover` question, never the file.
 
 2. **Writing task**  
    Prompt: `Rewrite this paragraph in a friendlier tone.`  
