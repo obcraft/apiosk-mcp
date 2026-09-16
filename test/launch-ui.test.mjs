@@ -73,6 +73,14 @@ test('MCP Apps negotiates the current protocol and accepts only its parent frame
   assert.equal(h.window.apiosk.data.answer,'verified');
 });
 
+test('host tool cancellation preserves the durable task snapshot and recovery identity',async()=>{
+  const h=harness();await h.initialize();
+  const running={status:'running',state:{state_ref:'saved-task',revision:4},context_view:{worker_active:true}};
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:running}});
+  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-cancelled',params:{reason:'host stopped waiting'}});
+  assert.deepEqual(h.window.apiosk.data,running);
+});
+
 test('the shared bridge reports compact content height to ChatGPT',()=>{
   const heights=[];const h=harness(null,{notifyIntrinsicHeight:value=>heights.push(value)});
   h.window.apiosk.resize();

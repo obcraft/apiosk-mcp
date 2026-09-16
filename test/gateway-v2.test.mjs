@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
-import { APIO_V2_CARD_URI, APIO_V2_CARD_META } from '../src/gateway-v2-card.mjs';
+import { APIO_V2_CARD_URI, APIO_V2_CARD_META, gatewayV2CardHtml, gatewayV2CardMeta } from '../src/gateway-v2-card.mjs';
 import { V2_SOURCES_PRESENTATION } from '../src/result-presentation.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
 test('v2 exposes four model tools and an app-only approval tool while legacy stays unchanged',async()=>{
@@ -10,6 +10,7 @@ test('v2 exposes four model tools and an app-only approval tool while legacy sta
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);
+ assert.ok(tools.find(t=>t.name==='apiosk_status').outputSchema.properties.status.enum.includes('cancelled'));
  for (const name of ['apiosk_discover','apiosk_execute','apiosk_status']) {
    const description=tools.find(t=>t.name===name).description;
    assert.match(description,/only a brief confirmation/);
@@ -31,6 +32,15 @@ test('v2 does not call gateway without a connection',async()=>{
 });
 test('v2 transport refuses insecure nonlocal configuration',()=>{
  assert.throws(()=>createApioskMcpRuntime({env:{APIOSK_GATEWAY_V2_URL:'http://example.test'}}));
+});
+test('v2 card events and CSP trust only the configured gateway origin',()=>{
+ const staging='https://gateway.staging.apiosk.test';
+ const html=gatewayV2CardHtml(`${staging}/`),meta=gatewayV2CardMeta(`${staging}/`);
+ assert.deepEqual(meta.ui.csp.connectDomains,[staging]);
+ assert.deepEqual(meta['openai/widgetCSP'].connect_domains,[staging]);
+ assert.match(html,/gateway\.staging\.apiosk\.test/);
+ assert.doesNotMatch(html,/apiosk-gateway-v2\.fly\.dev/);
+ assert.doesNotMatch(html,/__APIOSK_GATEWAY_ORIGIN__/);
 });
 
 test('hosted v2 never inherits a machine-wide buyer token',async()=>{

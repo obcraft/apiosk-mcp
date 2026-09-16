@@ -60,7 +60,10 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  if(msg.method==='ui/notifications/host-context-changed'){applyTheme(msg.params?.theme);return}
  if(msg.method==='ui/notifications/tool-input'){emitInput(msg.params);return}
  if(msg.method==='ui/notifications/tool-result'){emit(unwrap(msg.params));return}
- if(msg.method==='ui/notifications/tool-cancelled'){emit({status:'cancelled'});return}});
+ // A host cancelling its local tool wait does not prove that the durable
+ // Gateway task stopped. Keep the latest task snapshot and its recovery
+ // controls; only a Gateway response may set status=cancelled.
+ if(msg.method==='ui/notifications/tool-cancelled'){return}});
 // ---- OpenAI Apps SDK: globals plus an event ---------------------------------
 function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result;
  // Keep the last server-returned view for this card across remounts. This is

@@ -29,6 +29,7 @@ Copy the newest state unchanged, including signature, revision, expiry and focus
 | `needs_selection` | Show the returned candidates and ask which entity is intended. Use `select_entity` with `{"entity_ref": <returned reference>}`. Do not guess the first match. |
 | `requires_approval` | Show the plan and exact total, and wait for the person to approve in the interactive card when `context_view.approval_mode` is `chatbot`. Otherwise offer `proposal.approval_url`. After approval, the server continues automatically. If a legacy external approval leaves an offered continuation, start it once using its current action and quote reference; the backend handles all remaining calls. |
 | `running` | With server execution, the card receives events and the backend continues. Do not issue execute or poll loops. Use apiosk_status only when current saved evidence is needed. For a legacy server without execution_mode=server, follow its offered poll action and retry_after_ms. Never buy again to check progress. |
+| `cancelled` | Explain that no further source calls will start. Preserve and report any results, charges or receipts already saved; cancellation does not erase them. |
 | `succeeded` | Answer from returned evidence. Use offered result reads if details are needed. |
 | `partial` | Answer the supported part and state missing fields, entities, periods or truncation. Do not imply complete coverage. |
 | `unsupported` | Explain the specific limitation. Ask before changing the requested source or scope. |
@@ -47,7 +48,7 @@ The person approves one exact total ceiling in the chat card under the spending 
 
 A request ID belongs to one exact request. Preserve it for an identical transport retry. A changed state, input or approval situation needs a new request ID. The adapter generates one when omitted. Preserve the action ID and idempotency key on paid-action retries; the adapter defaults the key to the action ID.
 
-If state is lost, expired or a response was interrupted, call `apiosk_execute` with ONLY `recover_task_ref` set to the previous `state.state_ref`. Recovery reads; it does not parse, approve or buy. Continue from recovered state. If the reference is lost too, explain that safe resumption is unavailable; do not silently repurchase.
+If state is lost, expired or a response was interrupted, call `apiosk_status` with ONLY `task_ref` set to the previous `state.state_ref`. Recovery reads; it does not parse, approve or buy. `apiosk_execute` with only `recover_task_ref` remains a compatibility route, but do not prefer it. Continue from recovered state. If the reference is lost too, explain that safe resumption is unavailable; do not silently repurchase.
 
 When the person says stop, use the offered cancel action. Cancellation stops future steps; it does not reverse an already dispatched request or guarantee a refund. On an authentication error, reconnect through the host's OAuth UI. Never request account passwords, Supabase keys, treasury keys or provider keys in chat.
 

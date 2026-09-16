@@ -62,7 +62,7 @@ const taskOutput = {
   type: "object", additionalProperties: false,
   properties: {
     protocol_version: { type: "string", const: "2" }, request_id: { type: "string", format: "uuid" },
-    status: { type: "string", enum: ["ready", "needs_input", "needs_selection", "requires_approval", "running", "succeeded", "partial", "unsupported", "state_conflict", "failed"] },
+    status: { type: "string", enum: ["ready", "needs_input", "needs_selection", "requires_approval", "running", "cancelled", "succeeded", "partial", "unsupported", "state_conflict", "failed"] },
     intent_ref: { type: ["string", "null"], format: "uuid" }, context_view: { type: "object", additionalProperties: true },
     proposal: { anyOf: [proposalOutput, { type: "null" }] }, result: {}, billing: {},
     next_actions: { type: "array", items: actionOutput }, state: { anyOf: [schemas.state, { type: "null" }] },

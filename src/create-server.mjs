@@ -9,7 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { createApioskMcpRuntime } from "./runtime.mjs";
 import { V2_INSTRUCTIONS, V2_DESCRIPTION, V2_RESOURCE } from "./gateway-v2.mjs";
-import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_CARD_HTML, APIO_V2_CARD_META } from "./gateway-v2-card.mjs";
+import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_LEGACY_URIS, gatewayV2CardHtml, gatewayV2CardMeta } from "./gateway-v2-card.mjs";
 import { APIO_RESULT_CANVAS_HTML, APIO_RESULT_CANVAS_URI, APIO_RESULT_CANVAS_META } from "./result-canvas.mjs";
 import { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_URI, APIO_OFFER_CARD_META } from "./offer-card.mjs";
 import { APIO_RESULTS_PICKER_HTML, APIO_RESULTS_PICKER_URI, APIO_RESULTS_PICKER_META } from "./results-picker.mjs";
@@ -179,7 +179,10 @@ export function resolveServerPresentation(env = process.env) {
 }
 export function createApioskMcpServer(options = {}) {
   const runtime = resolveRuntime(options);
-  const gatewayV2 = Boolean((options.env || process.env).APIOSK_GATEWAY_V2_URL);
+  const env = options.env || process.env;
+  const gatewayV2 = Boolean(env.APIOSK_GATEWAY_V2_URL);
+  const v2CardHtml = gatewayV2 ? gatewayV2CardHtml(env.APIOSK_GATEWAY_V2_URL) : null;
+  const v2CardMeta = gatewayV2 ? gatewayV2CardMeta(env.APIOSK_GATEWAY_V2_URL) : null;
   const server = new Server(
     resolveServerPresentation(options.env || process.env).info,
     // `prompts` is declared because it is implemented. Leaving it out made
@@ -258,12 +261,12 @@ export function createApioskMcpServer(options = {}) {
       uri: APIO_V2_CARD_URI,
       name: "Apiosk Gateway v2 interactive card",
       mimeType: uiMimeType(),
-      _meta: APIO_V2_CARD_META,
-    }, { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: APIO_V2_CARD_META }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
+      _meta: v2CardMeta,
+    }, { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: v2CardMeta }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
       uri,
       name: "Apiosk Gateway v2 interactive card (compatible)",
       mimeType: uiMimeType(),
-      _meta: APIO_V2_CARD_META,
+      _meta: v2CardMeta,
     }))] : [
       ...UI_RESOURCES.map(({ uri, name, meta }) => ({
         uri,
@@ -278,8 +281,8 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (gatewayV2) {
       if (request.params.uri === "apiosk://v2/host-contract") return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
-      if (request.params.uri === APIO_V2_CHATGPT_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: APIO_V2_CARD_HTML, _meta: APIO_V2_CARD_META }] };
-      if (request.params.uri === APIO_V2_CARD_URI || APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: APIO_V2_CARD_HTML, _meta: APIO_V2_CARD_META }] };
+      if (request.params.uri === APIO_V2_CHATGPT_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: v2CardHtml, _meta: v2CardMeta }] };
+      if (request.params.uri === APIO_V2_CARD_URI || APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: v2CardHtml, _meta: v2CardMeta }] };
       throw new Error("Unknown v2 resource");
     }
     const skillResource = await readApioskSkillResource(request.params.uri);

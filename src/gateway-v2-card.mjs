@@ -10,33 +10,30 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v43.html";
-// Separate MIME-labelled aliases of the same card. Older ChatGPT renderers
-// use outputTemplate/skybridge; MCP Apps hosts use ui.resourceUri/mcp-app.
-export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v10-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:42},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v44.html";
+export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v11-chatgpt.html";
+export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:43},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
-export const APIO_V2_CARD_META = (() => {
+export function gatewayV2CardMeta(gatewayUrl = "https://api.apiosk.com") {
+  const gatewayOrigin = new URL(gatewayUrl).origin;
   const meta = uiResourceMeta(
     "Shows Apiosk sources, plan, price, approval, progress, balance and complete source-backed results. The card already displays the details; add only a brief completion note and source citation unless the user explicitly asks for details or analysis. " + V2_SOURCES_PRESENTATION
   );
-  // Let each host choose its sandbox origin. Claude rejects an Apiosk URL
-  // here; ChatGPT's separate widgetDomain remains available for its sandbox.
   delete meta.ui.domain;
-  // Published provider avatars live in Apiosk's public storage. Other hosts
-  // are intentionally blocked and fall back to a generated initial.
   meta.ui.csp.resourceDomains = SOURCE_LOGO_ORIGINS;
   meta["openai/widgetCSP"].resource_domains = SOURCE_LOGO_ORIGINS;
-  meta.ui.csp.connectDomains = [...new Set([...(meta.ui.csp.connectDomains || []), "https://api.apiosk.com", "https://apiosk-gateway-v2.fly.dev"])];
+  meta.ui.csp.connectDomains = [...new Set([...(meta.ui.csp.connectDomains || []), gatewayOrigin])];
   meta["openai/widgetCSP"].connect_domains = meta.ui.csp.connectDomains;
   meta.ui.prefersBorder = false;
   meta["openai/widgetPrefersBorder"] = false;
   return meta;
-})();
+}
 
-export const APIO_V2_CARD_HTML = `<!doctype html>
+export const APIO_V2_CARD_META = gatewayV2CardMeta();
+
+const APIO_V2_CARD_HTML_TEMPLATE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>${APIOSK_UI_STYLE}
 ${V2_CBS_STYLE}
@@ -67,7 +64,7 @@ function showFeedback(message,kind=''){feedback.classList.remove('hidden');feedb
 function safeLogo(url){try{const u=new URL(url);return u.protocol==='https:'&&${JSON.stringify(SOURCE_LOGO_ORIGINS)}.includes(u.origin)?u.href:null}catch{return null}}
 function sourceLogo(source){const url=safeLogo(source&&source.logo_url);if(url){const img=el('img','logo');img.alt='';img.src=url;img.onerror=()=>img.replaceWith(fallbackLogo(source));return img}return fallbackLogo(source)}
 function fallbackLogo(source){return el('span','logo fallback',text(source&&source.name||'A').trim().slice(0,1).toUpperCase()||'A')}
-function invokeLabel(status){return({ready:'Ready',needs_input:'Input needed',needs_selection:'Choose one',requires_approval:'Approval needed',running:'Running',succeeded:'Completed',partial:'Partial result',unsupported:'Unavailable',state_conflict:'Updated',failed:'Failed'}[status]||pretty(status||'Ready'))}
+function invokeLabel(status){return({ready:'Ready',needs_input:'Input needed',needs_selection:'Choose one',requires_approval:'Approval needed',running:'Running',cancelled:'Cancelled',succeeded:'Completed',partial:'Partial result',unsupported:'Unavailable',state_conflict:'Updated',failed:'Failed'}[status]||pretty(status||'Ready'))}
 function toolArgs(action,value){const args={action_id:action.action_id,state:output.state,idempotency_key:action.action_id,quote_ref:output.proposal&&output.proposal.quote_ref||null,input:value==null?null:value};return args}
 async function callAction(action,value){if(busy||!output||!output.state)return;if(['select_entity','supply_input'].includes(action.kind))watchUntil=Date.now()+300000;busy=true;showFeedback(({select_entity:'Selecting the company…',supply_input:'Updating your request…',read_result:'Loading the saved result…',poll:'Checking status…',cancel:'Stopping remaining steps…'})[action.kind]||'Updating…');try{const next=await window.apiosk.callTool('apiosk_execute',toolArgs(action,value));acceptResponse(next)}catch(e){showFeedback(e&&e.message||'The request could not be completed.','error')}finally{busy=false}}
 function acceptResponse(next){if(next?.state?.state_ref===output?.state?.state_ref&&Number(next.state.revision)<Number(output.state.revision))return;if(!next?.state){showFeedback(next?.message||(next?.errors||[]).map(e=>e.message).join(' ')||'The response was interrupted. Check status to recover your saved task.','error');return}render(next);void publishResult(next)}
@@ -85,8 +82,14 @@ ${V2_CARD_RESULT}
 ${V2_CARD_RESEARCH}
 ${V2_CARD_ACTIONS}
 function renderErrors(data){const shown=new Set();const errors=(Array.isArray(data.errors)?data.errors:[]).filter(e=>{const message=e.message||e.code||'The request could not be completed.';if(shown.has(message))return false;shown.add(message);return true});if(!errors.length)return;const s=section('Needs attention');for(const e of errors)s.append(el('div','notice error',e.message||e.code||'The request could not be completed.'))}
-function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':data.status==='failed'?'Your request could not be completed.':data.status==='needs_input'?'More information is needed to prepare your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);if(data.context_view?.money_display?.fallback_reason)section('Currency').append(el('p','notice','Display currency conversion is unavailable. Amounts are shown in USD.'));renderErrors(data)}window.apiosk.resize()}
+function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':data.status==='cancelled'?'No further source calls will be started. Saved results and charges remain available.':data.status==='failed'?'Your request could not be completed.':data.status==='needs_input'?'More information is needed to prepare your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);if(data.context_view?.money_display?.fallback_reason)section('Currency').append(el('p','notice','Display currency conversion is unavailable. Amounts are shown in USD.'));renderErrors(data)}window.apiosk.resize()}
 ${V2_CARD_EVENTS}
 ${V2_CARD_COMPACT}
 const recoveredCards=new Set();window.apiosk.onInput&&window.apiosk.onInput(value=>{input=value||{}});window.apiosk.onData(data=>{render(data);const ref=data?.state?.state_ref;if(ref&&!recoveredCards.has(ref)){recoveredCards.add(ref);setTimeout(()=>{if(output?.state?.state_ref===ref&&!busy)void refreshTask(false)},100)}});
 </script></body></html>`;
+
+export function gatewayV2CardHtml(gatewayUrl = "https://api.apiosk.com") {
+  return APIO_V2_CARD_HTML_TEMPLATE.replaceAll("__APIOSK_GATEWAY_ORIGIN__", new URL(gatewayUrl).origin);
+}
+
+export const APIO_V2_CARD_HTML = gatewayV2CardHtml();

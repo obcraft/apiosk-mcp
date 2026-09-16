@@ -7,7 +7,7 @@ ${V2_VERDICT_STYLE}
 `;
 export const V2_CARD_COMPACT = `
 renderPlan=function(data){
- const p=data.proposal;if(!p||['succeeded','partial','failed','unsupported','needs_selection'].includes(data.status))return;
+ const p=data.proposal;if(!p||['cancelled','succeeded','partial','failed','unsupported','needs_selection'].includes(data.status))return;
  const details=p.step_details||[],subjects=[...new Set(details.map(d=>d.subject).filter(Boolean))];
  const sources=[...new Map(details.filter(d=>d.source).map(d=>[d.source.directory_slug||d.source.slug||d.source.name,{...d.source,name:d.source.directory_name||d.source.name}])).values()];
  const s=section(subjects.join(' · ')||p.label||'Data request');s.classList.add('request-section');planSurface=s;
