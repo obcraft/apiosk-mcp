@@ -28,8 +28,8 @@
       "Plan the API calls needed to research a company before spending anything."
     ],
     "brandColor": "#6349DB",
-    "composerIcon": "./assets/icon.png",
-    "logo": "./assets/logo.png"
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg"
   },
   "mcpServers": "./.mcp.json"
 }

@@ -7,14 +7,14 @@
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
-      "src": "https://mcp.apiosk.com/brand/mark-20260905-transparent.svg",
+      "src": "https://mcp.apiosk.com/brand/mark-20260918.svg",
       "mimeType": "image/svg+xml",
       "sizes": [
         "any"
       ]
     },
     {
-      "src": "https://mcp.apiosk.com/brand/mark-light-20260905-transparent.png",
+      "src": "https://mcp.apiosk.com/brand/mark-light-20260918.png",
       "mimeType": "image/png",
       "sizes": [
         "512x512"
@@ -22,7 +22,7 @@
       "theme": "light"
     },
     {
-      "src": "https://mcp.apiosk.com/brand/mark-dark-20260905-transparent.png",
+      "src": "https://mcp.apiosk.com/brand/mark-dark-20260918.png",
       "mimeType": "image/png",
       "sizes": [
         "512x512"

@@ -5,3 +5,7 @@ The Apiosk connector uses the same transparent a as the app sidebar and website 
 The live MCP initialize response, discovery server card and server.json share the SVG and theme-labelled 512px PNG icons. dxt.json uses the adaptive SVG. Versioned URLs prevent reuse of the old purple artwork. The legacy logo-optimized-light.png URL remains available with the transparent black mark and revalidation headers.
 
 Assets live in assets/brand and ship in both the npm package and Docker image. Clients that snapshot connector metadata need to refresh the connection after deployment. Published directory listings may use a separately uploaded logo; changing MCP metadata does not confirm their displayed artwork has changed.
+
+The September 2026 refresh uses `mark-{light,dark}-20260918.png` and `mark-20260918.svg` for icons. The supplied icon silhouette is embedded in the adaptive SVG. The full-name artwork retains the previous `wordmark-{black,white}-320.png` images. Apple touch icons are 180px with an opaque background. Older connector icon URLs are explicit aliases with revalidation headers. Card wordmarks follow the host's `data-theme` even when it differs from the operating system.
+
+The canonical icon source and exporter are in the adjacent website checkout at `assets/brand` and `scripts/generate-brand-assets.mjs`. The exporter preserves existing wordmarks.
