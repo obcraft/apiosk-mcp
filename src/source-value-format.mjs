@@ -1,3 +1,4 @@
+import { formatCompanyName, formatCompanyText, isCompanyNameField } from './company-name.mjs';
 // Display formatting only. Raw source JSON remains unchanged.
 export function sourceCurrency(value) {
   const candidate = typeof value === 'string' ? value : value?.currency ?? value?.currencyCode ?? value?.unit;
@@ -5,12 +6,13 @@ export function sourceCurrency(value) {
   const code = candidate.replace(/^iso4217:/i, '').toUpperCase();
   return /^(EUR|USD|GBP|CHF|JPY|CAD|AUD|SEK|NOK|DKK)$/.test(code) ? code : null;
 }
-export function formatSourceValue(value, key = '', currency = null) {
+export function formatSourceValue(value, key = '', currency = null, nameContext) {
   const raw = String(value ?? '');
+  if (typeof value === 'string' && isCompanyNameField(key)) return formatCompanyName(value);
   const label = String(key).replace(/[\s_.-]/g, '');
   // Identifiers, calendar years and dates are labels, not amounts.
   if (/year|date|code|identifier|kvk|postcode|postal|phone|iban/i.test(label) || /(?:^id$|Id$|ID$|Number$|Nummer$)/.test(label)) return raw;
-  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return raw;
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return formatCompanyText(raw, nameContext);
   const negative = raw.startsWith('-'), unsigned = negative ? raw.slice(1) : raw;
   const [whole, fraction] = unsigned.split('.');
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (fraction == null ? '' : '.' + fraction);

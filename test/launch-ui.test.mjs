@@ -531,3 +531,23 @@ test('interrupted live updates recover saved state and stale stream errors canno
  assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(streams.length,1);
  const feedback=h.nodes.get('feedback').textContent;streams[0].onerror();assert.equal(h.nodes.get('feedback').textContent,feedback);
 });
+
+test('company names use readable casing throughout the card without changing selection identity or source JSON', async () => {
+ const raw='ORION BEHEER BV',entity='ORION-REF';
+ const result={subject:{label:raw},source:{name:'KVK'},data:{resultaten:[{naam:raw,kvkNummer:'01234567',adres:{binnenlandsAdres:{plaats:'AMSTERDAM'}}}]}};
+ const data={...v2Ready,status:'needs_selection',context_view:{candidates:[{entity_ref:entity,label:raw,facts:[{type:'company.name',value:raw}]}]},next_actions:[{action_id:'select',kind:'select_entity'}]};
+ const before=JSON.stringify(data),calls=[];
+ const completed={...v2Ready,status:'succeeded',proposal:{...v2Ready.proposal,step_details:[{subject:raw,source:{name:'KVK'}}]},next_actions:[],result,context_view:{analysis:{status:'completed',limitations:[],observations:[{text:raw+' is registered.',evidence:[{pointer:'/data/resultaten/0/naam',value:raw}]}]}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push(args);return{structuredContent:completed}}});
+ const flatten=node=>[node.textContent,...node.children.flatMap(flatten)];
+ const choice=h.nodes.get('sections').querySelectorAll('button').find(button=>flatten(button).includes('Orion Beheer BV'));
+ assert.ok(choice);await choice.onclick();
+ assert.equal(calls[0].input.entity_ref,entity);assert.equal(JSON.stringify(data),before);
+ const rendered=flatten(h.nodes.get('sections'));
+ assert.ok(rendered.includes('Result · Orion Beheer BV'));
+ assert.ok(rendered.includes('Orion Beheer BV is registered.'));
+ assert.ok(rendered.includes('Orion Beheer BV'));
+ assert.ok(rendered.includes('KVK 01234567 · AMSTERDAM'));
+ assert.ok(h.nodes.get('sections').querySelectorAll('pre').some(node=>node.textContent.includes(raw)));
+ assert.equal(result.data.resultaten[0].naam,raw);
+});

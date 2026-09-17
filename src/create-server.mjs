@@ -281,7 +281,7 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     if (gatewayV2) {
       if (request.params.uri === "apiosk://v2/host-contract") return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
-      if (request.params.uri === APIO_V2_CHATGPT_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: v2CardHtml, _meta: v2CardMeta }] };
+      if (request.params.uri === APIO_V2_CHATGPT_CARD_URI || (APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri) && request.params.uri.endsWith("-chatgpt.html"))) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: v2CardHtml, _meta: v2CardMeta }] };
       if (request.params.uri === APIO_V2_CARD_URI || APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: v2CardHtml, _meta: v2CardMeta }] };
       throw new Error("Unknown v2 resource");
     }

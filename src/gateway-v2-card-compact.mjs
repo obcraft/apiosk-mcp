@@ -10,7 +10,7 @@ renderPlan=function(data){
  const p=data.proposal;if(!p||['cancelled','succeeded','partial','failed','unsupported','needs_selection'].includes(data.status))return;
  const details=p.step_details||[],subjects=[...new Set(details.map(d=>d.subject).filter(Boolean))];
  const sources=[...new Map(details.filter(d=>d.source).map(d=>[d.source.directory_slug||d.source.slug||d.source.name,{...d.source,name:d.source.directory_name||d.source.name}])).values()];
- const s=section(subjects.join(' · ')||p.label||'Data request');s.classList.add('request-section');planSurface=s;
+ const s=section(formatCompanyText(subjects.join(' · ')||p.label||'Data request',data));s.classList.add('request-section');planSurface=s;
  if(data.billing?.authorization_active||data.status==='running'){
   s.append(el('p','compact-status','Getting your data…'));
   s.append(el('p','meta','Approved up to '+money(p.max_total_atomic,p.currency,true)));return;

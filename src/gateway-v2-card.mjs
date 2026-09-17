@@ -1,3 +1,5 @@
+import { V2_CARD_CHOICES } from './gateway-v2-card-choices.mjs';
+import { COMPANY_NAME_DISPLAY } from './company-name.mjs';
 import { V2_CBS_STYLE } from './gateway-v2-card-cbs.mjs';
 import { V2_CARD_CLARIFICATION } from "./gateway-v2-card-clarification.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
@@ -11,9 +13,9 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v45.html";
-export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v11-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:44},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v46.html";
+export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v12-chatgpt.html";
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:45},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), "ui://apiosk/gateway-v2-card-v11-chatgpt.html"];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -58,6 +60,7 @@ ${V2_COMPACT_STYLE}
 </div><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div></div></main>
 <script>${APIOSK_UI_BRIDGE}</script><script>
 const byId=id=>document.getElementById(id),sections=byId('sections'),feedback=byId('feedback'),feedbackText=byId('feedback-text');let output=null,input={},busy=false,planSurface=null,pollTimer=null,watchUntil=0;const attempted=new Set(),announced=new Set();
+${COMPANY_NAME_DISPLAY}
 const text=v=>v==null?'':String(v),pretty=v=>text(v).replace(/[._-]+/g,' ').replace(/\\b\\w/g,c=>c.toUpperCase());
 function el(tag,className,value){const n=document.createElement(tag);if(className)n.className=className;if(value!=null)n.textContent=text(value);return n}
 ${formatDisplayMoney.toString()}
@@ -78,7 +81,7 @@ ${V2_CARD_SOURCES}
 function sourceLine(source){const line=el('div','step-source'),logo=sourceLogo(source);logo.classList.add('mini');line.append(logo,el('span','',source.name||source.provider||'Apiosk source'));return line}
 function sourceBadge(source){const badge=el('div','source-badge'),logo=sourceLogo(source);logo.classList.add('mini');badge.append(logo,el('span','',source.name||source.provider||'Source'));return badge}
 function renderPlan(data){const p=data.proposal;if(!p)return;const formatted=money(p.max_total_atomic,p.currency,true),price=el('div','request-price');if(formatted)price.append(el('span','price-label','Maximum total'),el('strong','',formatted),el('span','price-note','From your Apiosk balance'));const s=section('Data request',price),list=el('div','steps');s.classList.add('request-section');planSurface=s;(p.steps||[]).forEach((step,i)=>{const d=(p.step_details||[])[i]||{},row=el('div','step'),copy=el('div'),source=d.source||{},title=el('div','step-title-line');title.append(el('div','step-title',d.title||pretty(step)),el('span','state '+text(d.status||'pending'),d.status||'pending'));copy.append(sourceLine(source),title);row.append(el('span','step-no',text(i+1)+'.'),copy);list.append(row)});s.append(list)}
-function renderChoices(data){const select=(data.next_actions||[]).find(a=>a.kind==='select_entity'),candidates=data.context_view?.candidates;if(!select||!Array.isArray(candidates)||!candidates.length)return;const s=section('Which company do you mean?');s.classList.add('choice-section');s.setAttribute('role','region');s.setAttribute('aria-label','Choose the right company');s.append(el('p','meta','Choose once to continue within your approved amount.'));const list=el('div','choice-list');for(const c of candidates){const copy=el('span'),name=(c.facts||[]).find(f=>f.type==='company.name');copy.append(el('strong','',name?.value||c.label));const identifiers=(c.facts||[]).filter(f=>/kvk|city|country|lei/i.test(f.type)).map(f=>(/kvk/i.test(f.type)?'KVK ':'')+text(f.value));copy.append(el('span','meta',identifiers.join(' · ')));const b=el('button');b.append(copy,el('span','','Select'));b.onclick=()=>callAction(select,{entity_ref:c.entity_ref});list.append(b)}s.append(list)}
+${V2_CARD_CHOICES}
 ${V2_CARD_CLARIFICATION}
 function renderInput(data){const action=(data.next_actions||[]).find(a=>a.kind==='supply_input');if(!action){renderClarification(data);return}const s=section('One detail is needed'),form=el('form','field'),field=el('input');field.required=true;field.autocomplete='off';field.placeholder='Enter the requested value';const b=el('button','primary','Continue');form.append(field,b);form.onsubmit=e=>{e.preventDefault();let value=field.value.trim();const type=action.input_schema&&action.input_schema.properties&&action.input_schema.properties.value&&action.input_schema.properties.value.type;if(type==='integer'||type==='number')value=Number(value);else if(type==='boolean')value=value==='true';callAction(action,{value})};s.append(form)}
 function renderBilling(data){const b=data.billing;if(!b)return;if(data.context_view?.execution_mode==='server'&&!b.authorization_active&&!data.result&&!(b.executions||[]).length&&String(b.total_charged||'0')==='0')return;const available=money(b.balance_available,b.currency),charged=money(b.total_charged,b.currency);if(available==null&&charged==null)return;const s=section('Payment summary'),grid=el('div','balances');if(charged!=null){const box=el('div','balance');box.append(el('span','','Total charged · '+(b.workspace?.name||'Apiosk balance')),el('b','',charged));grid.append(box)}if(available!=null){const box=el('div','balance');box.append(el('span','','Available balance'),el('b','',available));grid.append(box)}s.append(grid)}
