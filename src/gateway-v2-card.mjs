@@ -1,5 +1,5 @@
 import { V2_CARD_CHOICES } from './gateway-v2-card-choices.mjs';
-import { COMPANY_NAME_DISPLAY } from './company-name.mjs';
+import { DISPLAY_TEXT } from './display-text.mjs';
 import { V2_CBS_STYLE } from './gateway-v2-card-cbs.mjs';
 import { V2_CARD_CLARIFICATION } from "./gateway-v2-card-clarification.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
@@ -60,7 +60,7 @@ ${V2_COMPACT_STYLE}
 </div><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div></div></main>
 <script>${APIOSK_UI_BRIDGE}</script><script>
 const byId=id=>document.getElementById(id),sections=byId('sections'),feedback=byId('feedback'),feedbackText=byId('feedback-text');let output=null,input={},busy=false,planSurface=null,pollTimer=null,watchUntil=0;const attempted=new Set(),announced=new Set();
-${COMPANY_NAME_DISPLAY}
+${DISPLAY_TEXT}
 const text=v=>v==null?'':String(v),pretty=v=>text(v).replace(/[._-]+/g,' ').replace(/\\b\\w/g,c=>c.toUpperCase());
 function el(tag,className,value){const n=document.createElement(tag);if(className)n.className=className;if(value!=null)n.textContent=text(value);return n}
 ${formatDisplayMoney.toString()}

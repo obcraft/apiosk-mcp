@@ -265,7 +265,7 @@ export function createApioskMcpServer(options = {}) {
     }, { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: v2CardMeta }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
       uri,
       name: "Apiosk Gateway v2 interactive card (compatible)",
-      mimeType: uiMimeType(),
+      mimeType: uri.endsWith("-chatgpt.html") ? "text/html+skybridge" : uiMimeType(),
       _meta: v2CardMeta,
     }))] : [
       ...UI_RESOURCES.map(({ uri, name, meta }) => ({

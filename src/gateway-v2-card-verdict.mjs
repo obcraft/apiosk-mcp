@@ -44,22 +44,22 @@ function renderSupplierVerdict(view){
  const nl=view.language==='nl',t=(dutch,english)=>nl?dutch:english,value=v=>v!=null&&typeof v==='object'?JSON.stringify(v):text(v);
  const title=t('Leverancierscontrole','Supplier payment check'),s=section(title);s.classList.add('answer-section');s.classList.add('verdict-section');
  const banner=el('div','verdict-banner '+view.decision);banner.setAttribute('role','status');banner.append(el('span','verdict-icon',view.icon),el('strong','verdict-label',view.label));s.append(banner);
- if(view.reasons.length){const list=el('ul','verdict-reasons');for(const reason of view.reasons)list.append(el('li','',formatCompanyText(reason,output)));s.append(list)}
- const p=view.supplier,parts=[formatCompanyName(p.name),p.kvk&&'KVK '+p.kvk,p.vat&&t('Btw ','VAT ')+p.vat,p.iban&&'IBAN '+p.iban,p.domain].filter(Boolean);
+ if(view.reasons.length){const list=el('ul','verdict-reasons');for(const reason of view.reasons)list.append(el('li','',formatDisplayNarrative(reason,output)));s.append(list)}
+ const p=view.supplier,parts=[formatDisplayText(p.name),p.kvk&&'KVK '+p.kvk,p.vat&&t('Btw ','VAT ')+p.vat,p.iban&&'IBAN '+p.iban,p.domain].filter(Boolean);
  if(parts.length)s.append(el('p','verdict-supplier',parts.join(' · ')));
  if(view.partial)s.append(el('p','notice',t('Niet alle controles zijn afgerond.','Not every check could be completed.')));
  const icons={pass:'✓',warn:'!',fail:'✕',unknown:'?'};
  if(view.checks.length){s.append(el('p','key',t('Controles','Checks')));const list=el('ul','verdict-checks');
   for(const check of view.checks){const row=el('li','verdict-check '+check.status),copy=el('div','check-copy');
    const icon=el('span','check-icon '+check.status,icons[check.status]);icon.setAttribute('aria-label',check.status);
-   copy.append(el('p','check-label',formatCompanyText(check.label,output)));
-   if(check.detail)copy.append(el('p','check-detail',formatCompanyText(check.detail,output)));
+   copy.append(el('p','check-label',formatDisplayNarrative(check.label,output)));
+   if(check.detail)copy.append(el('p','check-detail',formatDisplayNarrative(check.detail,output)));
    if(check.status==='unknown')copy.append(el('p','check-source',t('Niet geverifieerd','Not verified')));
    if(check.source)copy.append(el('p','check-source',t('Bron: ','Source: ')+check.source));
    if(check.evidence.length){const evidence=el('details','evidence-details');evidence.append(el('summary','',t('Onderbouwing','Source evidence')));evidence.ontoggle=()=>window.apiosk.resize();for(const item of check.evidence)evidence.append(el('p','value',formatSourceValue(item.value,item.field||item.pointer,null,output)+(item.pointer?' · '+item.pointer:'')));copy.append(evidence)}
    row.append(icon,copy);list.append(row)}
   s.append(list)}
- for(const limitation of view.limitations)s.append(el('p','notice',formatCompanyText(limitation,output)));
+ for(const limitation of view.limitations)s.append(el('p','notice',formatDisplayNarrative(limitation,output)));
  const links=el('div','result-links');s.append(links);
  return {section:s,links,title,subtitle:t('Gecontroleerd met de teruggegeven bronnen.','Checked against the returned sources.')};
 }

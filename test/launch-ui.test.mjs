@@ -547,7 +547,7 @@ test('company names use readable casing throughout the card without changing sel
  assert.ok(rendered.includes('Result · Orion Beheer BV'));
  assert.ok(rendered.includes('Orion Beheer BV is registered.'));
  assert.ok(rendered.includes('Orion Beheer BV'));
- assert.ok(rendered.includes('KVK 01234567 · AMSTERDAM'));
+ assert.ok(rendered.includes('KVK 01234567 · Amsterdam'));
  assert.ok(h.nodes.get('sections').querySelectorAll('pre').some(node=>node.textContent.includes(raw)));
  assert.equal(result.data.resultaten[0].naam,raw);
 });
