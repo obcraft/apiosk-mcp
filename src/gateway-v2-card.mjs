@@ -6,13 +6,14 @@ import { V2_CARD_RESULT } from "./gateway-v2-card-result.mjs";
 import { V2_CARD_RESEARCH } from "./gateway-v2-card-research.mjs";
 import { V2_RESULT_READY_PROMPT, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
 import { V2_CARD_ACTIONS } from "./gateway-v2-card-actions.mjs";
+import { V2_ACCOUNT_MARKUP, V2_CARD_ACCOUNT, V2_ACCOUNT_STYLE } from "./gateway-v2-card-account.mjs";
 import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v44.html";
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v45.html";
 export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v11-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:43},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
+export const APIO_V2_CARD_LEGACY_URIS = Array.from({length:44},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`);
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -26,6 +27,7 @@ export function gatewayV2CardMeta(gatewayUrl = "https://api.apiosk.com") {
   meta["openai/widgetCSP"].resource_domains = SOURCE_LOGO_ORIGINS;
   meta.ui.csp.connectDomains = [...new Set([...(meta.ui.csp.connectDomains || []), gatewayOrigin])];
   meta["openai/widgetCSP"].connect_domains = meta.ui.csp.connectDomains;
+  meta["openai/widgetCSP"].redirect_domains = [...new Set(["https://app.apiosk.com", gatewayOrigin])];
   meta.ui.prefersBorder = false;
   meta["openai/widgetPrefersBorder"] = false;
   return meta;
@@ -39,6 +41,7 @@ const APIO_V2_CARD_HTML_TEMPLATE = `<!doctype html>
 ${V2_CBS_STYLE}
 :root{--apiosk:var(--apiosk-accent);--apiosk-strong:#553cc5;--apiosk-soft:var(--apiosk-accent-wash);--good:#36a577;--bad:#d56071}
 html,body{min-height:0!important;height:auto!important}body{padding:2px}.card{padding:0;overflow:hidden;border-radius:14px;box-shadow:none}.card.plan-mode>.shell{display:none}.shell{padding:12px 13px}.pill{border:1px solid color-mix(in srgb,CanvasText 12%,transparent);border-radius:999px;padding:5px 8px;font-size:10px;line-height:1;opacity:.72;text-transform:capitalize}
+${V2_ACCOUNT_STYLE}
 .hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.hero h2{font-size:18px;margin:0}.hero p{margin:5px 0 0}.hero-status{display:flex;flex-direction:column;align-items:flex-end;gap:9px}.amount{text-align:right;white-space:nowrap}.amount b{display:block;font-size:18px;font-weight:600;letter-spacing:-.025em}.amount span{display:block;margin-top:5px;font-size:10px;opacity:.6}
 .section{border-top:1px solid color-mix(in srgb,CanvasText 10%,transparent);padding:14px 15px}.plan-mode #sections>.section:first-child{border-top:0;padding:18px}.section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}.section-title h3{font-size:12px;margin:0}.plan-mode #sections>.section:first-child>.section-title h3{font-size:17px;letter-spacing:-.025em}.section-title span{font-size:10px;opacity:.6}
 .sources{display:grid;gap:8px}.source{display:grid;grid-template-columns:35px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px;border:1px solid color-mix(in srgb,CanvasText 10%,transparent);border-radius:12px;background:color-mix(in srgb,CanvasText 2.5%,transparent)}.logo{width:35px;height:35px;border-radius:10px;border:1px solid color-mix(in srgb,CanvasText 10%,transparent);object-fit:contain;background:var(--apiosk-soft)}.fallback{display:grid;place-items:center;color:var(--apiosk);font-weight:600}.source-name{font-size:12px;font-weight:600;letter-spacing:-.018em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.source-meta{font-size:10px;opacity:.62;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.count{font-size:10px;opacity:.62;white-space:nowrap}.count.unavailable{color:var(--bad);opacity:.85}
@@ -50,7 +53,7 @@ html,body{min-height:0!important;height:auto!important}body{padding:2px}.card{pa
 @media(max-width:480px){.request-section>.section-title{gap:8px}.request-price strong{font-size:14px}.request-price .price-note{max-width:140px}.plan-mode #sections>.request-section:first-child{padding:14px}.hero{display:block}.hero-status{align-items:flex-start;margin-top:11px}.amount{text-align:left}.source{grid-template-columns:32px minmax(0,1fr)}.source .count{grid-column:2}.balances{grid-template-columns:1fr}.result-row{grid-template-columns:1fr;gap:3px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 ${V2_COMPACT_STYLE}
-</style></head><body><main class="card hidden" id="card"><div class="shell">
+</style></head><body><main class="card hidden" id="card">${V2_ACCOUNT_MARKUP}<div class="shell">
 <div class="hero"><div><h2 id="title"></h2><p id="subtitle" class="meta"></p></div><div class="hero-status"><span class="pill" id="status-pill"></span><div class="amount hidden" id="price"><b id="price-value"></b><span>maximum total</span></div></div></div>
 </div><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div></div></main>
 <script>${APIOSK_UI_BRIDGE}</script><script>
@@ -61,6 +64,7 @@ ${formatDisplayMoney.toString()}
 function money(atomic,currency='USD',ceiling=false){return formatDisplayMoney(atomic,currency,output?.context_view?.money_display,ceiling)}
 function section(title,aside){const s=el('section','section'),h=el('div','section-title'),t=el('h3','',title);h.append(t);if(aside)h.append(aside&&aside.nodeType?aside:el('span','',aside));s.append(h);sections.append(s);return s}
 function showFeedback(message,kind=''){feedback.classList.remove('hidden');feedbackText.textContent=message;feedbackText.className='notice '+kind;window.apiosk.resize()}
+${V2_CARD_ACCOUNT}
 function safeLogo(url){try{const u=new URL(url);return u.protocol==='https:'&&${JSON.stringify(SOURCE_LOGO_ORIGINS)}.includes(u.origin)?u.href:null}catch{return null}}
 function sourceLogo(source){const url=safeLogo(source&&source.logo_url);if(url){const img=el('img','logo');img.alt='';img.src=url;img.onerror=()=>img.replaceWith(fallbackLogo(source));return img}return fallbackLogo(source)}
 function fallbackLogo(source){return el('span','logo fallback',text(source&&source.name||'A').trim().slice(0,1).toUpperCase()||'A')}
@@ -82,7 +86,7 @@ ${V2_CARD_RESULT}
 ${V2_CARD_RESEARCH}
 ${V2_CARD_ACTIONS}
 function renderErrors(data){const shown=new Set();const errors=(Array.isArray(data.errors)?data.errors:[]).filter(e=>{const message=e.message||e.code||'The request could not be completed.';if(shown.has(message))return false;shown.add(message);return true});if(!errors.length)return;const s=section('Needs attention');for(const e of errors)s.append(el('div','notice error',e.message||e.code||'The request could not be completed.'))}
-function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':data.status==='cancelled'?'No further source calls will be started. Saved results and charges remain available.':data.status==='failed'?'Your request could not be completed.':data.status==='needs_input'?'More information is needed to prepare your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);if(data.context_view?.money_display?.fallback_reason)section('Currency').append(el('p','notice','Display currency conversion is unavailable. Amounts are shown in USD.'));renderErrors(data)}window.apiosk.resize()}
+function render(data){if(!data||typeof data!=='object')return;output=data;planSurface=null;if(pollTimer){clearTimeout(pollTimer);pollTimer=null}const card=byId('card');card.classList.remove('hidden');data.proposal?card.classList.add('plan-mode'):card.classList.remove('plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');renderAccount(data);const status=Array.isArray(data.sources)?'ready':data.status||'ready';byId('status-pill').textContent=invokeLabel(status);if(Array.isArray(data.sources))renderSources(data);else{byId('title').textContent=invokeLabel(data.status);byId('subtitle').textContent=data.status==='running'?'The selected source is working on your request.':data.status==='cancelled'?'No further source calls will be started. Saved results and charges remain available.':data.status==='failed'?'Your request could not be completed.':data.status==='needs_input'?'More information is needed to prepare your request.':'Your request is up to date.';renderPlan(data);renderChoices(data);renderInput(data);renderResult(data);renderActions(data);renderBilling(data);if(data.context_view?.money_display?.fallback_reason)section('Currency').append(el('p','notice','Display currency conversion is unavailable. Amounts are shown in USD.'));renderErrors(data)}window.apiosk.resize()}
 ${V2_CARD_EVENTS}
 ${V2_CARD_COMPACT}
 const recoveredCards=new Set();window.apiosk.onInput&&window.apiosk.onInput(value=>{input=value||{}});window.apiosk.onData(data=>{render(data);const ref=data?.state?.state_ref;if(ref&&!recoveredCards.has(ref)){recoveredCards.add(ref);setTimeout(()=>{if(output?.state?.state_ref===ref&&!busy)void refreshTask(false)},100)}});

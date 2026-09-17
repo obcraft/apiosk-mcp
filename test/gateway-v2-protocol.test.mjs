@@ -29,6 +29,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(tools.find(t=>t.name==='apiosk_approve')._meta['openai/visibility'],'private');
   assert.equal(ui.contents[0]._meta.ui.domain,undefined);
   assert.equal(ui.contents[0]._meta['openai/widgetDomain'],'https://mcp.apiosk.com');
+  assert.deepEqual(ui.contents[0]._meta['openai/widgetCSP'].redirect_domains,['https://app.apiosk.com','http://127.0.0.1:8082']);
   for(const uri of APIO_V2_CARD_LEGACY_URIS){
    assert.ok(resources.find(resource=>resource.uri===uri));
    const compatible=await client.readResource({uri});assert.match(compatible.contents[0].text,/Apiosk balance/);

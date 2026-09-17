@@ -11,7 +11,7 @@ import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
-  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{add(){},remove(){},contains(){return false}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},setAttribute(name,value){this[name]=value},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
+  const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{values:new Set(),add(...values){for(const value of values)this.values.add(value)},remove(...values){for(const value of values)this.values.delete(value)},toggle(value,force){const enabled=force===undefined?!this.values.has(value):force;enabled?this.values.add(value):this.values.delete(value);return enabled},contains(value){return this.values.has(value)}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},setAttribute(name,value){this[name]=value},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
   const element=name=>Object.assign(el(name),{remove(){},after(){}});
   const document={documentElement:{scrollWidth:320,scrollHeight:200,dataset:{},style:{}},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},createElement:element};
   const parent={postMessage(m){sent.push(m)}};
@@ -110,6 +110,24 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   assert.ok(flatten(planSection).includes('Details'));
   assert.ok(!flatten(planSection).includes('pending'));
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
+});
+
+test('workspace tasks show verified organisation identity and safe balance/history shortcuts',async()=>{
+  const opened=[];
+  const data={...v2Ready,context_view:{...v2Ready.context_view,workspace:{kind:'workspace',workspace_id:'workspace',name:'Risk Desk',organisation_name:'Northwind'},navigation:{balance_url:'https://app.apiosk.com/settings/billing?workspace=workspace',history_url:'https://app.apiosk.com/usage/history?workspace=workspace'}},billing:{...v2Ready.billing,workspace:{kind:'workspace',workspace_id:'workspace',name:'Risk Desk',organisation_name:'Northwind'}}};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:({href})=>opened.push(href)});
+  assert.equal(h.nodes.get('account-name').textContent,'Risk Desk');assert.equal(h.nodes.get('account-org').textContent,'Northwind');
+  assert.equal(h.nodes.get('account-bar').classList.contains('hidden'),false);
+  await h.nodes.get('balance-shortcut').onclick();await h.nodes.get('history-shortcut').onclick();
+  assert.deepEqual(opened,['https://app.apiosk.com/settings/billing?workspace=workspace','https://app.apiosk.com/usage/history?workspace=workspace']);
+});
+
+test('personal tasks hide account identity and reject off-origin shortcuts',async()=>{
+  const data={...v2Ready,context_view:{...v2Ready.context_view,workspace:{kind:'personal',workspace_id:null},navigation:{balance_url:'https://attacker.example/settings/billing',history_url:'javascript:alert(1)'}}};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:()=>{throw new Error('must not open')}});
+  assert.equal(h.nodes.get('account-bar').classList.contains('hidden'),true);
+  assert.equal(h.nodes.get('balance-shortcut').onclick,null);
+  assert.equal(h.nodes.get('history-shortcut').onclick,null);
 });
 
 test('the source list says what can be executed, not how much is listed',async()=>{
