@@ -141,7 +141,7 @@ ${BRAND_LINKS}
   @media(prefers-color-scheme:dark){:root{--bg:#0d0f13;--card:#15171d;--text:#ecebf2;--muted:#a5a2b0;--border:#262a34;--soft:#1d2028;--accent:#c3a0ff;--wash:rgb(195 160 255/.12)}}
   *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(760px 340px at 50% -12%,var(--wash),transparent 70%),var(--bg);color:var(--text);font:500 14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:-.011em;padding:24px;-webkit-font-smoothing:antialiased}
   main{max-width:560px;width:100%}.card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 18px 45px -38px rgba(72,42,145,.45)}
-  .brand{display:block;width:48px;height:48px;margin-bottom:24px}.brand img{display:block;width:48px;height:48px;object-fit:contain;object-position:left center}
+  .brand{display:block;width:92px;height:30px;margin-bottom:24px}.brand img{display:block;width:92px;height:30px;object-fit:contain;object-position:left center}
   .badge{display:inline-block;font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:4px 8px;margin-bottom:12px}
   h1{font-size:25px;font-weight:600;line-height:1.18;margin:0 0 8px;letter-spacing:-.032em}p{color:var(--muted);margin:0}.lead{font-size:14px}
   .steps{display:grid;gap:8px;margin:20px 0}.step{display:flex;align-items:center;gap:10px;padding:10px 11px;background:var(--soft);border-radius:11px}.step b{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--wash);color:var(--accent);font-size:10px}.step span{font-size:12px}
@@ -152,7 +152,7 @@ ${BRAND_LINKS}
 <body>
 <main>
   <div class="card">
-    <picture class="brand"><source media="(prefers-color-scheme:dark)" srcset="/brand/mark-dark-20260920-3d.png"><img src="/brand/mark-light-20260920-3d.png" alt="Apiosk" width="512" height="512"></picture>
+    <picture class="brand"><source media="(prefers-color-scheme:dark)" srcset="/brand/wordmark-white-320.png"><img src="/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture>
     <span class="badge">Model Context Protocol</span>
     <h1>Connect Apiosk to your chatbot</h1>
     <p class="lead">Ask for specialist data, approve the total price in Apiosk and receive the source-backed result in the same conversation.</p>
