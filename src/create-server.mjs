@@ -77,14 +77,14 @@ export function resolveServerVersion(env = process.env) {
  * SVG follows the host color scheme; PNG fallbacks explicitly name their theme. */
 export const SERVER_ICONS = [
   {
-    "src": "https://mcp.apiosk.com/brand/mark-20260918.svg",
+    "src": "https://mcp.apiosk.com/brand/mark-20260920-3d.svg",
     "mimeType": "image/svg+xml",
     "sizes": [
       "any"
     ]
   },
   {
-    "src": "https://mcp.apiosk.com/brand/mark-light-20260918.png",
+    "src": "https://mcp.apiosk.com/brand/mark-light-20260920-3d.png",
     "mimeType": "image/png",
     "sizes": [
       "512x512"
@@ -92,7 +92,7 @@ export const SERVER_ICONS = [
     "theme": "light"
   },
   {
-    "src": "https://mcp.apiosk.com/brand/mark-dark-20260918.png",
+    "src": "https://mcp.apiosk.com/brand/mark-dark-20260920-3d.png",
     "mimeType": "image/png",
     "sizes": [
       "512x512"

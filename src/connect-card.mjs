@@ -34,7 +34,7 @@ export const APIO_CONNECT_CARD_HTML = `<!doctype html>
 <style>${APIOSK_UI_STYLE}
 :root{--apiosk:var(--apiosk-accent);--apiosk-soft:var(--apiosk-accent-wash);--good:#36a577;--bad:#d56071}
 body{padding:8px}.card{padding:15px;border-radius:18px;box-shadow:0 18px 45px -38px rgba(72,42,145,.62)}
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.apiosk-wordmark{display:block;width:74px;height:24px}.apiosk-wordmark img{display:block;width:74px;height:24px;object-fit:contain;object-position:left center}.apiosk-wordmark img{filter:var(--apiosk-wordmark-filter,none)}@media(prefers-color-scheme:dark){:root{--apiosk-wordmark-filter:invert(1)}}:root[data-theme="light"]{--apiosk-wordmark-filter:none}:root[data-theme="dark"]{--apiosk-wordmark-filter:invert(1)}.state-pill{border:1px solid color-mix(in srgb,CanvasText 12%,transparent);border-radius:999px;padding:5px 8px;font-size:10px;line-height:1;opacity:.72}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.apiosk-wordmark{display:grid;width:36px;height:36px}.apiosk-wordmark img{grid-area:1/1;width:36px;height:36px;object-fit:contain}.brand-white{display:none}@media(prefers-color-scheme:dark){.brand-black{display:none}.brand-white{display:block}}:root[data-theme="light"] .brand-black{display:block}:root[data-theme="light"] .brand-white{display:none}:root[data-theme="dark"] .brand-black{display:none}:root[data-theme="dark"] .brand-white{display:block}.state-pill{border:1px solid color-mix(in srgb,CanvasText 12%,transparent);border-radius:999px;padding:5px 8px;font-size:10px;line-height:1;opacity:.72}
 .headline{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}.headline h2{font-size:18px}.balance{font-weight:600;font-size:20px;letter-spacing:-.025em;line-height:1.1;white-space:nowrap}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;background:var(--bad)}.dot[data-payable="true"]{background:var(--good)}
 .limits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}.limit{padding:10px;border-radius:11px;background:color-mix(in srgb,CanvasText 5%,transparent)}.limit span{font-size:9px;opacity:.62}.limit b{display:block;font-size:14px;font-weight:600;letter-spacing:-.02em;margin-top:3px}
@@ -43,7 +43,7 @@ body{padding:8px}.card{padding:15px;border-radius:18px;box-shadow:0 18px 45px -3
 @media(max-width:480px){.headline{display:block}.balance{margin-top:10px}.limits{grid-template-columns:1fr}.actions button{flex:1}}
 </style></head>
 <body><main class="card">
-<div class="top"><span class="apiosk-wordmark"><img src="https://mcp.apiosk.com/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></span><span class="state-pill">Connection</span></div>
+<div class="top"><span class="apiosk-wordmark" role="img" aria-label="Apiosk"><img class="brand-black" src="https://mcp.apiosk.com/brand/mark-light-20260920-3d.png" alt="" width="512" height="512"><img class="brand-white" src="https://mcp.apiosk.com/brand/mark-dark-20260920-3d.png" alt="" width="512" height="512"></span><span class="state-pill">Connection</span></div>
 <div class="headline"><div><h2 id="state"><span id="dot" class="dot"></span>Checking…</h2><div id="message" class="meta"></div></div><div id="balance" class="balance"></div></div>
 <div id="bar" class="bar hidden"><i id="fill"></i></div>
 <div id="limits" class="limits"></div>

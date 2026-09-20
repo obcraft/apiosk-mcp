@@ -247,7 +247,7 @@ function createConnectionCompletePage({ appName, clientName, redirectTarget }) {
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(820px 440px at 88% -10%,var(--glow),transparent 62%),var(--background);-webkit-font-smoothing:antialiased}
     .page{min-height:100vh;display:grid;place-items:center;padding:28px 18px}
     main{width:min(430px,100%);background:color-mix(in srgb,var(--card) 97%,transparent);border:1px solid var(--border);border-radius:20px;padding:28px;box-shadow:var(--shadow);text-align:center}
-    .brand{display:block;width:92px;height:30px;margin:0 auto 20px}.brand img{display:block;width:92px;height:30px;object-fit:contain}
+    .brand{display:block;width:48px;height:48px;margin:0 auto 20px}.brand img{display:block;width:48px;height:48px;object-fit:contain}
     .check{width:38px;height:38px;margin:0 auto 15px;border-radius:50%;background:color-mix(in srgb,var(--success) 13%,transparent);display:grid;place-items:center}
     .check svg{width:19px;height:19px;stroke:var(--success)}
     h1{margin:0 0 8px;font-size:24px;font-weight:600;letter-spacing:-.03em}p{color:var(--muted);font-size:14px;line-height:1.55;margin:0 0 20px}
@@ -255,7 +255,7 @@ function createConnectionCompletePage({ appName, clientName, redirectTarget }) {
     a.continue{display:block;border-radius:11px;padding:12px 15px;font-weight:600;letter-spacing:-.016em;background:var(--primary);color:var(--primary-fg);text-decoration:none;box-shadow:0 10px 22px -16px var(--primary)}
     .note{font-size:12px;color:var(--muted);margin:14px 0 0}
     :root{color-scheme:only light;--background:#f8f8fb;--foreground:#1f2028;--card:#fff;--border:#e5e7eb;--muted:#676371;--primary:#6349db;--primary-fg:#fff;--success:#057857}body{background:var(--background)}main{background:#fff;border-radius:12px;box-shadow:none}.steps{display:none}a.continue{box-shadow:none}
-  </style></head><body><div class="page"><main><picture class="brand"><img src="/brand/wordmark-black-320.png" alt="Apiosk" width="320" height="103"></picture>
+  </style></head><body><div class="page"><main><picture class="brand"><img src="/brand/mark-light-20260920-3d.png" alt="Apiosk" width="512" height="512"></picture>
     <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
     <h1>You're connected</h1>
     <p>Your Apiosk account is connected. Finishing securely in ${escapeHtml(clientLabel)}.</p>

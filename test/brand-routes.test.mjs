@@ -8,7 +8,7 @@ test('favicon discovery serves the same transparent marks as MCP metadata', asyn
  const app=express();registerBrandRoutes(app);
  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
  try {
-  for(const [route,file,type] of [['/favicon.svg','mark-20260918.svg','image/svg+xml'],['/favicon.png','mark-light-20260918.png','image/png'],['/favicon.ico','favicon.ico','image/x-icon'],['/apple-touch-icon.png','apple-touch-icon.png','image/png']]) {
+  for(const [route,file,type] of [['/favicon.svg','mark-20260920-3d.svg','image/svg+xml'],['/favicon.png','mark-light-20260920-3d.png','image/png'],['/favicon.ico','favicon.ico','image/x-icon'],['/apple-touch-icon.png','apple-touch-icon.png','image/png']]) {
    const res=await fetch(`http://127.0.0.1:${server.address().port}${route}`);
    assert.equal(res.status,200);assert.ok(res.headers.get('content-type').startsWith(type));
    assert.match(res.headers.get('cache-control'),/must-revalidate/);
