@@ -39,3 +39,15 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(result.isError,true);assert.ok(result._meta['mcp/www_authenticate']);
  }finally{await client.close();await server.close();}
 });
+
+test('gateway v2 contract routes supplier onboarding through one qualified Apiosk task',()=>{
+  for (const phrase of [
+    'Supplier onboarding due diligence',
+    'use `apiosk_discover` ONCE with the complete request',
+    'one combined price ceiling and one purchase approval',
+    'Never guess a company number or VAT number',
+    'unknown—not clean',
+    'surface `context_view.report.url` as the combined PDF',
+    'one- or two-sentence summary',
+  ]) assert.ok(V2_INSTRUCTIONS.includes(phrase),`missing supplier due-diligence contract: ${phrase}`);
+});
