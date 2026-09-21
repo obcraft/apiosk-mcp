@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 
-export const BRAND_LINKS = `<link rel="icon" href="/favicon.ico?v=20260918" sizes="16x16 32x32 48x48" media="(prefers-color-scheme: light)" />
+export const BRAND_LINKS = `<link rel="icon" type="image/png" href="/brand/apiosk-a-20260921.png" sizes="1254x1254" media="(prefers-color-scheme: light)" />
+<link rel="icon" href="/favicon.ico?v=20260921" sizes="16x16 32x32 48x48" media="(prefers-color-scheme: light)" />
 <link rel="icon" href="/favicon-dark.ico?v=20260918" sizes="16x16 32x32 48x48" media="(prefers-color-scheme: dark)" />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=20260918" />
 <link rel="icon" type="image/png" sizes="512x512" href="/brand/mark-light-20260918.png" media="(prefers-color-scheme: light)" />
@@ -12,7 +13,7 @@ export function registerBrandRoutes(app) {
     ["/favicon.ico", "favicon.ico", "image/x-icon"],
     ["/favicon-dark.ico", "favicon-dark.ico", "image/x-icon"],
     ["/favicon.svg", "mark-20260918.svg", "image/svg+xml"],
-    ["/favicon.png", "mark-light-20260918.png", "image/png"],
+    ["/favicon.png", "apiosk-a-20260921.png", "image/png"],
     ["/apple-touch-icon.png", "apple-touch-icon.png", "image/png"],
     // Cached clients can still request earlier metadata and card URLs.
     ["/brand/mark-20260905-transparent.svg", "mark-20260918.svg", "image/svg+xml"],
