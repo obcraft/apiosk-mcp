@@ -110,14 +110,17 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   assert.ok(flatten(planSection).includes('Details'));
   assert.ok(!flatten(planSection).includes('pending'));
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
+  assert.equal(plan.nodes.get('subtitle').textContent,'Review the sources and maximum total before approving.');
 });
 
-test('workspace tasks show verified organisation identity and safe balance/history shortcuts',async()=>{
+test('workspace tasks use one status header without identity and retain scoped shortcuts',async()=>{
   const opened=[];
   const data={...v2Ready,context_view:{...v2Ready.context_view,workspace:{kind:'workspace',workspace_id:'workspace',name:'Risk Desk',organisation_name:'Northwind'},navigation:{balance_url:'https://app.apiosk.com/settings/billing?workspace=workspace',history_url:'https://app.apiosk.com/usage/history?workspace=workspace'}},billing:{...v2Ready.billing,workspace:{kind:'workspace',workspace_id:'workspace',name:'Risk Desk',organisation_name:'Northwind'}}};
   const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:({href})=>opened.push(href)});
-  assert.equal(h.nodes.get('account-name').textContent,'Risk Desk');assert.equal(h.nodes.get('account-org').textContent,'Northwind');
-  assert.equal(h.nodes.get('account-bar').classList.contains('hidden'),false);
+  assert.doesNotMatch(APIO_V2_CARD_HTML,/account-name|account-org|account-bar|\.card\.plan-mode>\.shell\{display:none\}/);
+  assert.equal((APIO_V2_CARD_HTML.match(/<header\b/g)||[]).length,1);
+  assert.match(APIO_V2_CARD_HTML,/<header[^>]*>[\s\S]*id="title"[\s\S]*id="account-shortcuts"[\s\S]*<\/header>/);
+  assert.equal(h.nodes.get('account-shortcuts').classList.contains('hidden'),false);
   await h.nodes.get('balance-shortcut').onclick();await h.nodes.get('history-shortcut').onclick();
   assert.deepEqual(opened,['https://app.apiosk.com/settings/billing?workspace=workspace','https://app.apiosk.com/usage/history?workspace=workspace']);
 });
@@ -125,7 +128,17 @@ test('workspace tasks show verified organisation identity and safe balance/histo
 test('personal tasks hide account identity and reject off-origin shortcuts',async()=>{
   const data={...v2Ready,context_view:{...v2Ready.context_view,workspace:{kind:'personal',workspace_id:null},navigation:{balance_url:'https://attacker.example/settings/billing',history_url:'javascript:alert(1)'}}};
   const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:()=>{throw new Error('must not open')}});
-  assert.equal(h.nodes.get('account-bar').classList.contains('hidden'),true);
+  assert.equal(h.nodes.get('account-shortcuts').classList.contains('hidden'),true);
+  assert.equal(h.nodes.get('balance-shortcut').onclick,null);
+  assert.equal(h.nodes.get('history-shortcut').onclick,null);
+});
+
+test('input-needed uses the request status as its header and rejects unsafe workspace links',async()=>{
+  const data={...v2Ready,status:'needs_input',proposal:null,context_view:{workspace:{kind:'workspace',workspace_id:'workspace',name:'Testing Group',organisation_name:'Testing Org.'},navigation:{balance_url:'https://attacker.example/settings/billing',history_url:'javascript:alert(1)'},clarification:{message:'Which VAT number should be checked?'}}};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data});
+  assert.equal(h.nodes.get('title').textContent,'Input needed');
+  assert.equal(h.nodes.get('subtitle').textContent,'More information is needed to prepare your request.');
+  assert.equal(h.nodes.get('account-shortcuts').classList.contains('hidden'),true);
   assert.equal(h.nodes.get('balance-shortcut').onclick,null);
   assert.equal(h.nodes.get('history-shortcut').onclick,null);
 });
