@@ -1,7 +1,10 @@
+import { approvalFeedback } from './approval-feedback.mjs';
 // Runs inside the card: observe consent, then use only gateway-issued actions.
 export const V2_CARD_ACTIONS = `
 let approvalExpiryTimer=null;
 const quoteExpired=data=>Date.parse(data.proposal?.expires_at)<=Date.now();
+${approvalFeedback.toString()}
+const responseMessage=(data,fallback)=>approvalFeedback(data,money,fallback);
 async function refreshPrice(data,button){
  if(busy||output!==data)return;
  busy=true;button.disabled=true;showFeedback('Refreshing the price. No purchase is being made…');
@@ -18,7 +21,7 @@ async function refreshPrice(data,button){
  finally{busy=false;button.disabled=false}
 }
 async function refreshTask(publish=true){if(busy||!output?.state?.state_ref)return;const before=output;if(publish)busy=true;try{const next=await window.apiosk.callTool('apiosk_status',{task_ref:before.state.state_ref});if(!next?.state||next.state.state_ref!==before.state.state_ref)throw new Error(next?.message||'Could not recover this request. Use Check status to try again.');if(publish)acceptResponse(next);else if(!busy&&output===before&&next?.state?.state_ref===before.state.state_ref&&Number(next.state.revision)>=Number(before.state.revision)){render(next);void window.apiosk.context(next).catch(()=>{})}return true}catch(e){if(publish)showFeedback(e&&e.message||'Could not refresh this request. Use Check status to try again.','error')}finally{if(publish)busy=false}}
-async function approvePlan(data,button){if(busy)return;if(output!==data){showFeedback('This request was updated. Use the current plan below.','error');return}if(quoteExpired(data)){render(data);showFeedback('This quote expired. Click Get new price, then review and approve the refreshed plan.','error');return}busy=true;button.disabled=true;showFeedback('Saving your approval…');try{const next=await window.apiosk.callTool('apiosk_approve',{state:data.state,quote_ref:data.proposal.quote_ref,max_total_atomic:data.proposal.max_total_atomic});if(!next?.state||next.state.state_ref!==data.state.state_ref||!next.billing?.authorization_active||next.billing.quote_ref!==data.proposal.quote_ref||next.proposal?.max_total_atomic!==data.proposal.max_total_atomic)throw new Error(next?.message||'Approval was not confirmed. Check status before continuing.');watchUntil=Date.now()+300000;acceptResponse(next)}catch(e){watchUntil=0;showFeedback(e&&e.message||'Approval could not be confirmed. Check status before continuing.','error')}finally{busy=false;button.disabled=false}}
+async function approvePlan(data,button){if(busy)return;if(output!==data){showFeedback('This request was updated. Use the current plan below.','error');return}if(quoteExpired(data)){render(data);showFeedback('This quote expired. Click Get new price, then review and approve the refreshed plan.','error');return}busy=true;button.disabled=true;showFeedback('Saving your approval…');try{const next=await window.apiosk.callTool('apiosk_approve',{state:data.state,quote_ref:data.proposal.quote_ref,max_total_atomic:data.proposal.max_total_atomic});if(!next?.state||next.state.state_ref!==data.state.state_ref||!next.billing?.authorization_active||next.billing.quote_ref!==data.proposal.quote_ref||next.proposal?.max_total_atomic!==data.proposal.max_total_atomic)throw new Error(responseMessage(next,'Approval was not confirmed. Check status before continuing.'));watchUntil=Date.now()+300000;acceptResponse(next)}catch(e){watchUntil=0;showFeedback(e&&e.message||'Approval could not be confirmed. Check status before continuing.','error')}finally{busy=false;button.disabled=false}}
 function renderActions(data){
  if(approvalExpiryTimer){clearTimeout(approvalExpiryTimer);approvalExpiryTimer=null}
  const server=data.context_view?.execution_mode==='server';

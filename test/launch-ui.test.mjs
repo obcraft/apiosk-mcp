@@ -285,6 +285,85 @@ test('in-chat approval never buys after a refused or mismatched approval respons
  const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Quote expired'));
  assert.equal(button.disabled,true);await button.onclick();assert.equal(calls,0);
 });
+test('Gateway errors-array approval refusal is shown verbatim and never executes or retries',async()=>{
+ const message='Approval could not be saved. Check the connection spending limits.';
+ const calls=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name)=>{calls.push(name);return {isError:true,structuredContent:{protocol_version:'2',status:'failed',state:null,errors:[{code:'approval_refused',message}],next_actions:[]}}}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ assert.equal(h.nodes.get('feedback-text').textContent,message);
+ await h.tick(350);await h.tick(2000);
+ assert.deepEqual(calls,['apiosk_approve']);
+ assert.ok(h.nodes.get('sections').querySelectorAll('button').some(b=>b.textContent==='Check status'));
+});
+test('approval budget messages show the required amount and the blocked limit in account currency',async()=>{
+ for(const [code,available,fragment] of [
+  ['approval_per_request_limit','271739','allows 0.25 EUR per request'],
+  ['approval_daily_limit','86956','0.08 EUR left in its daily budget'],
+  ['approval_balance_insufficient','86956','available Apiosk balance is 0.08 EUR'],
+ ]){
+  const calls=[];
+  const data={...v2Ready,context_view:{approval_mode:'chatbot',money_display:{base_currency:'USD',currency:'EUR',rate:'0.92000000'}}};
+  const response={errors:[{code,message:'Safe budget explanation',details:{required_atomic:'881698',available_atomic:available,currency:'USD'}}]};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async name=>{calls.push(name);return {isError:true,structuredContent:response}}});
+  const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to'));
+  await button.onclick();
+  const message=h.nodes.get('feedback-text').textContent;
+  assert.ok(message.includes('up to 0.811163 EUR'));
+  assert.ok(message.includes(fragment));
+  assert.ok(message.includes('ask a smaller question'));
+  assert.ok(message.includes('Nothing was purchased by this approval attempt.'));
+  assert.doesNotMatch(message,/USD|micro|Approval was not confirmed/);
+  assert.equal(button.disabled,false);
+  await h.tick(350);await h.tick(2000);
+  assert.deepEqual(calls,['apiosk_approve']);
+ }
+});
+test('Claude also shows actionable EUR budget feedback without executing or drafting a message',async()=>{
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize('Claude');
+ const data={...v2Ready,context_view:{approval_mode:'chatbot',money_display:{base_currency:'USD',currency:'EUR',rate:'0.92000000'}}};
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:data}});
+ const clicking=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ const call=h.sent.find(m=>m.method==='tools/call');
+ assert.equal(call.params.name,'apiosk_approve');
+ await h.message({jsonrpc:'2.0',id:call.id,result:{isError:true,structuredContent:{errors:[{code:'approval_daily_limit',message:'Daily budget exceeded',details:{required_atomic:'881698',available_atomic:'86956',currency:'USD'}}]}}});
+ await clicking;
+ assert.match(h.nodes.get('feedback-text').textContent,/0.08 EUR left in its daily budget/);
+ assert.match(h.nodes.get('feedback-text').textContent,/Apiosk > Connections/);
+ await h.tick(350);await h.tick(2000);
+ assert.equal(h.sent.filter(m=>m.method==='tools/call').length,1);
+ assert.equal(h.sent.some(m=>m.method==='ui/message'),false);
+});
+test('an uncertain approval never claims that nothing was purchased',async()=>{
+ const calls=[];const message='We could not confirm your approval yet. Use Check status to recover your saved request before trying again.';
+ const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async name=>{calls.push(name);return {isError:true,structuredContent:{errors:[{code:'approval_unconfirmed',message}]}}}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ assert.equal(h.nodes.get('feedback-text').textContent,message);
+ assert.doesNotMatch(h.nodes.get('feedback-text').textContent,/Nothing was purchased/);
+ await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve']);
+});
+test('after correcting a budget the saved plan can be approved once and complete without a new question',async()=>{
+ const calls=[];let approvals=0;
+ const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const approved={...data,billing:{authorization_active:true,quote_ref:data.proposal.quote_ref}};
+ const done={...approved,status:'succeeded',next_actions:[],result:{data:{name:'Anthropic Limited'}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{
+  calls.push({name,args});
+  if(name==='apiosk_status')return {structuredContent:data};
+  if(name==='apiosk_approve')return ++approvals===1
+   ? {isError:true,structuredContent:{errors:[{code:'approval_per_request_limit',message:'Increase your connection limit.'}]}}
+   : {structuredContent:approved};
+  return {structuredContent:done};
+ }});
+ const approve=()=>h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ await approve();await h.tick(350);assert.equal(calls.length,1);
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Check status').onclick();
+ assert.equal(calls.filter(c=>c.name==='apiosk_approve').length,1);
+ await approve();await h.tick(350);
+ assert.deepEqual(calls.map(c=>c.name),['apiosk_approve','apiosk_status','apiosk_approve','apiosk_execute']);
+ assert.deepEqual(calls[0].args,calls[2].args);
+ assert.equal(h.nodes.get('title').textContent,'Source result');
+});
 test('Claude receives result context without an unsolicited composer draft or second confirmation',async()=>{
  const h=harness(APIO_V2_CARD_HTML);await h.initialize('Claude');
  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:v2Ready}});

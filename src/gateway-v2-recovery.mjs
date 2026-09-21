@@ -1,4 +1,13 @@
 import { createHash } from "node:crypto";
+// Gateway task errors are nested. Keep their recovery envelope while exposing
+// the server's safe diagnostic to older host cards that only read message.
+export function gatewayFailure(result, taskRef) {
+ const diagnostic = result?.errors?.find(error => typeof error?.message === 'string');
+ return { ...result,
+  ...(diagnostic && { error_code: diagnostic.code, message: diagnostic.message }),
+  ...((taskRef || result?.state?.state_ref) && { recover_task_ref: taskRef || result.state.state_ref }),
+ };
+}
 // Scope a free planning retry to the complete input. Paid action keys stay untouched.
 export function planningRetryId(body) {
  const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;

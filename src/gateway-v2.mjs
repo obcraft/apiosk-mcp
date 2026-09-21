@@ -1,4 +1,4 @@
-import { planningRetryId, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
+import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -154,7 +154,7 @@ export function createV2Runtime(options = {}) {
         }
         const {response} = received;
         let {result} = received;
-        if (!response.ok) return failure(result);
+        if (!response.ok) return failure(gatewayFailure(result, recover || args.state?.state_ref));
         if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
         if (browsing) {
           const { catalog_total: _catalogTotal, ...publicResult } = result;

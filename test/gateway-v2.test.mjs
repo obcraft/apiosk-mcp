@@ -36,6 +36,17 @@ test('v2 does not call gateway without a connection',async()=>{
  let calls=0;const runtime=createApioskMcpRuntime({env:{APIOSK_GATEWAY_V2_URL:env.APIOSK_GATEWAY_V2_URL},fetchImpl:async()=>{calls++;}});
  assert.equal((await runtime.callTool('apiosk_discover',{question:'x'})).isError,true);assert.equal(calls,0);
 });
+test('approval refusal preserves Gateway errors and exposes their reason without retrying',async()=>{
+ const state={schema_version:'2',state_ref:'00000000-0000-4000-8000-000000000001',expires_at:'2099-01-01T00:00:00Z',revision:1,state_token:'opaque',focus:{entity_refs:[],goal_refs:[]}};
+ const diagnostic={code:'approval_refused',message:'Check the connection spending limits. No new purchase was made.'};let calls=0;
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>{calls++;return Response.json({protocol_version:'2',status:'failed',state:null,errors:[diagnostic],next_actions:[]},{status:403});}});
+ const result=await runtime.callTool('apiosk_approve',{state,quote_ref:'00000000-0000-4000-8000-000000000002',max_total_atomic:'881698'});
+ assert.equal(calls,1);assert.equal(result.isError,true);
+ assert.equal(result.structuredContent.message,diagnostic.message);
+ assert.equal(result.structuredContent.error_code,'approval_refused');
+ assert.equal(result.structuredContent.recover_task_ref,state.state_ref);
+ assert.deepEqual(result.structuredContent.errors,[diagnostic]);
+});
 test('v2 transport refuses insecure nonlocal configuration',()=>{
  assert.throws(()=>createApioskMcpRuntime({env:{APIOSK_GATEWAY_V2_URL:'http://example.test'}}));
 });
