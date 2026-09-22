@@ -4,7 +4,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createApioskMcpServer, resolveServerPresentation } from '../src/create-server.mjs';
 import { V2_INSTRUCTIONS } from '../src/gateway-v2.mjs';
-import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS } from '../src/gateway-v2-card.mjs';
+import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_MODERN_CARD_URIS } from '../src/gateway-v2-card.mjs';
 
 for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and resource share the same contract`,async()=>{
  const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082'};
@@ -40,7 +40,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   for(const uri of APIO_V2_CARD_LEGACY_URIS){
    assert.ok(resources.find(resource=>resource.uri===uri));
    const compatible=await client.readResource({uri});assert.match(compatible.contents[0].text,/Apiosk balance/);
-   assert.equal(compatible.contents[0].mimeType,uri==='ui://apiosk/gateway-v2-card-v51.html'?'text/html;profile=mcp-app':uri.endsWith('-chatgpt.html')||host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app');
+   assert.equal(compatible.contents[0].mimeType,APIO_V2_MODERN_CARD_URIS.includes(uri)?'text/html;profile=mcp-app':uri.endsWith('-chatgpt.html')||host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app');
   }
   assert.deepEqual((await client.listPrompts()).prompts,[]);
   const result=await client.callTool({name:'apiosk_discover',arguments:{question:'Example'}});

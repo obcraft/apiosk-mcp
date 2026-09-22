@@ -6,6 +6,7 @@ import { OAuthClientMetadataSchema } from "@modelcontextprotocol/sdk/shared/auth
 import { createOAuthMetadata, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import { authorizationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/authorize.js";
 import { tokenHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/token.js";
+import { InvalidGrantError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { clientRegistrationHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/register.js";
 import { metadataHandler } from "@modelcontextprotocol/sdk/server/auth/handlers/metadata.js";
 
@@ -137,11 +138,26 @@ function resolveEffectiveExpiry(requestedExpiry, upperBound = null) {
   return requestedExpiry;
 }
 
+// OAuth clients need invalid_grant to prompt reconnection. Plain Errors are
+// converted by the SDK into HTTP 500 and retried as service outages.
+function parseOAuthGrant(secret, token, type, client) {
+  let payload;
+  try {
+    payload = parseSignedToken(secret, token);
+  } catch {
+    throw new InvalidGrantError("Invalid or expired grant. Reconnect your Apiosk account.");
+  }
+  if (payload.typ !== type || payload.clientId !== client.client_id) {
+    throw new InvalidGrantError("Invalid or expired grant. Reconnect your Apiosk account.");
+  }
+  return payload;
+}
+
 function buildIssuedToken(secret, type, payload, ttlSeconds, maxExpiry = null) {
   const issuedAt = getIssuedAtSeconds();
   const exp = resolveEffectiveExpiry(issuedAt + ttlSeconds, maxExpiry);
   if (!Number.isFinite(exp) || exp <= issuedAt) {
-    throw new Error("Session has expired. Re-authorize the Apiosk app and retry.");
+    throw new InvalidGrantError("Session has expired. Re-authorize the Apiosk app and retry.");
   }
 
   return {
@@ -699,26 +715,14 @@ class ApioskHostedOAuthProvider {
   }
 
   async challengeForAuthorizationCode(client, authorizationCode) {
-    const payload = parseSignedToken(this.secret, authorizationCode);
-    if (payload.typ !== "code") {
-      throw new Error("Invalid authorization code");
-    }
-    if (payload.clientId !== client.client_id) {
-      throw new Error("Authorization code was not issued to this client");
-    }
+    const payload = parseOAuthGrant(this.secret, authorizationCode, "code", client);
     return payload.codeChallenge;
   }
 
   async exchangeAuthorizationCode(client, authorizationCode, _codeVerifier, redirectUri, resource) {
-    const payload = parseSignedToken(this.secret, authorizationCode);
-    if (payload.typ !== "code") {
-      throw new Error("Invalid authorization code");
-    }
-    if (payload.clientId !== client.client_id) {
-      throw new Error("Authorization code was not issued to this client");
-    }
+    const payload = parseOAuthGrant(this.secret, authorizationCode, "code", client);
     if (redirectUri && payload.redirectUri !== redirectUri) {
-      throw new Error("redirect_uri does not match the authorization code");
+      throw new InvalidGrantError("redirect_uri does not match the authorization code");
     }
 
     const requestedResource = resource ? resource.href : payload.resource || this.mcpServerUrl.href;
@@ -764,13 +768,7 @@ class ApioskHostedOAuthProvider {
   }
 
   async exchangeRefreshToken(client, refreshToken, scopes, resource) {
-    const payload = parseSignedToken(this.secret, refreshToken);
-    if (payload.typ !== "refresh") {
-      throw new Error("Invalid refresh token");
-    }
-    if (payload.clientId !== client.client_id) {
-      throw new Error("Refresh token was not issued to this client");
-    }
+    const payload = parseOAuthGrant(this.secret, refreshToken, "refresh", client);
 
     const grantedScopes =
       Array.isArray(scopes) && scopes.length ?

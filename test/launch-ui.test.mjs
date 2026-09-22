@@ -84,6 +84,7 @@ test('MCP Apps negotiates the current protocol and accepts only its parent frame
 
 test('supplier answer precedes one collapsed source group and opening it never purchases',async()=>{
   const data=JSON.parse(readFileSync(new URL('./fixtures/uk-supplier-ui.json',import.meta.url)));
+  Object.assign(data.context_view.results[0].data,{items_per_page:10,page_number:1,start_index:0});
   const calls=[],h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(...args)=>{calls.push(args);return {structuredContent:data}}});
   const sections=h.nodes.get('sections');
   assert.equal(h.nodes.get('title').textContent,'Supplier verification');
@@ -93,7 +94,10 @@ test('supplier answer precedes one collapsed source group and opening it never p
   const disclosure=sections.querySelector('.source-results-toggle');
   assert.equal(disclosure.open,false);
   assert.equal(disclosure.children[0].textContent,'Sources and details · 4 sources · 8 results');
-  assert.equal(disclosure.querySelector('.source-results-list').children.length,8);
+  assert.equal(disclosure.querySelector('.source-results-list').children.length,4,'one collapsed row per provider');
+  const companyRow=disclosure.querySelector('.source-result-summary');
+  assert.deepEqual(companyRow.children.map(node=>flatten(node).join('')),['C','Companies House','Kindsearch#companies','Results9','Items per page10','Page number1','Start index0']);
+  assert.ok(disclosure.querySelectorAll('.source-result-group').every(group=>!group.open));
   assert.equal(disclosure.querySelectorAll('pre').length,8,'every original source response is retained');
   assert.ok(flatten(disclosure).includes('VAT remains unverified because no UK VAT candidate was found.'));
   assert.ok(sections.children[0].querySelectorAll('button').some(b=>b.textContent==='Download PDF'));

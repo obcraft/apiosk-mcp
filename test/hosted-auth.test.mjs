@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 
 import { createHostedOAuthSupport } from "../src/oauth.mjs";
 
@@ -64,6 +65,57 @@ function createTestSupport(overrides = {}) {
     ...overrides,
   });
 }
+
+test("token HTTP endpoint reports expired grants as reconnectable errors, preserving real server failures", async () => {
+  const express = (await import("express")).default;
+  const support = createTestSupport();
+  const client = await support.provider.clientsStore.registerClient({
+    client_id: "oauth-error-test",
+    redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+    token_endpoint_auth_method: "none",
+  });
+  const now = Math.floor(Date.now() / 1000);
+  const grant = (overrides = {}) => {
+    const encoded = Buffer.from(JSON.stringify({
+      typ: "refresh", clientId: client.client_id, exp: now + 3600,
+      scopes: ["mcp:tools"], apioskConnectToken: "test-upstream",
+      ...overrides,
+    })).toString("base64url");
+    const signature = crypto.createHmac("sha256", TEST_ENV.APIOSK_MCP_OAUTH_SECRET).update(encoded).digest("base64url");
+    return `apiosk.${encoded}.${signature}`;
+  };
+  const app = express();
+  app.use("/token", support.tokenRouter);
+  const server = await new Promise(resolve => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  const request = async body => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/token`, {
+      method: "POST", body: new URLSearchParams({ client_id: client.client_id, ...body }),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  try {
+    for (const token of ["invalid", grant({ exp: now - 60 }), grant({ clientId: "other-client" }), grant({ typ: "access" }), grant({ apioskConnectTokenExpiresAt: now - 60 })]) {
+      const result = await request({ grant_type: "refresh_token", refresh_token: token });
+      assert.equal(result.status, 400);
+      assert.equal(result.body.error, "invalid_grant");
+      assert.equal(result.body.access_token, undefined);
+    }
+    const codeResult = await request({ grant_type: "authorization_code", code: grant({ typ: "code", exp: now - 60 }), code_verifier: "test-verifier" });
+    assert.equal(codeResult.status, 400);
+    assert.equal(codeResult.body.error, "invalid_grant");
+    const valid = await request({ grant_type: "refresh_token", refresh_token: grant() });
+    assert.equal(valid.status, 200);
+    assert.ok(valid.body.access_token);
+    support.provider.exchangeRefreshToken = async () => { throw new Error("unexpected service failure"); };
+    const failure = await request({ grant_type: "refresh_token", refresh_token: grant() });
+    assert.equal(failure.status, 500);
+    assert.equal(failure.body.error, "server_error");
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+  }
+});
 
 // The tool surface itself is asserted in test/surface.test.mjs. What is left
 // here is the OAuth issuer: the handoff to the agent gateway, token minting
