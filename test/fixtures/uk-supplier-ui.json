@@ -1,0 +1,32 @@
+{
+  "status": "partial",
+  "state": {"state_ref": "fixture-uk-supplier", "revision": 9},
+  "next_actions": [],
+  "errors": [],
+  "context_view": {
+    "execution_mode": "server",
+    "worker_active": false,
+    "conversation": [{"question": "We’re onboarding Anthropic as a supplier. Use Apiosk to verify its UK entity: ownership, filed accounts, VAT validity, and director screening."}],
+    "analysis": {
+      "status": "partial",
+      "observations": [
+        {"text": "Anthropic Limited is active under company number 14604577.", "evidence": [{"result_ref":"profile","pointer":"/data/company_status","value":"active"}]},
+        {"text": "No PSC records were returned; ownership has not been established.", "evidence": []},
+        {"text": "Latest accounts period: 2024-12-31. This is filing status, not an audit.", "evidence": []},
+        {"text": "One potential PEP screening match requires identity review, not a sanctions finding.", "evidence": []}
+      ],
+      "limitations": ["VAT remains unverified because no UK VAT candidate was found.", "Synthetic UI fixture based on the saved demo shape; not a new lookup."]
+    },
+    "report": {"format":"pdf","url":"https://api.apiosk.com/fixture-report.pdf"},
+    "results": [
+      {"result_ref":"search","subject":{"entity_ref":"anthropic","label":"Anthropic"},"source":{"provider":"companies-house","name":"Companies House","path":"/search/companies","url":"https://find-and-update.company-information.service.gov.uk/"},"data":{"kind":"search#companies","total_results":9,"items":[{"title":"ANTHROPIC LIMITED","company_number":"14604577"}]}},
+      {"result_ref":"profile","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"companies-house","name":"Companies House","path":"/company/{company_number}","url":"https://find-and-update.company-information.service.gov.uk/company/14604577"},"data":{"company_name":"ANTHROPIC LIMITED","company_number":"14604577","company_status":"active","accounts":{"last_accounts":{"made_up_to":"2024-12-31","type":"small"},"next_accounts":{"due_on":"2026-12-31","overdue":false}}}},
+      {"result_ref":"filings","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"companies-house","name":"Companies House","path":"/company/{company_number}/filing-history"},"data":{"filing_history_status":"filing-history-available","total_count":17,"items":[]}},
+      {"result_ref":"psc","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"companies-house","name":"Companies House","path":"/company/{company_number}/persons-with-significant-control"},"data":{"total_results":0,"items":[]}},
+      {"result_ref":"vat-search","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"tavily","name":"Tavily"},"data":{"results":[]}},
+      {"result_ref":"roster","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"sirenic","name":"Sirenic"},"data":{"active_directors":2}},
+      {"result_ref":"screen-1","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"opensanctions","name":"OpenSanctions"},"data":{"responses":{"q1":{"total":{"value":0},"results":[]}}}},
+      {"result_ref":"screen-2","subject":{"entity_ref":"anthropic","label":"ANTHROPIC LIMITED"},"source":{"provider":"opensanctions","name":"OpenSanctions"},"data":{"responses":{"q1":{"total":{"value":1},"results":[{"caption":"Jeff Bleich","properties":{"topics":["role.pep"]}}]}}}}
+    ]
+  }
+}

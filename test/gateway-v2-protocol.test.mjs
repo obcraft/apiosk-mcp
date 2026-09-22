@@ -40,7 +40,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   for(const uri of APIO_V2_CARD_LEGACY_URIS){
    assert.ok(resources.find(resource=>resource.uri===uri));
    const compatible=await client.readResource({uri});assert.match(compatible.contents[0].text,/Apiosk balance/);
-   assert.equal(compatible.contents[0].mimeType,uri.endsWith('-chatgpt.html')||host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app');
+   assert.equal(compatible.contents[0].mimeType,uri==='ui://apiosk/gateway-v2-card-v51.html'?'text/html;profile=mcp-app':uri.endsWith('-chatgpt.html')||host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app');
   }
   assert.deepEqual((await client.listPrompts()).prompts,[]);
   const result=await client.callTool({name:'apiosk_discover',arguments:{question:'Example'}});

@@ -9,10 +9,19 @@ import { APIO_RESULTS_PICKER_HTML } from '../src/results-picker.mjs';
 import { APIO_V2_CARD_HTML } from '../src/gateway-v2-card.mjs';
 import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
+const flatten=node=>[node.textContent,...node.children.flatMap(flatten)];
+
 function harness(html=null,openai=null) {
   const sent=[],listeners=new Map(),nodes=new Map(),timers=new Map();let timerId=0;
   const el=(name='div')=>({nodeType:1,tagName:name.toUpperCase(),textContent:'',value:'',disabled:false,dataset:{},children:[],isConnected:true,get lastElementChild(){return this.children.at(-1)},classList:{values:new Set(),add(...values){for(const value of values)this.values.add(value)},remove(...values){for(const value of values)this.values.delete(value)},toggle(value,force){const enabled=force===undefined?!this.values.has(value):force;enabled?this.values.add(value):this.values.delete(value);return enabled},contains(value){return this.values.has(value)}},append(...c){this.children.push(...c)},prepend(...c){this.children.unshift(...c)},replaceChildren(...c){this.children=c},querySelector(selector){return this.querySelectorAll(selector)[0]},querySelectorAll(selector){return this.children.flatMap(c=>[...(selector.split(',').some(s=>s.startsWith('.')?(c.className||'').split(' ').includes(s.slice(1)):s===c.tagName.toLowerCase())?[c]:[]),...c.querySelectorAll(selector)])},setAttribute(name,value){this[name]=value},focus(){},addEventListener(name,fn){this['on'+name]=fn},reportValidity(){return !this.required||this.value!==''}});
-  const element=name=>Object.assign(el(name),{remove(){},after(){}});
+  // Match DOM move semantics: appending a node reparents it, never duplicates it.
+  const element=name=>Object.assign(el(name),{
+    remove(){if(this.parentElement)this.parentElement.children=this.parentElement.children.filter(node=>node!==this);this.parentElement=null},
+    append(...children){for(const child of children){child.remove?.();child.parentElement=this;this.children.push(child)}},
+    prepend(...children){for(const child of [...children].reverse()){child.remove?.();child.parentElement=this;this.children.unshift(child)}},
+    replaceChildren(...children){for(const child of this.children)child.parentElement=null;this.children=[];this.append(...children)},
+    after(){},
+  });
   const document={documentElement:{scrollWidth:320,scrollHeight:200,dataset:{},style:{}},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},createElement:element};
   const parent={postMessage(m){sent.push(m)}};
   const window={parent,openai,addEventListener(n,fn){listeners.set(n,fn)}};
@@ -71,6 +80,49 @@ test('MCP Apps negotiates the current protocol and accepts only its parent frame
   await h.initialize();assert.ok(h.sent.some(m=>m.method==='ui/notifications/initialized'));
   await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{answer:'verified'}}});
   assert.equal(h.window.apiosk.data.answer,'verified');
+});
+
+test('supplier answer precedes one collapsed source group and opening it never purchases',async()=>{
+  const data=JSON.parse(readFileSync(new URL('./fixtures/uk-supplier-ui.json',import.meta.url)));
+  const calls=[],h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(...args)=>{calls.push(args);return {structuredContent:data}}});
+  const sections=h.nodes.get('sections');
+  assert.equal(h.nodes.get('title').textContent,'Supplier verification');
+  assert.ok(flatten(sections.children[0]).includes('Not fully verified'));
+  assert.ok(flatten(sections.children[0]).includes('Not verified · no validation result'));
+  assert.equal(sections.children[0].querySelectorAll('.result-row').length,0);
+  const disclosure=sections.querySelector('.source-results-toggle');
+  assert.equal(disclosure.open,false);
+  assert.equal(disclosure.children[0].textContent,'Sources and details · 4 sources · 8 results');
+  assert.equal(disclosure.querySelector('.source-results-list').children.length,8);
+  assert.equal(disclosure.querySelectorAll('pre').length,8,'every original source response is retained');
+  assert.ok(flatten(disclosure).includes('VAT remains unverified because no UK VAT candidate was found.'));
+  assert.ok(sections.children[0].querySelectorAll('button').some(b=>b.textContent==='Download PDF'));
+  disclosure.open=true;disclosure.ontoggle();
+  assert.equal(calls.length,0);
+  await h.globals({toolOutput:{...data,state:{...data.state,revision:10}}});
+  assert.equal(sections.querySelector('.source-results-toggle').open,true,'free refresh preserves the open state');
+  const current=sections.querySelector('.source-results-toggle');current.open=false;current.ontoggle();
+  await h.globals({toolOutput:{...data,state:{...data.state,revision:11}}});
+  assert.equal(sections.querySelector('.source-results-toggle').open,false);
+  assert.equal(calls.length,0);
+});
+
+test('generic research also puts the supplied answer before collapsed source records',()=>{
+  const data={status:'partial',state:{state_ref:'generic'},context_view:{analysis:{status:'partial',observations:[{text:'Source-backed answer',evidence:[]}],limitations:['Important missing coverage']},results:[{source:{name:'Registry'},data:{name:'Company',count:0}}]},next_actions:[]};
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data}),sections=h.nodes.get('sections');
+  assert.ok(flatten(sections.children[0]).includes('Source-backed answer'));
+  assert.ok(flatten(sections.children[0]).includes('Important missing coverage'));
+  assert.equal(sections.querySelector('.source-results-toggle').open,false);
+  assert.equal(sections.querySelectorAll('.result-row').length,2);
+});
+
+test('result headings, summaries and source fields remain inert text',()=>{
+  const data=JSON.parse(readFileSync(new URL('./fixtures/uk-supplier-ui.json',import.meta.url)));
+  const hostile='<img src=x onerror="alert(1)">';data.context_view.results[1].data.company_name=hostile;
+  data.context_view.results[1].data.company_status=hostile;
+  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data}),sections=h.nodes.get('sections');
+  assert.ok(flatten(sections.children[0]).includes(hostile));
+  assert.equal(sections.querySelectorAll('img').length,0);
 });
 
 test('host tool cancellation preserves the durable task snapshot and recovery identity',async()=>{
@@ -424,7 +476,7 @@ test('v2 card observes approval then executes once with the saved quote and publ
  assert.equal(calls[1].args.quote_ref,'quote');assert.equal(calls[1].args.idempotency_key,'run');
  assert.equal(h.nodes.get('title').textContent,'Source result');assert.equal(contexts.at(-1).privateContent.apioskResult.status,'succeeded');
  assert.equal(messages.length,1);assert.match(messages[0].prompt,/Do not purchase/);
- assert.match(messages[0].prompt,/only a brief completion note and source citation/);
+ assert.match(messages[0].prompt,/only a brief conclusion and source citation/);
  assert.match(messages[0].prompt,/Do not repeat the card's figures, tables, JSON, charges/);
  assert.match(messages[0].prompt,/only when the actual user explicitly asks/);
  assert.doesNotMatch(messages[0].prompt,/Include actual charges and any missing data/);

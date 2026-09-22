@@ -6,6 +6,7 @@ import { formatDisplayMoney } from "./display-money.mjs";
 import { V2_CARD_EVENTS } from "./gateway-v2-card-events.mjs";
 import { V2_CARD_RESULT } from "./gateway-v2-card-result.mjs";
 import { V2_CARD_RESEARCH } from "./gateway-v2-card-research.mjs";
+import { V2_ANSWER_STYLE } from "./gateway-v2-card-answer.mjs";
 import { V2_RESULT_READY_PROMPT, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
 import { V2_CARD_ACTIONS } from "./gateway-v2-card-actions.mjs";
 import { V2_ACCOUNT_MARKUP, V2_CARD_ACCOUNT, V2_ACCOUNT_STYLE } from "./gateway-v2-card-account.mjs";
@@ -13,16 +14,17 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v51.html";
-export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v17-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:50},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), "ui://apiosk/gateway-v2-card-v11-chatgpt.html", "ui://apiosk/gateway-v2-card-v12-chatgpt.html", "ui://apiosk/gateway-v2-card-v13-chatgpt.html", "ui://apiosk/gateway-v2-card-v14-chatgpt.html", "ui://apiosk/gateway-v2-card-v15-chatgpt.html", "ui://apiosk/gateway-v2-card-v16-chatgpt.html"];
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v52.html";
+export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v18-chatgpt.html";
+export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v51.html"];
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:51},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:7},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
 export function gatewayV2CardMeta(gatewayUrl = "https://api.apiosk.com") {
   const gatewayOrigin = new URL(gatewayUrl).origin;
   const meta = uiResourceMeta(
-    "Shows Apiosk sources, plan, price, approval, progress, balance and complete source-backed results. The card already displays the details; add only a brief completion note and source citation unless the user explicitly asks for details or analysis. " + V2_SOURCES_PRESENTATION
+    "Shows Apiosk plan, price, approval, progress and an answer-first result. Source records are collapsed under Sources and details. For verification questions, briefly state the supported conclusion and material unknowns, not just that data was fetched. Do not equate active registration with onboarding clearance. " + V2_SOURCES_PRESENTATION
   );
   delete meta.ui.domain;
   meta.ui.csp.resourceDomains = SOURCE_LOGO_ORIGINS;
@@ -55,6 +57,7 @@ ${V2_ACCOUNT_STYLE}
 @media(max-width:480px){.request-section>.section-title{gap:8px}.request-price strong{font-size:14px}.request-price .price-note{max-width:140px}.plan-mode #sections>.request-section:first-child{padding:14px}.hero{display:block}.hero-status{align-items:flex-start;margin-top:11px}.amount{text-align:left}.source{grid-template-columns:32px minmax(0,1fr)}.source .count{grid-column:2}.balances{grid-template-columns:1fr}.result-row{grid-template-columns:1fr;gap:3px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 ${V2_COMPACT_STYLE}
+${V2_ANSWER_STYLE}
 </style></head><body><main class="card hidden" id="card"><header class="shell" aria-labelledby="title">
 <div class="hero"><div><h2 id="title"></h2><p id="subtitle" class="meta"></p></div><div class="hero-status">${V2_ACCOUNT_MARKUP}<span class="pill hidden" id="status-pill" aria-hidden="true"></span><div class="amount hidden" id="price"><b id="price-value"></b><span>maximum total</span></div></div></div>
 </header><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div><div class="actions" id="feedback-actions"></div></div></main>
