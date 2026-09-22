@@ -110,7 +110,7 @@ export function createV2Runtime(options = {}) {
     ...(d.name === "apiosk_approve" ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
     "openai/visibility": d.name === "apiosk_approve" ? "private" : "public",
     "openai/toolInvocation/invoking": d.name === "apiosk_sources" ? "Exploring sources…" : d.name === "apiosk_discover" ? "Preparing your data plan…" : "Updating your Apiosk request…",
-    "openai/toolInvocation/invoked": d.name === "apiosk_sources" ? "Sources ready" : d.name === "apiosk_discover" ? "Plan ready" : "Request updated",
+    "openai/toolInvocation/invoked": d.name === "apiosk_sources" ? "Sources ready" : d.name === "apiosk_discover" ? "Request reviewed" : "Request updated",
   } }));
   const validator = new AjvJsonSchemaValidator();
   const validate = new Map(definitions.map(d => [d.name, validator.getValidator(d.inputSchema)]));
