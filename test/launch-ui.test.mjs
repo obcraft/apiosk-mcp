@@ -328,7 +328,14 @@ test('Claude also shows actionable EUR budget feedback without executing or draf
  await h.message({jsonrpc:'2.0',id:call.id,result:{isError:true,structuredContent:{errors:[{code:'approval_daily_limit',message:'Daily budget exceeded',details:{required_atomic:'881698',available_atomic:'86956',currency:'USD'}}]}}});
  await clicking;
  assert.match(h.nodes.get('feedback-text').textContent,/0.08 EUR left in its daily budget/);
- assert.match(h.nodes.get('feedback-text').textContent,/Apiosk > Connections/);
+ assert.match(h.nodes.get('feedback-text').textContent,/Set a higher daily limit below/);
+ const limits=h.nodes.get('feedback-actions').querySelectorAll('button').find(b=>b.textContent==='Set higher limits');
+ assert.ok(limits);
+ const opening=limits.onclick();
+ const open=h.sent.find(m=>m.method==='ui/open-link');
+ assert.equal(open.params.url,'https://app.apiosk.com/connections');
+ await h.message({jsonrpc:'2.0',id:open.id,result:{}});await opening;
+ assert.ok(h.nodes.get('feedback-actions').querySelectorAll('p').some(p=>p.textContent.includes('Or reconnect Apiosk')));
  await h.tick(350);await h.tick(2000);
  assert.equal(h.sent.filter(m=>m.method==='tools/call').length,1);
  assert.equal(h.sent.some(m=>m.method==='ui/message'),false);
@@ -340,7 +347,35 @@ test('an uncertain approval never claims that nothing was purchased',async()=>{
  await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
  assert.equal(h.nodes.get('feedback-text').textContent,message);
  assert.doesNotMatch(h.nodes.get('feedback-text').textContent,/Nothing was purchased/);
+ assert.equal(h.nodes.get('feedback-actions').querySelectorAll('button').length,0);
  await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve']);
+});
+test('Set higher limits opens existing connection settings without reconnecting or purchasing',async()=>{
+ const calls=[],links=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const response={errors:[{code:'approval_per_request_limit',message:'Increase your limit.'}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:value=>links.push(value.href),callTool:async name=>{calls.push(name);return {isError:true,structuredContent:response}}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ const actions=h.nodes.get('feedback-actions');
+ const button=actions.querySelectorAll('button').find(b=>b.textContent==='Set higher limits');
+ await button.onclick();
+ assert.deepEqual(links,['https://app.apiosk.com/connections']);
+ assert.deepEqual(calls,['apiosk_approve']);
+ assert.ok(actions.querySelectorAll('p').some(p=>p.textContent.includes('new connection')));
+ await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve']);
+});
+test('a host that cannot open settings gives clear manual guidance instead of a dead button',async()=>{
+ const calls=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,openExternal:()=>{throw Error('blocked')},callTool:async name=>{calls.push(name);return {isError:true,structuredContent:{errors:[{code:'approval_daily_limit',message:'Increase your daily limit.'}]}}}});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ await h.nodes.get('feedback-actions').querySelectorAll('button')[0].onclick();
+ assert.ok(h.nodes.get('feedback-actions').querySelectorAll('p').some(p=>p.textContent.startsWith('Open Apiosk > Integrations')));
+ assert.deepEqual(calls,['apiosk_approve']);
+});
+test('balance errors do not suggest higher connection limits or reconnecting',async()=>{
+ const data={...v2Ready,context_view:{approval_mode:'chatbot'}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async()=>({isError:true,structuredContent:{errors:[{code:'approval_balance_insufficient',message:'Add funds.'}]}})});
+ await h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to')).onclick();
+ assert.equal(h.nodes.get('feedback-actions').children.length,0);
 });
 test('after correcting a budget the saved plan can be approved once and complete without a new question',async()=>{
  const calls=[];let approvals=0;

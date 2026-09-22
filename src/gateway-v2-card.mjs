@@ -13,9 +13,9 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v49.html";
-export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v15-chatgpt.html";
-export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:48},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), "ui://apiosk/gateway-v2-card-v11-chatgpt.html", "ui://apiosk/gateway-v2-card-v12-chatgpt.html", "ui://apiosk/gateway-v2-card-v13-chatgpt.html", "ui://apiosk/gateway-v2-card-v14-chatgpt.html"];
+export const APIO_V2_CARD_URI = "ui://apiosk/gateway-v2-card-v50.html";
+export const APIO_V2_CHATGPT_CARD_URI = "ui://apiosk/gateway-v2-card-v16-chatgpt.html";
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:49},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), "ui://apiosk/gateway-v2-card-v11-chatgpt.html", "ui://apiosk/gateway-v2-card-v12-chatgpt.html", "ui://apiosk/gateway-v2-card-v13-chatgpt.html", "ui://apiosk/gateway-v2-card-v14-chatgpt.html", "ui://apiosk/gateway-v2-card-v15-chatgpt.html"];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -57,7 +57,7 @@ ${V2_ACCOUNT_STYLE}
 ${V2_COMPACT_STYLE}
 </style></head><body><main class="card hidden" id="card"><header class="shell" aria-labelledby="title">
 <div class="hero"><div><h2 id="title"></h2><p id="subtitle" class="meta"></p></div><div class="hero-status">${V2_ACCOUNT_MARKUP}<span class="pill hidden" id="status-pill" aria-hidden="true"></span><div class="amount hidden" id="price"><b id="price-value"></b><span>maximum total</span></div></div></div>
-</header><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div></div></main>
+</header><div id="sections"></div><div class="section hidden" id="feedback"><div id="feedback-text" class="notice" role="status" aria-live="polite"></div><div class="actions" id="feedback-actions"></div></div></main>
 <script>${APIOSK_UI_BRIDGE}</script><script>
 const byId=id=>document.getElementById(id),sections=byId('sections'),feedback=byId('feedback'),feedbackText=byId('feedback-text');let output=null,input={},busy=false,planSurface=null,pollTimer=null,watchUntil=0;const attempted=new Set(),announced=new Set();
 ${DISPLAY_TEXT}
@@ -66,7 +66,7 @@ function el(tag,className,value){const n=document.createElement(tag);if(classNam
 ${formatDisplayMoney.toString()}
 function money(atomic,currency='USD',ceiling=false){return formatDisplayMoney(atomic,currency,output?.context_view?.money_display,ceiling)}
 function section(title,aside){const s=el('section','section'),h=el('div','section-title'),t=el('h3','',title);h.append(t);if(aside)h.append(aside&&aside.nodeType?aside:el('span','',aside));s.append(h);sections.append(s);return s}
-function showFeedback(message,kind=''){feedback.classList.remove('hidden');feedbackText.textContent=message;feedbackText.className='notice '+kind;window.apiosk.resize()}
+function showFeedback(message,kind=''){feedback.classList.remove('hidden');feedbackText.textContent=message;feedbackText.className='notice '+kind;byId('feedback-actions').replaceChildren();window.apiosk.resize()}
 ${V2_CARD_ACCOUNT}
 function safeLogo(url){try{const u=new URL(url);return u.protocol==='https:'&&${JSON.stringify(SOURCE_LOGO_ORIGINS)}.includes(u.origin)?u.href:null}catch{return null}}
 function sourceLogo(source){const url=safeLogo(source&&source.logo_url);if(url){const img=el('img','logo');img.alt='';img.src=url;img.onerror=()=>img.replaceWith(fallbackLogo(source));return img}return fallbackLogo(source)}
