@@ -687,6 +687,34 @@ test('a single matching service stays within its parent source',async()=>{
 });
 
 
+test('missing input names the requested field and submits only the entered value',async()=>{
+ const calls=[];
+ const data={status:'needs_input',state:{state_ref:'task',revision:1},context_view:{},next_actions:[{kind:'supply_input',action_id:'query',label:'Provide web.query',input_schema:{properties:{value:{type:'string'}}}}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:data}}});
+ const sections=h.nodes.get('sections'),form=sections.querySelector('form'),field=form.querySelector('input');
+ assert.ok(flatten(sections).includes('Search query'));
+ assert.ok(flatten(sections).includes('What should the web search look for?'));
+ assert.equal(field['aria-label'],'Search query');
+ assert.equal(form.className,'field actions');
+ assert.equal(form.querySelector('button').className,'quiet');
+ await form.onsubmit({preventDefault(){}});assert.equal(calls.length,0);
+ field.value='ASML Holding N.V.';await form.onsubmit({preventDefault(){}});
+ assert.equal(calls[0].name,'apiosk_execute');
+ assert.equal(calls[0].args.input.value,'ASML Holding N.V.');
+ assert.equal(Object.keys(calls[0].args.input).length,1);
+ assert.equal(calls[0].args.action_id,'query');
+});
+
+test('missing input uses schema help and never presents an unidentified field',()=>{
+ const data={status:'needs_input',state:{state_ref:'task',revision:1},next_actions:[{kind:'supply_input',label:'Provide vat.number',input_schema:{properties:{value:{type:'string',title:'VAT number',description:'Which VAT number should be checked?',examples:['NL123456789B01']}}}}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:data});
+ assert.ok(flatten(h.nodes.get('sections')).includes('Which VAT number should be checked?'));
+ assert.equal(h.nodes.get('sections').querySelector('input').placeholder,'For example: NL123456789B01');
+ const unknown=harness(APIO_V2_CARD_HTML,{toolOutput:{...data,next_actions:[{kind:'supply_input',input_schema:{}}]}});
+ assert.equal(unknown.nodes.get('sections').querySelectorAll('input').length,0);
+ assert.ok(flatten(unknown.nodes.get('sections')).includes('The request did not identify the missing detail. Use Check status to reload the saved request.'));
+});
+
 test('an idle clarification displays its question, accepts only user input and always offers status recovery',async()=>{
  const calls=[],streams=[];
  class Events {constructor(){streams.push(this)} close(){} addEventListener(){}}

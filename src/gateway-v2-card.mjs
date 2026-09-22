@@ -14,10 +14,10 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v53.html";
+export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v54.html";
 export const APIO_V2_CHATGPT_CARD_URI="ui://apiosk/gateway-v2-card-v19-chatgpt.html";
-export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v52.html", "ui://apiosk/gateway-v2-card-v51.html"];
-export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:52},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:8},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
+export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v53.html", "ui://apiosk/gateway-v2-card-v52.html"];
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:53},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:8},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -87,7 +87,6 @@ function sourceBadge(source){const badge=el('div','source-badge'),logo=sourceLog
 function renderPlan(data){const p=data.proposal;if(!p)return;const formatted=money(p.max_total_atomic,p.currency,true),price=el('div','request-price');if(formatted)price.append(el('span','price-label','Maximum total'),el('strong','',formatted),el('span','price-note','From your Apiosk balance'));const s=section('Data request',price),list=el('div','steps');s.classList.add('request-section');planSurface=s;(p.steps||[]).forEach((step,i)=>{const d=(p.step_details||[])[i]||{},row=el('div','step'),copy=el('div'),source=d.source||{},title=el('div','step-title-line');title.append(el('div','step-title',d.title||pretty(step)),el('span','state '+text(d.status||'pending'),d.status||'pending'));copy.append(sourceLine(source),title);row.append(el('span','step-no',text(i+1)+'.'),copy);list.append(row)});s.append(list)}
 ${V2_CARD_CHOICES}
 ${V2_CARD_CLARIFICATION}
-function renderInput(data){const action=(data.next_actions||[]).find(a=>a.kind==='supply_input');if(!action){renderClarification(data);return}const s=section('One detail is needed'),form=el('form','field'),field=el('input');field.required=true;field.autocomplete='off';field.placeholder='Enter the requested value';const b=el('button','primary','Continue');form.append(field,b);form.onsubmit=e=>{e.preventDefault();let value=field.value.trim();const type=action.input_schema&&action.input_schema.properties&&action.input_schema.properties.value&&action.input_schema.properties.value.type;if(type==='integer'||type==='number')value=Number(value);else if(type==='boolean')value=value==='true';callAction(action,{value})};s.append(form)}
 function renderBilling(data){const b=data.billing;if(!b)return;if(data.context_view?.execution_mode==='server'&&!b.authorization_active&&!data.result&&!(b.executions||[]).length&&String(b.total_charged||'0')==='0')return;const available=money(b.balance_available,b.currency),charged=money(b.total_charged,b.currency);if(available==null&&charged==null)return;const s=section('Payment summary'),grid=el('div','balances');if(charged!=null){const box=el('div','balance');box.append(el('span','','Total charged · '+(b.workspace?.name||'Apiosk balance')),el('b','',charged));grid.append(box)}if(available!=null){const box=el('div','balance');box.append(el('span','','Available balance'),el('b','',available));grid.append(box)}s.append(grid)}
 ${V2_CARD_RESULT}
 ${V2_CARD_RESEARCH}
