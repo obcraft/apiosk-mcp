@@ -9,7 +9,7 @@ import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS } 
 for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and resource share the same contract`,async()=>{
  const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082'};
  const server=createApioskMcpServer({env,hostedAuthEnabled:true,legacyUiMime:host==='chatgpt'});
- const expectedMime=host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app';
+ const expectedMime='text/html;profile=mcp-app';
  const client=new Client({name:host,version:'test'});
  const [a,b]=InMemoryTransport.createLinkedPair();
  try {
@@ -19,6 +19,13 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(client.getServerCapabilities().extensions,undefined);
   const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
   for(const tool of tools){assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);assert.equal(tool.outputSchema.type,'object')}
+  for(const tool of tools.filter(tool=>tool.name!=='apiosk_approve')){
+   assert.equal(tool._meta.ui.resourceUri,APIO_V2_CARD_URI);
+   assert.equal(tool._meta['openai/outputTemplate'],APIO_V2_CHATGPT_CARD_URI);
+   assert.notEqual(tool._meta.ui.resourceUri,tool._meta['openai/outputTemplate']);
+  }
+  assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta.ui.resourceUri,undefined);
+  assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta['openai/outputTemplate'],undefined);
   const {resources}=await client.listResources();assert.equal(resources.length,3+APIO_V2_CARD_LEGACY_URIS.length);
   const contract=resources.find(r=>r.uri==='apiosk://v2/host-contract');
   const card=resources.find(r=>r.uri===APIO_V2_CARD_URI);
@@ -33,6 +40,7 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   for(const uri of APIO_V2_CARD_LEGACY_URIS){
    assert.ok(resources.find(resource=>resource.uri===uri));
    const compatible=await client.readResource({uri});assert.match(compatible.contents[0].text,/Apiosk balance/);
+   assert.equal(compatible.contents[0].mimeType,uri.endsWith('-chatgpt.html')||host==='chatgpt'?'text/html+skybridge':'text/html;profile=mcp-app');
   }
   assert.deepEqual((await client.listPrompts()).prompts,[]);
   const result=await client.callTool({name:'apiosk_discover',arguments:{question:'Example'}});

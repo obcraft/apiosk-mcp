@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
-import { APIO_V2_CARD_URI, APIO_V2_CARD_META, gatewayV2CardHtml, gatewayV2CardMeta } from '../src/gateway-v2-card.mjs';
+import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_META, gatewayV2CardHtml, gatewayV2CardMeta } from '../src/gateway-v2-card.mjs';
 import { V2_SOURCES_PRESENTATION } from '../src/result-presentation.mjs';
 const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'};
 test('approval card displays source scope without interpreting it as HTML',()=>{
@@ -12,7 +12,7 @@ test('approval card displays source scope without interpreting it as HTML',()=>{
 });
 test('v2 exposes four model tools and an app-only approval tool while legacy stays unchanged',async()=>{
  const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
- for(const tool of tools){const uri=tool.name==='apiosk_approve'?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],uri);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,tool.name==='apiosk_approve'?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
+ for(const tool of tools){const uri=tool.name==='apiosk_approve'?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],tool.name==='apiosk_approve'?undefined:APIO_V2_CHATGPT_CARD_URI);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,tool.name==='apiosk_approve'?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);

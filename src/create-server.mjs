@@ -221,9 +221,9 @@ export function createApioskMcpServer(options = {}) {
    * one per host.
    */
   function uiMimeType() {
-    // Stateless HTTP loses initialize capabilities between requests. Keep
-    // the Apps SDK MIME for OpenAI clients that still fetch legacy templates.
-    // This changes resource formatting only; authentication stays identical.
+    // Preserve the old host-dependent labels only for previously issued URIs.
+    // New v2 resources below have separate, stable MCP Apps / Skybridge URIs:
+    // modern ChatGPT also sends an OpenAI user agent, so it is not a MIME signal.
     if (gatewayV2) return options.legacyUiMime ? "text/html+skybridge" : "text/html;profile=mcp-app";
     const declared = server.getClientCapabilities()?.extensions?.["io.modelcontextprotocol/ui"];
     return declared ? "text/html;profile=mcp-app" : "text/html+skybridge";
@@ -266,7 +266,7 @@ export function createApioskMcpServer(options = {}) {
     resources: gatewayV2 ? [V2_RESOURCE, {
       uri: APIO_V2_CARD_URI,
       name: "Apiosk Gateway v2 interactive card",
-      mimeType: uiMimeType(),
+      mimeType: "text/html;profile=mcp-app",
       _meta: v2CardMeta,
     }, { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: v2CardMeta }, ...APIO_V2_CARD_LEGACY_URIS.map(uri => ({
       uri,
@@ -288,7 +288,8 @@ export function createApioskMcpServer(options = {}) {
     if (gatewayV2) {
       if (request.params.uri === "apiosk://v2/host-contract") return { contents: [{ uri: request.params.uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
       if (request.params.uri === APIO_V2_CHATGPT_CARD_URI || (APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri) && request.params.uri.endsWith("-chatgpt.html"))) return { contents: [{ uri: request.params.uri, mimeType: "text/html+skybridge", text: v2CardHtml, _meta: v2CardMeta }] };
-      if (request.params.uri === APIO_V2_CARD_URI || APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: v2CardHtml, _meta: v2CardMeta }] };
+      if (request.params.uri === APIO_V2_CARD_URI) return { contents: [{ uri: request.params.uri, mimeType: "text/html;profile=mcp-app", text: v2CardHtml, _meta: v2CardMeta }] };
+      if (APIO_V2_CARD_LEGACY_URIS.includes(request.params.uri)) return { contents: [{ uri: request.params.uri, mimeType: uiMimeType(), text: v2CardHtml, _meta: v2CardMeta }] };
       throw new Error("Unknown v2 resource");
     }
     const skillResource = await readApioskSkillResource(request.params.uri);

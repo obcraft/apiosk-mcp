@@ -6,7 +6,7 @@ import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv
 import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 import { resolveConnectToken } from "./gateway-client.mjs";
 import { content } from "./tool-result.mjs";
-import { APIO_V2_CARD_URI } from "./gateway-v2-card.mjs";
+import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI } from "./gateway-v2-card.mjs";
 import { V2_RESULT_PRESENTATION, V2_RESULT_TOOL_DESCRIPTION, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
 
 export const V2_INSTRUCTIONS = readFileSync(new URL('./gateway-v2-instructions.md', import.meta.url), 'utf8');
@@ -104,7 +104,9 @@ export function createV2Runtime(options = {}) {
     "openai/widgetAccessible": true,
     // App-only calls update the calling card. A private tool must not claim
     // the shared output template: ChatGPT marks that template unusable.
-    ...(d.name === "apiosk_approve" ? {} : { "openai/outputTemplate": APIO_V2_CARD_URI }),
+    // Modern MCP Apps and legacy Skybridge have distinct cache identities.
+    // Never vary the new standard resource's MIME based on the host user agent.
+    ...(d.name === "apiosk_approve" ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
     "openai/visibility": d.name === "apiosk_approve" ? "private" : "public",
     "openai/toolInvocation/invoking": d.name === "apiosk_sources" ? "Exploring sources…" : d.name === "apiosk_discover" ? "Preparing your data plan…" : "Updating your Apiosk request…",
     "openai/toolInvocation/invoked": d.name === "apiosk_sources" ? "Sources ready" : d.name === "apiosk_discover" ? "Plan ready" : "Request updated",
