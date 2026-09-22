@@ -762,3 +762,11 @@ test('company names use readable casing throughout the card without changing sel
  assert.ok(h.nodes.get('sections').querySelectorAll('pre').some(node=>node.textContent.includes(raw)));
  assert.equal(result.data.resultaten[0].naam,raw);
 });
+
+test('evidence bundle download opens the saved archive without calling a paid tool',async()=>{
+ const opened=[],calls=[];
+ const evidence_url='https://apiosk-gateway-v2.fly.dev/v2/tasks/task/reports/quote/evidence.zip?signature=fixture';
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{report:{format:'pdf',evidence_url}},result:{data:{name:'Example'}}},openExternal:({href})=>opened.push(href),callTool:async(...args)=>calls.push(args)});
+ const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download evidence');
+ assert.ok(button); await button.onclick(); assert.deepEqual(opened,[evidence_url]);assert.deepEqual(calls,[]);
+});

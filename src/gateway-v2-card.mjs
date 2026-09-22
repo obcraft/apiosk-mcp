@@ -14,10 +14,10 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_COMPACT, V2_COMPACT_STYLE } from "./gateway-v2-card-compact.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v54.html";
+export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v55.html";
 export const APIO_V2_CHATGPT_CARD_URI="ui://apiosk/gateway-v2-card-v19-chatgpt.html";
-export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v53.html", "ui://apiosk/gateway-v2-card-v52.html"];
-export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:53},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:8},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
+export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v54.html", "ui://apiosk/gateway-v2-card-v53.html"];
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:54},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:8},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 

@@ -190,10 +190,13 @@ test('annual report links use the configured gateway origin without sending buye
 test('combined research PDF links survive status and archived turns without another execution', async()=>{
  const id='00000000-0000-4000-8000-000000000001';
  const path=`/v2/tasks/${id}/reports/${id}/report.pdf?owner=${id}&snapshot=abc&expires=99&signature=abc`;
- const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',status:'succeeded',next_actions:[],errors:[],context_view:{report:{format:'pdf',download_path:path},conversation:[{output:{report:{format:'pdf',download_path:path}}}]}})});
+ const evidencePath=path.replace('report.pdf','evidence.zip');
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',status:'succeeded',next_actions:[],errors:[],context_view:{report:{format:'pdf',download_path:path,evidence_download_path:evidencePath},conversation:[{output:{report:{format:'pdf',download_path:path,evidence_download_path:evidencePath}}}]}})});
  const reply=await runtime.callTool('apiosk_status',{task_ref:id});
  assert.equal(reply.structuredContent.context_view.report.url,`http://127.0.0.1:8082${path}`);
  assert.equal(reply.structuredContent.context_view.conversation[0].output.report.url,`http://127.0.0.1:8082${path}`);
+ assert.equal(reply.structuredContent.context_view.report.evidence_url,`http://127.0.0.1:8082${evidencePath}`);
+ assert.equal(reply.structuredContent.context_view.conversation[0].output.report.evidence_url,`http://127.0.0.1:8082${evidencePath}`);
 });
 
 

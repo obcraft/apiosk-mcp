@@ -32,7 +32,7 @@ function observeTask(data){
    if(next.state?.state_ref!==ref||Number(next.state.revision)<Number(output.state.revision))return;
    if(next.context_view?.events_path)next.context_view.events_url=new URL(next.context_view.events_path,parsed.origin).href;
    const documents=[next.context_view,next.result,...(next.context_view?.results||[]),...(next.context_view?.conversation||[]).flatMap(t=>[t.output,t.output?.result,...(t.output?.results||[])])];
-   for(const doc of documents){const path=doc?.report?.download_path;if(typeof path==='string'&&path.startsWith('/v2/tasks/'+ref+'/'))doc.report.url=new URL(path,parsed.origin).href}
+   for(const doc of documents){const path=doc?.report?.download_path;if(typeof path==='string'&&path.startsWith('/v2/tasks/'+ref+'/'))doc.report.url=new URL(path,parsed.origin).href;const evidence=doc?.report?.evidence_download_path;if(typeof evidence==='string'&&evidence.startsWith('/v2/tasks/'+ref+'/reports/')&&evidence.includes('/evidence.zip?'))doc.report.evidence_url=new URL(evidence,parsed.origin).href}
    acceptResponse(next);
   }catch{recover()}
  });

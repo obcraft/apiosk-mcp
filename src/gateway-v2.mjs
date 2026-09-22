@@ -1,3 +1,4 @@
+import { attachReportLinks } from './gateway-v2-report-links.mjs';
 import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
 import { randomUUID } from "node:crypto";
@@ -174,13 +175,7 @@ export function createV2Runtime(options = {}) {
         }
         const eventsPath = result.context_view?.events_path;
         if (typeof eventsPath === 'string' && eventsPath.startsWith(`/v2/tasks/${result.state?.state_ref}/events?`)) result.context_view.events_url = new URL(eventsPath, base).href;
-        const documents = [result.context_view, ...(result.context_view?.conversation || []).map(turn => turn.output), result.result, ...(result.context_view?.results || []), ...(result.context_view?.conversation || []).flatMap(turn => [turn.output?.result, ...(turn.output?.results || [])])];
-        for (const document of documents) {
-          const reportPath = document?.report?.download_path;
-          if (typeof reportPath === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/(?:results|reports)\/[0-9a-f-]+\/report\.pdf\?/.test(reportPath)) {
-            document.report.url = new URL(reportPath, base).href;
-          }
-        }
+        attachReportLinks(result, base);
         const reply = content(result);
         // Include the presentation contract on every response: existing hosts
         // may still have an older initialize/tool-description snapshot cached.
