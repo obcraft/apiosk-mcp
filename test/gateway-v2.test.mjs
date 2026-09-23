@@ -218,3 +218,20 @@ test('paid execution conflicts and ambiguous planning transport failures are nev
  const failed=createApioskMcpRuntime({env,fetchImpl:async()=>{count++;throw Error('timeout')}});
  await failed.callTool('apiosk_discover',{question:'Construction revenue',request_id:'00000000-0000-4000-8000-000000000001'});assert.equal(count,2);
 });
+
+test('fixed European dossiers use the shared workflow planner without buying or free-text reinterpretation', async () => {
+ const calls=[];
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{calls.push({url,...options});return Response.json({protocol_version:'2',status:'requires_approval',next_actions:[],errors:[]});}});
+ const workflow={slug:'tender-company-dossier',input:{name:'Mollie B.V.',country:'NL',registration:'30204462'}};
+ const result=await runtime.callTool('apiosk_discover',{workflow});
+ assert.equal(result.structuredContent.status,'requires_approval');
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].url.pathname,'/v2/workflows/tender-company-dossier/start');
+ const body=JSON.parse(calls[0].body);
+ assert.deepEqual(body.input,workflow.input);
+ assert.deepEqual(Object.keys(body).sort(),['input','request_id']);
+ for (const args of [{question:'also free text',workflow},{workflow,context_delta:{}},{workflow:{...workflow,slug:'not-a-workflow'}},{workflow:{...workflow,input:{...workflow.input,country:'DE'}}}]) {
+  assert.equal((await runtime.callTool('apiosk_discover',args)).isError,true);
+ }
+ assert.equal(calls.length,1,'invalid recipes cannot reach the gateway');
+});
