@@ -22,6 +22,19 @@ const errorFields = {
   request_id: { type: "string", format: "uuid" }, idempotency_key: { type: "string", format: "uuid" },
   recover_task_ref: { type: "string", format: "uuid" },
 };
+const capabilitySource = {
+  type: "object", additionalProperties: false, required: ["slug", "name"],
+  properties: { slug: { type: "string" }, name: { type: "string" } },
+};
+const capabilityGroup = {
+  type: "object", additionalProperties: false,
+  required: ["slug", "name", "primary_sources", "supplementary_sources"],
+  properties: {
+    slug: { type: "string" }, name: { type: "string" },
+    primary_sources: { type: "array", items: capabilitySource },
+    supplementary_sources: { type: "array", items: capabilitySource },
+  },
+};
 const sourceOutput = {
   type: "object", additionalProperties: false,
   properties: {
@@ -35,6 +48,8 @@ const sourceOutput = {
     tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
     endpoint_count: { type: "integer", minimum: 0, description: "Published endpoints in this source, not chatbot tools." },
     capabilities: { type: "array", items: { type: "string" } }, input_types: { type: "array", items: { type: "string" } },
+    executable_capabilities: { type: "array", items: { type: "string" } },
+    capability_roles: { type: "object", additionalProperties: { type: "string", enum: ["primary", "supplementary"] } },
   },
 };
 const sourcesOutput = {
@@ -45,6 +60,8 @@ const sourcesOutput = {
     next_offset: { type: ["integer", "null"], minimum: 0 }, categories: { type: "array", items: { type: "string" } },
     tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
     capabilities: { type: "array", items: { type: "string" } }, notice: { type: "string" }, ...errorFields,
+    capability_groups: { type: "array", items: capabilityGroup },
+    selected_capability: { anyOf: [capabilityGroup, { type: "null" }] },
   },
   anyOf: [{ required: ["protocol_version", "sources", "total", "offset", "categories", "tags", "sectors", "capabilities", "notice"] }, { required: ["error_code", "message"] }],
 };
@@ -166,7 +183,7 @@ export function createV2Runtime(options = {}) {
           const { catalog_total: _catalogTotal, ...publicResult } = result;
           result = { ...publicResult,
           sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
-          notice: "Browsing is free. Only purchasable sources with executable capabilities are listed. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Expand services only when requested. Apiosk checks the exact question and price before any purchase.",
+          notice: "Browsing is free. Published sources may have execution or coverage restrictions. Capability groups list primary sources; supplementary sources are optional enrichment. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Apiosk checks the exact question and price before any purchase.",
           };
         }
         if (!browsing) {

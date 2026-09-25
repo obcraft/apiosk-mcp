@@ -235,3 +235,30 @@ test('fixed European dossiers use the shared workflow planner without buying or 
  }
  assert.equal(calls.length,1,'invalid recipes cannot reach the gateway');
 });
+
+test('European capability discovery preserves primary and supplementary sources within the advertised output schema',async()=>{
+ const { AjvJsonSchemaValidator } = await import('@modelcontextprotocol/sdk/validation/ajv-provider.js');
+ for(const [capability, primary, supplementary] of [
+  ['eu.company.profile',['kvk-dutch-business-register','sirenic','companies-house'],['gleif','vies','overheid-io']],
+  ['eu.tenders.search',['ted','tenderned'],['eu-funding-tenders','sirenic']],
+  ['eu.statistics.query',['cbs-statline','eurostat'],['pdok','data-overheid-nl']],
+ ]) {
+  const group={slug:capability,name:capability,primary_sources:primary.map(slug=>({slug,name:slug})),supplementary_sources:supplementary.map(slug=>({slug,name:slug}))};
+  const calls=[];
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{
+   calls.push({url,options});
+   return Response.json({protocol_version:'2',sources:primary.map(slug=>({slug,name:slug,description:'Published source',category:'data',tags:[],sectors:[],endpoint_count:1,capabilities:[capability],executable_capabilities:[],capability_roles:{[capability]:'primary'},input_types:[],available_in_v2:false})),total:primary.length,catalog_total:37,offset:0,next_offset:null,categories:['data'],tags:[],sectors:[],capabilities:[capability],capability_groups:[group],selected_capability:group,notice:'Browsing is free.'});
+  }});
+  const result=await runtime.callTool('apiosk_sources',{capability});
+  assert.ok(!result.isError,JSON.stringify(result));
+  assert.deepEqual(result.structuredContent.sources.map(s=>s.slug),primary);
+  assert.deepEqual(result.structuredContent.selected_capability,group);
+  assert.deepEqual(result.structuredContent.capability_groups,[group]);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].options.method,'GET');
+  assert.equal(calls[0].url.searchParams.get('capability'),capability);
+  const descriptor=(await runtime.listTools()).find(t=>t.name==='apiosk_sources');
+  const validation=new AjvJsonSchemaValidator().getValidator(descriptor.outputSchema)(result.structuredContent);
+  assert.equal(validation.valid,true,JSON.stringify(validation));
+ }
+});
