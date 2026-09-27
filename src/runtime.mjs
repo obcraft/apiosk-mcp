@@ -1,127 +1,35 @@
-// The runtime: six tools, one client, one dispatch.
+// The runtime: Gateway v2, for every transport.
 //
-// This file was 139 KB and held about thirty tool handlers, their schemas, a
-// wallet store, a publisher client and four ways to answer "what now". It is
-// small now for a reason that is not tidiness: adding a tool has to be a change
-// a reviewer cannot miss. A tool is a file in src/tools/ and a line in
-// src/tools/index.mjs; nothing can be smuggled in here.
+// Since 2.0 there is one runtime. The hosted server and the stdio package both
+// speak the Gateway v2 agent contract (src/gateway-v2.mjs): browse sources,
+// plan and price one task, approve it once, follow it to its result. The 1.x
+// tools that called the agent gateway's /v1/ask, /v1/select, /v1/run,
+// /v1/plans and /v1/jobs are gone; the agent gateway answers those routes with
+// 410 and names their v2 replacements.
 //
-// What is left is the part that genuinely belongs to the runtime rather than to
-// any one tool: build the gateway client for this request, look the tool up,
-// run it, and time and log the call.
+// What is left here is the one decision that belongs to the runtime rather than
+// to the tools: which gateway. `APIOSK_GATEWAY_V2_URL` overrides it (a local or
+// staging gateway); unset, it is the production gateway.
 
-import { createGatewayClient } from "./gateway-client.mjs";
-import { logToolCall } from "./observability.mjs";
-import { TOOL_DEFINITIONS, TOOL_NAMES, getTool } from "./tools/index.mjs";
-import { errorContent } from "./tool-result.mjs";
 import { createV2Runtime } from "./gateway-v2.mjs";
 
-export { TOOL_NAMES };
+export const DEFAULT_GATEWAY_V2_URL = "https://gateway.apiosk.com";
 
-const DEFAULT_TOOL_OUTPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: true,
-  properties: {},
-};
+/** The Gateway v2 origin this process talks to. */
+export function resolveGatewayV2Url(env = process.env) {
+  return String(env?.APIOSK_GATEWAY_V2_URL || "").trim() || DEFAULT_GATEWAY_V2_URL;
+}
 
 /**
  * Build the MCP runtime.
  *
  * @param {object} options
- * @param {object} [options.env]            environment, for the gateway base URL and tokens
- * @param {object} [options.client]         a pre-built SDK client, for tests
- * @param {Function} [options.clientFactory] builds the SDK client, for tests
- * @param {Function} [options.fetchImpl]    fetch, for tests
+ * @param {object} [options.env]              environment, for the gateway URL and a stdio token
+ * @param {boolean} [options.hostedAuthEnabled] hosted: never fall back to a machine-wide token
+ * @param {Function} [options.fetchImpl]      fetch, for tests
  */
 export function createApioskMcpRuntime(options = {}) {
   const env = options.env || process.env;
-  if (env.APIOSK_GATEWAY_V2_URL) return createV2Runtime(options);
-
-  // One client per request, not one per process: the connect token that names
-  // the buyer's wallet and policy arrives on the request, and one server serves
-  // many buyers.
-  function gatewayFor(authInfo) {
-    return createGatewayClient({
-      env,
-      authInfo,
-      fetchImpl: options.fetchImpl || fetch,
-      client: options.client || null,
-      clientFactory: options.clientFactory || null,
-    });
-  }
-
-  // The surface does not vary by caller. An agent that sees a different tool
-  // list depending on how it authenticated cannot be reasoned about, and the
-  // per-session surfaces this replaced were how thirty nine tools stayed
-  // invisible to everyone who could have questioned them.
-  async function listTools() {
-    return TOOL_DEFINITIONS.map((tool) => ({
-      ...tool,
-      outputSchema: tool.outputSchema || DEFAULT_TOOL_OUTPUT_SCHEMA,
-    }));
-  }
-
-  async function dispatchTool(name, argumentsObject, authInfo, host) {
-    const tool = getTool(name);
-    if (!tool) {
-      return errorContent({
-        error_code: "tool.unknown",
-        message: `Unknown Apiosk tool: ${name}. This server exposes exactly: ${TOOL_NAMES.join(", ")}.`,
-      });
-    }
-
-    try {
-      return await tool.run(argumentsObject, { env, authInfo, gateway: gatewayFor(authInfo), host });
-    } catch (error) {
-      return errorContent({
-        error_code: error?.code || "tool.failed",
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  // Observability wrapper: time and log every tools/call dispatch. Logging is
-  // fire-and-forget — a logging failure never affects the tool result. Raw
-  // tokens and arguments are never persisted (hash and key names only).
-  async function callTool(name, argumentsObject = {}, authInfo = null, host = null) {
-    const startedAt = Date.now();
-    let outcome = "ok";
-    let errorCode = null;
-    try {
-      const result = await dispatchTool(name, argumentsObject, authInfo, host);
-      if (result?.isError) outcome = "error";
-      else if (result?.structuredContent?.status === "payment_required") outcome = "refused";
-      else if (result?.structuredContent?.status === "approval_required") outcome = "held";
-      return result;
-    } catch (error) {
-      outcome = "error";
-      errorCode = (error && (error.code || error.name)) || null;
-      throw error;
-    } finally {
-      try {
-        logToolCall(env, {
-          toolName: name,
-          outcome,
-          errorCode,
-          latencyMs: Date.now() - startedAt,
-          authInfo,
-          argKeys: argumentsObject && typeof argumentsObject === "object" ? Object.keys(argumentsObject) : [],
-        });
-      } catch {
-        /* observability must never break a tool call */
-      }
-    }
-  }
-
-  /**
-   * Does this tool need a connection before the server will dispatch it?
-   *
-   * Read by the hosted OAuth middleware to answer with a 401 challenge rather
-   * than letting an unauthenticated call reach a tool that spends money.
-   */
-  async function isToolProtected(name) {
-    return Boolean(getTool(name)?.requiresConnection);
-  }
-
-  return { listTools, callTool, isToolProtected };
+  // A copy, never a mutation: the caller's env (often process.env) is not ours.
+  return createV2Runtime({ ...options, env: { ...env, APIOSK_GATEWAY_V2_URL: resolveGatewayV2Url(env) } });
 }

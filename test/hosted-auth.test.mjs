@@ -515,8 +515,9 @@ test("verifyAccessToken accepts an Apiosk connect token directly, for headless a
   }
 });
 
-test('v2 challenges before anonymous initialization so hosts configure OAuth on connection', async () => {
-  const support = createTestSupport({env:{...TEST_ENV,APIOSK_GATEWAY_V2_URL:'https://gateway.apiosk.test'}});
+test('every connection is challenged before anonymous initialization so hosts configure OAuth on connection', async () => {
+  // No APIOSK_GATEWAY_V2_URL: Gateway v2 is the only runtime, so the challenge is unconditional.
+  const support = createTestSupport({env:TEST_ENV});
   const middleware = support.createMcpAuthMiddleware({isToolProtected:async()=>true});
   for (const method of ['initialize','tools/list','resources/list','tools/call']) {
     const req={headers:{},path:'/mcp',body:{method,params:{name:'apiosk_sources'}}};

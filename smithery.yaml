@@ -4,10 +4,9 @@
 # :3000) and ships with a Dockerfile, so Smithery builds and runs the container
 # rather than a language-specific runtime.
 #
-# ON CONFIG: there are no required install-time parameters. Hosted clients are
-# onboarded by OAuth on the first provider-data call (`apiosk`, discover or
-# compare); execute and approval status use that same connection. A manually
-# supplied Connect token remains available for self-hosted or staging use.
+# ON CONFIG: there are no required install-time parameters. Every tool acts for
+# a connected Apiosk account, so hosted clients are onboarded by OAuth when they
+# connect. Data requests go to Gateway v2 (https://gateway.apiosk.com).
 
 runtime: container
 
@@ -17,24 +16,23 @@ build:
 
 startCommand:
   type: http
-  # Every field is optional; hosted users connect through OAuth on first use.
+  # Every field is optional; hosted users connect through OAuth.
   configSchema:
     type: object
     required: []
     properties:
       APIOSK_CONNECT_TOKEN:
         type: string
-        title: Apiosk connect token
+        title: Apiosk agent token
         description: >-
-          Optional. A token minted at buy.apiosk.com, naming the wallet and the
-          spending policy this server may buy under. Hosted users normally use
-          OAuth instead; all provider-data and execution tools require a
-          connected account.
-      APIOSK_GATEWAY_URL:
+          Optional. An Apiosk agent token (apk_access_… or a legacy apk_live_…
+          agent key) for self-hosted or staging use. Hosted users connect with
+          OAuth instead.
+      APIOSK_GATEWAY_V2_URL:
         type: string
-        title: Gateway base URL
+        title: Gateway v2 URL
         default: https://gateway.apiosk.com
         description: >-
-          Optional. Point the server at a different Apiosk gateway. Leave unset
-          unless you are testing against staging.
+          Optional. Point the server at a different Apiosk Gateway v2. Leave
+          unset unless you are testing against staging.
   exampleConfig: {}

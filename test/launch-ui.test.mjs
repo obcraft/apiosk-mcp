@@ -3,11 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { APIOSK_UI_BRIDGE } from '../src/ui-bridge.mjs';
-import { APIO_OFFER_CARD_HTML } from '../src/offer-card.mjs';
-import { APIO_RESULT_CANVAS_HTML } from '../src/result-canvas.mjs';
-import { APIO_RESULTS_PICKER_HTML } from '../src/results-picker.mjs';
 import { APIO_V2_CARD_HTML } from '../src/gateway-v2-card.mjs';
-import { executionKey, runExecute } from '../src/tools/execute.mjs';
 
 const flatten=node=>[node.textContent,...node.children.flatMap(flatten)];
 
@@ -221,68 +217,6 @@ test('conversation messages use content blocks and honor host rejection',async()
   assert.equal(message.params.content[0].type,'text');assert.equal(message.params.content[0].text,'Please continue');
   await h.message({jsonrpc:'2.0',id:message.id,result:{isError:true}});assert.equal(await promise,false);
   assert.equal(await h.window.apiosk.openLink('javascript:alert(1)'),false);
-});
-
-const offer={query:'Current registration?',top:{provider:'GLEIF',description:'Official registry',price_usdc:0.012,offer_token:'signed',input_fields:[]}};
-test('both cards render MCP Apps tool-result notifications without OpenAI globals',async()=>{
-  const proposal=harness(APIO_OFFER_CARD_HTML);await proposal.initialize();await proposal.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:offer}});
-  assert.equal(proposal.nodes.get('provider').textContent,'GLEIF');assert.match(proposal.nodes.get('approve').textContent,/0.012/);
-  const result=harness(APIO_RESULT_CANVAS_HTML);await result.initialize();await result.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{answer:'The registration is active.',result:{status:'ACTIVE'}}}});
-  assert.equal(result.nodes.get('answer').textContent,'The registration is active.');assert.match(result.nodes.get('source').textContent,/ACTIVE/);
-});
-
-test('Deny locks the proposal without invoking a paid tool',async()=>{
-  let calls=0;const h=harness(APIO_OFFER_CARD_HTML,{toolOutput:offer,callTool:async()=>{calls++},sendFollowUpMessage:async()=>{}});
-  await h.nodes.get('deny').onclick();await h.nodes.get('approve').onclick();
-  assert.equal(calls,0);assert.equal(h.nodes.get('approve').disabled,true);assert.match(h.nodes.get('status').textContent,/Nothing was spent/);
-});
-
-test('a paid success remains locked when delivering the chat answer fails',async()=>{
-  let calls=0;const h=harness(APIO_OFFER_CARD_HTML,{toolOutput:offer,callTool:async()=>{calls++;return{structuredContent:{ok:true,answer:'Active',result:{status:'ACTIVE'}}}},sendFollowUpMessage:async()=>{throw new Error('Host unavailable')}});
-  await h.nodes.get('approve').onclick();await h.nodes.get('approve').onclick();
-  assert.equal(calls,1);assert.equal(h.nodes.get('approve').disabled,true);assert.equal(h.nodes.get('description').textContent,'Active');
-});
-
-test('purchase keys survive retries and input property reordering',()=>{
-  const a=executionKey('signed',{input:{a:1,b:2}});
-  assert.equal(a,executionKey('signed',{input:{b:2,a:1}}));
-  assert.notEqual(a,executionKey('other',{input:{a:1,b:2}}));assert.notEqual(a,executionKey('signed',{input:{a:2,b:2}}));
-  assert.match(a,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
-});
-
-test('execute returns a readable answer and retains structured source details',async()=>{
-  const gateway={requestJson:async path=>path==='/v1/select'?{selection_id:'selection'}:{ok:true,answer:'The registration is active.',result:{status:'ACTIVE'}}};
-  const result=await runExecute({offer_token:'signed',prompt:offer.query,max_price_usdc:0.012},{gateway});
-  assert.equal(result.content[0].text,'The registration is active.');assert.equal(result.structuredContent.result.status,'ACTIVE');
-});
-
-test('prefilled enum and numeric fields retain their values behind Request details',async()=>{
-  let args;const fields=[{name:'country',type:'string',location:'query',options:['NL','US'],default_value:'NL'},{name:'year',type:'integer',location:'body',default_value:2026}];
-  const h=harness(APIO_OFFER_CARD_HTML,{toolOutput:{...offer,top:{...offer.top,input_fields:fields}},callTool:async(_name,value)=>{args=value;return{ok:true,answer:'Done'}},sendFollowUpMessage:async()=>{}});
-  assert.equal(h.nodes.get('fields').children[0].children[0].tagName,'SELECT');
-  await h.nodes.get('approve').onclick();
-  assert.equal(args.input_parts.query.country,'NL');assert.equal(args.input_parts.body.year,2026);
-});
-
-test('missing required input prevents a paid request',async()=>{
-  let calls=0;const h=harness(APIO_OFFER_CARD_HTML,{toolOutput:{...offer,top:{...offer.top,input_fields:[{name:'country',type:'string',required:true}]}},callTool:async()=>{calls++}});
-  await h.nodes.get('approve').onclick();assert.equal(calls,0);assert.match(h.nodes.get('status').textContent,/required fields/);
-});
-
-test('the alternatives picker also keeps a completed purchase locked',async()=>{
-  let calls=0;const selection={query:offer.query,options:[{id:'one',provider:'GLEIF',price_label:'$0.012',input_fields:[],execute_arguments:{offer_token:'signed',prompt:offer.query,max_price_usdc:.012}}]};
-  const h=harness(APIO_RESULTS_PICKER_HTML,{toolOutput:{selection},callTool:async()=>{calls++;return{ok:true,answer:'Active'}},sendFollowUpMessage:async()=>{throw new Error('Host unavailable')}});
-  await h.nodes.get('run').onclick();await h.nodes.get('run').onclick();assert.equal(calls,1);assert.equal(h.nodes.get('run').disabled,true);
-});
-
-test('Claude approvals open Apiosk without attempting an in-card purchase',async()=>{
-  const h=harness(APIO_OFFER_CARD_HTML);await h.initialize('Claude');
-  await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:offer}});
-  assert.match(h.nodes.get('approve').textContent,/Approve in Apiosk/);
-  const approval=h.nodes.get('approve').onclick();const link=h.sent.find(m=>m.method==='ui/open-link');
-  assert.equal(new URL(link.params.url).origin,'https://app.apiosk.com');
-  await h.message({jsonrpc:'2.0',id:link.id,result:{}});await approval;
-  assert.ok(!h.sent.some(m=>m.method==='tools/call'));assert.match(h.nodes.get('status').textContent,/Nothing was spent here/);
 });
 
 const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};

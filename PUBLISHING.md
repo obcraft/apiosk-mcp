@@ -26,6 +26,11 @@ Every release, these five values must be identical before you tag:
 - `python/apiosk_mcp/__init__.py` → `__version__`
 - `dxt.json` → `version`
 - `server.json` → `version` **and** both `packages[].version` entries
+- `package-lock.json` → root `version` and `packages[""].version`
+- `plugin/apiosk/.codex-plugin/plugin.json` → `version`
+- `src/create-server.mjs` → `SERVER_BASE_VERSION`, and `src/ui-bridge.mjs` → `appInfo.version`
+
+`test/surface.test.mjs` fails when any of them disagree.
 
 And these three must match each other (they define identity, not version):
 
@@ -52,12 +57,12 @@ Actions):
 Then, to cut a release:
 
 ```bash
-# 1. Bump the version in all five files to e.g. 1.7.1 (keep them in sync).
+# 1. Bump the version in every file above to e.g. 2.0.1 (keep them in sync).
 # 2. Commit.
-git commit -am "chore: release v1.7.1"
+git commit -am "chore: release v2.0.1"
 
 # 3. Tag and push. The workflow does the rest.
-git tag v1.7.1
+git tag v2.0.1
 git push origin main --tags
 ```
 

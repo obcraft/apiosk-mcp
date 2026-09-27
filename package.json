@@ -1,7 +1,7 @@
 {
   "name": "@apiosk/mcp",
-  "version": "1.8.0",
-  "description": "Buy an API call the way a person would: describe the job, see what can do it, compare the candidates on price and measured performance, choose one, and pay for it from a balance you control, under limits you set. The buyer sets the rules at buy.apiosk.com; the gateway enforces them on every call.",
+  "version": "2.0.0",
+  "description": "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.",
   "mcpName": "io.github.obcraft/apiosk-mcp",
   "main": "index.mjs",
   "exports": {
@@ -68,7 +68,6 @@
     "plugin"
   ],
   "dependencies": {
-    "@apiosk/sdk": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "express": "^5.2.1",
     "zod": "^4.4.3"

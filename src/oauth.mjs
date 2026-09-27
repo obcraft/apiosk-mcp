@@ -1178,10 +1178,10 @@ export function createHostedOAuthSupport({
 
         const requestBody = req.body;
         const method = trimString(requestBody?.method);
-        // Every v2 tool uses the connected account. Challenge during the
+        // Every tool uses the connected account. Challenge during the
         // initial handshake too, so hosts do not install it as an anonymous
         // connector and discover the sign-in requirement only on first use.
-        if (env.APIOSK_GATEWAY_V2_URL && method && !req.auth) {
+        if (method && !req.auth) {
           writeAuthChallenge(res, {
             status: 401,
             code: "invalid_token",

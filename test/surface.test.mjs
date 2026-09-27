@@ -1,152 +1,103 @@
 // The tool surface, asserted by name.
 //
-// This test is the thing that stops the drawer refilling. It failed once for a
-// good reason — a tool was added deliberately, the plan changed, and the list
-// here changed with it. Every other time it fails, something grew back.
-//
-// Adding a name here without a corresponding entry in
-// apiosk-buyer-flow-tasks/mcp/ is how thirty nine tools happened.
+// This test is the thing that stops the drawer refilling. Since 2.0 the only
+// runtime is Gateway v2: four model-visible tools and one app-only approval
+// tool the interactive card calls. Every other time this fails, something grew
+// back.
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { createApioskMcpRuntime } from "../src/runtime.mjs";
-import { TOOL_NAMES } from "../src/tools/index.mjs";
+import { createApioskMcpRuntime, DEFAULT_GATEWAY_V2_URL, resolveGatewayV2Url } from "../src/runtime.mjs";
 import { listApioskTools, SERVER_BASE_VERSION } from "../src/create-server.mjs";
 
-// The order is the order the two flows run in, and it is asserted rather than
+// The order is the order the flow runs in, and it is asserted rather than
 // sorted: a list that reorders itself is a list a reviewer stops reading.
 const EXPECTED = [
-  "apiosk",
-  "apiosk_connect",
+  "apiosk_sources",
   "apiosk_discover",
-  "apiosk_compare",
   "apiosk_execute",
-  "apiosk_approval_status",
-  // Step 7 of goal-plan-price-result: the multi-call flow. Added deliberately,
-  // with the plan compiled and priced by the gateway and by nothing here.
-  "apiosk_plan",
-  "apiosk_execute_plan",
-  "apiosk_job_status",
-  "apiosk_resolve_job",
-  "apiosk_cancel_job",
+  "apiosk_status",
+  // App-only: the card calls it after the person clicks Approve.
+  "apiosk_approve",
 ];
 
-test("the tool surface is exactly the eleven buyer-flow tools", async () => {
-  assert.deepEqual(TOOL_NAMES, EXPECTED);
-
+test("the tool surface is exactly the Gateway v2 tools, for every transport", async () => {
+  // No APIOSK_GATEWAY_V2_URL: stdio installs get v2 too, not a legacy runtime.
   const runtime = createApioskMcpRuntime({ env: {} });
   const tools = await runtime.listTools();
   assert.deepEqual(tools.map((tool) => tool.name), EXPECTED);
+});
+
+test("the gateway defaults to production and never mutates the caller's env", async () => {
+  const env = {};
+  assert.equal(resolveGatewayV2Url(env), "https://gateway.apiosk.com");
+  assert.equal(DEFAULT_GATEWAY_V2_URL, "https://gateway.apiosk.com");
+  assert.equal(resolveGatewayV2Url({ APIOSK_GATEWAY_V2_URL: "http://127.0.0.1:8082" }), "http://127.0.0.1:8082");
+
+  let seen;
+  const runtime = createApioskMcpRuntime({
+    env: { ...env, APIOSK_CONNECT_TOKEN: "apk_access_fixture" },
+    fetchImpl: async (url, options) => {
+      seen = { url: String(url), authorization: options.headers.authorization };
+      return Response.json({ protocol_version: "2", sources: [], total: 0, offset: 0, next_offset: null, categories: [], tags: [], sectors: [], capabilities: [] });
+    },
+  });
+  await runtime.callTool("apiosk_sources", {});
+  assert.equal(new URL(seen.url).origin, "https://gateway.apiosk.com");
+  assert.equal(new URL(seen.url).pathname, "/v2/sources");
+  assert.equal(seen.authorization, "Bearer apk_access_fixture");
+  assert.deepEqual(env, {});
 });
 
 test("the surface does not vary by how the caller authenticated", async () => {
   const runtime = createApioskMcpRuntime({ env: {} });
   const anonymous = await runtime.listTools();
   const connected = await listApioskTools({ runtime });
-  assert.deepEqual(
-    anonymous.map((tool) => tool.name),
-    connected.map((tool) => tool.name)
-  );
-});
-
-test("every tool declares a description that says whether it spends", async () => {
-  const runtime = createApioskMcpRuntime({ env: {} });
-  for (const tool of await runtime.listTools()) {
-    assert.ok(tool.description && tool.description.length > 120, `${tool.name} needs a real description`);
-    assert.ok(tool.inputSchema, `${tool.name} needs an input schema`);
-    // A tool has to say which side of the money line it is on. "SPENDS MONEY"
-    // used to be the only accepted way to say it, and it said the wrong thing:
-    // the user is not reaching for a card, Apiosk settles the call from a
-    // balance they funded and capped in advance. The claim still has to be
-    // there, in one of the words that actually mean it.
-    const saysSpend = /settles the call|settles its calls|settles the plan's calls|spends nothing|Spends nothing|Spends nothing itself|Reads only/.test(
-      tool.description
-    );
-    assert.ok(saysSpend, `${tool.name} must say whether it spends money`);
-  }
+  const hosted = await listApioskTools({ env: {}, hostedAuthEnabled: true });
+  assert.deepEqual(anonymous.map((tool) => tool.name), connected.map((tool) => tool.name));
+  assert.deepEqual(anonymous.map((tool) => tool.name), hosted.map((tool) => tool.name));
 });
 
 test("every tool has all three explicit review annotations", async () => {
   const runtime = createApioskMcpRuntime({ env: {} });
   for (const tool of await runtime.listTools()) {
+    assert.ok(tool.description && tool.description.length > 120, `${tool.name} needs a real description`);
+    assert.ok(tool.inputSchema, `${tool.name} needs an input schema`);
     for (const annotation of ["readOnlyHint", "openWorldHint", "destructiveHint"]) {
-      assert.equal(
-        typeof tool.annotations?.[annotation],
-        "boolean",
-        `${tool.name} must explicitly declare ${annotation}`,
-      );
+      assert.equal(typeof tool.annotations?.[annotation], "boolean", `${tool.name} must explicitly declare ${annotation}`);
     }
   }
 });
 
-test("every state-changing tool is marked open-world", async () => {
+test("every tool acts for a connected account and starts OAuth before its first request", async () => {
   const runtime = createApioskMcpRuntime({ env: {} });
-  const tools = await runtime.listTools();
-  for (const tool of tools.filter((entry) => entry.annotations.readOnlyHint === false)) {
-    assert.equal(
-      tool.annotations.openWorldHint,
-      true,
-      `${tool.name} changes a job, purchase, or external provider call`,
-    );
-  }
-});
-
-test("every agent-gateway data tool starts OAuth before its first request", async () => {
-  const runtime = createApioskMcpRuntime({ env: {} });
-  assert.equal(await runtime.isToolProtected("apiosk"), true);
-  assert.equal(await runtime.isToolProtected("apiosk_execute"), true);
-  assert.equal(await runtime.isToolProtected("apiosk_approval_status"), true);
+  for (const name of EXPECTED) assert.equal(await runtime.isToolProtected(name), true, `${name} must be protected`);
   assert.equal(await runtime.isToolProtected("apiosk_connect"), false);
-  assert.equal(await runtime.isToolProtected("apiosk_discover"), true);
-  assert.equal(await runtime.isToolProtected("apiosk_compare"), true);
-  for (const name of ["apiosk_plan", "apiosk_execute_plan", "apiosk_job_status", "apiosk_resolve_job", "apiosk_cancel_job"]) {
-    assert.equal(await runtime.isToolProtected(name), true, `${name} must start OAuth before its first request`);
+});
+
+test("the 1.x agent-gateway tools are gone and refused by name", async () => {
+  const runtime = createApioskMcpRuntime({ env: { APIOSK_CONNECT_TOKEN: "apk_access_fixture" } });
+  for (const gone of ["apiosk", "apiosk_connect", "apiosk_compare", "apiosk_approval_status", "apiosk_plan", "apiosk_execute_plan", "apiosk_job_status", "apiosk_resolve_job", "apiosk_cancel_job"]) {
+    const result = await runtime.callTool(gone, {});
+    assert.equal(result.isError, true, `${gone} must be refused`);
+    assert.match(result.content[0].text, /tool\.unknown/);
   }
 });
 
-test("the quick card has real approve and deny actions", async () => {
-  const { APIO_OFFER_CARD_HTML, APIO_OFFER_CARD_META } = await import("../src/offer-card.mjs");
-  assert.match(APIO_OFFER_CARD_HTML, /id="approve"/);
-  assert.match(APIO_OFFER_CARD_HTML, /id="deny"/);
-  assert.match(APIO_OFFER_CARD_HTML, /callTool\('apiosk_execute'/);
-  assert.match(APIO_OFFER_CARD_HTML, /sendFollowUpMessage/);
-  assert.deepEqual(APIO_OFFER_CARD_META.ui.csp.connectDomains, []);
-});
-
-test("an unknown tool is refused by name, with the real list", async () => {
-  const runtime = createApioskMcpRuntime({ env: {} });
-  const result = await runtime.callTool("apiosk_list_wallets", {});
-  assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /apiosk_connect/);
-  assert.match(result.content[0].text, /tool\.unknown/);
-});
-
-test("the plan card has real approve and deny actions and starts nothing else", async () => {
-  const { APIO_PLAN_CARD_HTML, APIO_PLAN_CARD_META } = await import("../src/plan-card.mjs");
-  assert.match(APIO_PLAN_CARD_HTML, /id="approve"/);
-  assert.match(APIO_PLAN_CARD_HTML, /id="deny"/);
-  assert.match(APIO_PLAN_CARD_HTML, /callTool\('apiosk_execute_plan'/);
-  assert.match(APIO_PLAN_CARD_HTML, /sendFollowUpMessage/);
-  assert.deepEqual(APIO_PLAN_CARD_META.ui.csp.connectDomains, []);
-  // The card carries the token through; it never assembles a plan of its own.
-  assert.ok(!/required_outputs|apiosk_plan'/.test(APIO_PLAN_CARD_HTML));
-});
-
-test("the published manifests agree on the eleven names", () => {
+test("the published manifests agree on the tool names", () => {
   const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), "utf8"));
 
   const dxt = read("../dxt.json");
   assert.deepEqual(dxt.tools.map((tool) => tool.name), EXPECTED);
 
   const serverJson = read("../server.json");
-  const described = JSON.stringify(serverJson);
-  for (const name of EXPECTED) assert.ok(described.includes(name), `server.json must name ${name}`);
+  assert.deepEqual(serverJson._meta["com.apiosk"].tools, EXPECTED);
 
   const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
   for (const name of EXPECTED) assert.ok(readme.includes(name), `README.md must document ${name}`);
-  for (const gone of ["apiosk_decide", "apiosk_fetch_paid", "apiosk_list_wallets", "apiosk_publish_api"]) {
+  for (const gone of ["apiosk_compare", "apiosk_plan", "apiosk_execute_plan", "apiosk_job_status", "apiosk_approval_status", "apiosk_connect"]) {
     assert.ok(!readme.includes(gone), `README.md still documents the removed ${gone}`);
   }
 });
@@ -154,13 +105,18 @@ test("the published manifests agree on the eleven names", () => {
 test("every published package and UI reports the server base version", () => {
   const read = (path) => JSON.parse(fs.readFileSync(new URL(path, import.meta.url), "utf8"));
   const packageJson = read("../package.json");
+  const packageLock = read("../package-lock.json");
   const serverJson = read("../server.json");
   const dxt = read("../dxt.json");
   const pluginJson = read("../plugin/apiosk/.codex-plugin/plugin.json");
   const pyproject = fs.readFileSync(new URL("../pyproject.toml", import.meta.url), "utf8");
+  const pythonInit = fs.readFileSync(new URL("../python/apiosk_mcp/__init__.py", import.meta.url), "utf8");
   const uiBridge = fs.readFileSync(new URL("../src/ui-bridge.mjs", import.meta.url), "utf8");
 
+  assert.equal(SERVER_BASE_VERSION, "2.0.0");
   assert.equal(packageJson.version, SERVER_BASE_VERSION);
+  assert.equal(packageLock.version, SERVER_BASE_VERSION);
+  assert.equal(packageLock.packages[""].version, SERVER_BASE_VERSION);
   assert.equal(serverJson.version, SERVER_BASE_VERSION);
   for (const publishedPackage of serverJson.packages) {
     assert.equal(publishedPackage.version, SERVER_BASE_VERSION);
@@ -168,6 +124,7 @@ test("every published package and UI reports the server base version", () => {
   assert.equal(dxt.version, SERVER_BASE_VERSION);
   assert.equal(pluginJson.version, SERVER_BASE_VERSION);
   assert.match(pyproject, new RegExp(`^version = "${SERVER_BASE_VERSION}"$`, "m"));
+  assert.match(pythonInit, new RegExp(`^__version__ = "${SERVER_BASE_VERSION}"$`, "m"));
   assert.match(uiBridge, new RegExp(`appInfo:\\{name:'Apiosk',version:'${SERVER_BASE_VERSION}'`));
 });
 
@@ -182,11 +139,8 @@ test("no module in src/ is allowed to grow past 20 KB", () => {
       }
       if (!entry.name.endsWith(".mjs")) continue;
       const size = fs.statSync(new URL(entry.name, base)).size;
-      // Two exemptions, both temporary and both owned by mcp/01, which replaces
-      // the browser wallet sign-in page with the buyer portal handoff:
-      //   oauth.mjs   carries that page
-      //   assets/     the vendored browser bundles the page loads. Not hand
-      //               written, so the 20 KB rule was never about them.
+      // oauth.mjs carries the hosted OAuth provider and is the one exemption;
+      // vendored browser bundles under assets/ were never hand written.
       const name = `${prefix}${entry.name}`;
       if (size > 20 * 1024 && name !== "oauth.mjs" && !name.startsWith("assets/")) {
         oversized.push(`${name} (${Math.round(size / 1024)} KB)`);

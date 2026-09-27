@@ -15,13 +15,6 @@ export function content(value) {
   return result;
 }
 
-export function errorContent(value) {
-  return {
-    content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value, null, 2) }],
-    isError: true,
-  };
-}
-
 export function trimString(value) {
   return String(value ?? "").trim();
 }

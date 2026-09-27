@@ -22,8 +22,9 @@ def _print_help() -> None:
                 "",
                 "Environment:",
                 "  APIOSK_MCP_NPM_PACKAGE  Override the npm package spec to execute.",
-                "  APIOSK_CONNECT_TOKEN    Connect token from buy.apiosk.com. Without one",
-                "                          the server can discover and compare, but not buy.",
+                "  APIOSK_CONNECT_TOKEN    Apiosk agent token (apk_access_... or apk_live_...).",
+                "                          Every tool acts for this connected account.",
+                "  APIOSK_GATEWAY_V2_URL   Gateway v2 origin (default https://gateway.apiosk.com).",
             ]
         )
     )

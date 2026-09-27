@@ -4,15 +4,12 @@
 // everything except the HTML: OpenAI's Apps SDK injects a `window.openai`
 // object, and MCP Apps (SEP-1865) injects nothing at all and expects the iframe
 // to speak JSON-RPC to its parent over postMessage. Written twice, the two
-// paths drift — src/offer-card.mjs already carries one of them inline, and its
-// deny button does something subtly different from its approve button because
-// of it.
+// paths drift.
 //
-// So the transport is written once, here, as the source text every card embeds.
+// So the transport is written once, here, as the source text the card embeds.
 // It is a template string rather than a module because a UI resource is ONE
-// self-contained document: the host renders the HTML in a sandboxed iframe with
-// no network of its own — both cards declare an empty CSP on purpose — so there
-// is nothing to import from.
+// self-contained document: the host renders the HTML in a sandboxed iframe, so
+// there is nothing to import from.
 //
 // What a card gets is four calls and no host detection:
 //
@@ -116,7 +113,7 @@ window.apiosk=api;
  if(typeof requestAnimationFrame==='function')requestAnimationFrame(()=>api.resize());else setTimeout(()=>api.resize(),0);
  if(window.parent===window)return;
  try{
-  const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'1.8.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
+  const result=await rpc('ui/initialize',{appInfo:{name:'Apiosk',version:'2.0.0'},protocolVersion:'2026-01-26',appCapabilities:{}});
   mcp=true;host=(result&&result.hostCapabilities)||{};applyTheme(result?.hostContext?.theme);
   api.can={callTool:!!host.serverTools,say:!!host.message,openLink:!!host.openLinks,purchase:!!host.serverTools&&!/claude/i.test(result?.hostInfo?.name||''),autoFollowUp:!!window.openai?.sendFollowUpMessage&&!/claude/i.test(result?.hostInfo?.name||'')};
   send({jsonrpc:'2.0',method:'ui/notifications/initialized',params:{}});

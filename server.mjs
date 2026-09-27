@@ -9,12 +9,6 @@ import {
   listApioskTools,
 } from "./src/create-server.mjs";
 import { V2_RESOURCE } from "./src/gateway-v2.mjs";
-import { PROMPTS } from "./src/prompts.mjs";
-import { APIO_RESULT_CANVAS_URI } from "./src/result-canvas.mjs";
-import { APIO_OFFER_CARD_URI } from "./src/offer-card.mjs";
-import { APIO_RESULTS_PICKER_URI } from "./src/results-picker.mjs";
-import { APIO_CONNECT_CARD_URI } from "./src/connect-card.mjs";
-import { APIO_PLAN_CARD_URI } from "./src/plan-card.mjs";
 import {
   createHostedOAuthSupport,
   resolveHostedMcpUrls,
@@ -31,7 +25,7 @@ import {
   createSettlementDisclosurePage,
 } from "./src/settlement-disclosure.mjs";
 
-const { v2: gatewayV2, info: SERVER_INFO, description: SERVER_DESCRIPTION, instructions: SERVER_INSTRUCTIONS } = resolveServerPresentation();
+const { info: SERVER_INFO, description: SERVER_DESCRIPTION, instructions: SERVER_INSTRUCTIONS } = resolveServerPresentation();
 
 const CONTROL_PLANE_BACKEND_URL = (
   process.env.APIOSK_CONTROL_PLANE_BACKEND_URL ||
@@ -214,10 +208,8 @@ const { issuerUrl, mcpServerUrl } = resolveHostedMcpUrls({
   port,
 });
 const runtime = createApioskMcpRuntime({
-  // Hosted MCP is multi-tenant and must never read/write machine-local wallet
-  // or config state. Buyer identity and payment capability are request-scoped
-  // through OAuth/connect tokens; local wallets belong only to stdio installs.
-  enableLocalWallets: false,
+  // Hosted MCP is multi-tenant: the buyer's identity arrives on each request
+  // through OAuth and never falls back to a machine-wide token.
   hostedAuthEnabled: true,
 });
 const hostedOAuth = createHostedOAuthSupport({
@@ -339,10 +331,8 @@ app.all("/api/*path", async (req, res) => {
 // hand-written literal, because a card that disagrees with the live server is
 // worse than no card: a scanner would publish a tool list nobody can call.
 //
-// `authentication.required` is false and that is the substantive claim here:
-// the comparison layer (discover, compare, decide) plus help are served
-// pre-auth and spend nothing, so a client can install this and get a real
-// answer before authenticating. OAuth only gates publishing and spending.
+// `authentication.required` is true: every Gateway v2 tool acts for a
+// connected Apiosk account, so hosts configure OAuth when they connect.
 app.get("/.well-known/mcp/server-card.json", async (req, res) => {
   try {
     const tools = await listApioskTools({ hostedAuthEnabled: true });
@@ -362,27 +352,17 @@ app.get("/.well-known/mcp/server-card.json", async (req, res) => {
       icons: SERVER_INFO.icons,
       instructions: SERVER_INSTRUCTIONS,
       authentication: {
-        required: gatewayV2,
-        schemes: gatewayV2 ? ["oauth2"] : ["oauth2", "noauth"],
+        required: true,
+        schemes: ["oauth2"],
       },
       capabilities: {
         tools: {},
         resources: {},
         prompts: {},
-        ...(gatewayV2 ? {} : { extensions: { "io.modelcontextprotocol/skills": {} } }),
       },
       tools,
-      prompts: gatewayV2 ? [] : PROMPTS,
-      // Every card this server can render, not one of the four. A registry
-      // reading a card that lists a single resource publishes a connector that
-      // looks like it has no interface.
-      resources: gatewayV2 ? [V2_RESOURCE] : [
-        { uri: APIO_RESULT_CANVAS_URI, name: "Apiosk paid result canvas", mimeType: "text/html+skybridge" },
-        { uri: APIO_OFFER_CARD_URI, name: "Apiosk offer approval card", mimeType: "text/html+skybridge" },
-        { uri: APIO_RESULTS_PICKER_URI, name: "Apiosk offer picker", mimeType: "text/html+skybridge" },
-        { uri: APIO_CONNECT_CARD_URI, name: "Apiosk connection card", mimeType: "text/html+skybridge" },
-        { uri: APIO_PLAN_CARD_URI, name: "Apiosk plan approval card", mimeType: "text/html+skybridge" },
-      ],
+      prompts: [],
+      resources: [V2_RESOURCE],
     });
   } catch (error) {
     res.status(500).json({

@@ -10,7 +10,7 @@ test('approval card displays source scope without interpreting it as HTML',()=>{
  assert.match(html,/context_view\?\.coverage_notices/);
  assert.match(html,/el\('p','notice',notice\)/);
 });
-test('v2 exposes four model tools and an app-only approval tool while legacy stays unchanged',async()=>{
+test('v2 exposes four model tools and an app-only approval tool',async()=>{
  const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
  for(const tool of tools){const uri=tool.name==='apiosk_approve'?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],tool.name==='apiosk_approve'?undefined:APIO_V2_CHATGPT_CARD_URI);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,tool.name==='apiosk_approve'?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
@@ -22,7 +22,7 @@ test('v2 exposes four model tools and an app-only approval tool while legacy sta
    assert.match(description,/only a brief confirmation/);
    assert.match(description,/unless the user explicitly requests those details/);
  }
- assert.equal((await createApioskMcpRuntime({env:{}}).listTools()).length,11);
+ assert.deepEqual((await createApioskMcpRuntime({env:{}}).listTools()).map(t=>t.name),tools.map(t=>t.name),'stdio without a configured gateway uses v2 too');
 });
 test('v2 forwards state exactly and stable action idempotency through authenticated transport',async()=>{
  const state={schema_version:'2',state_ref:'00000000-0000-4000-8000-000000000001',expires_at:'2099-01-01T00:00:00Z',revision:3,state_token:'opaque',focus:{entity_refs:[],goal_refs:[]}};let request;
