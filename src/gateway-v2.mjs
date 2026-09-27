@@ -10,6 +10,7 @@ import { resolveConnectToken } from "./gateway-client.mjs";
 import { content } from "./tool-result.mjs";
 import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI } from "./gateway-v2-card.mjs";
 import { V2_RESULT_PRESENTATION, V2_RESULT_TOOL_DESCRIPTION, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
+import { GROUPED_SOURCES_TOOL_TEXT, presentSources, sourcesOutputSchema } from "./source-groups.mjs";
 
 export const V2_INSTRUCTIONS = readFileSync(new URL('./gateway-v2-instructions.md', import.meta.url), 'utf8');
 export const V2_DESCRIPTION = "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.";
@@ -22,49 +23,7 @@ const errorFields = {
   request_id: { type: "string", format: "uuid" }, idempotency_key: { type: "string", format: "uuid" },
   recover_task_ref: { type: "string", format: "uuid" },
 };
-const capabilitySource = {
-  type: "object", additionalProperties: false, required: ["slug", "name"],
-  properties: { slug: { type: "string" }, name: { type: "string" } },
-};
-const capabilityGroup = {
-  type: "object", additionalProperties: false,
-  required: ["slug", "name", "primary_sources", "supplementary_sources"],
-  properties: {
-    slug: { type: "string" }, name: { type: "string" },
-    primary_sources: { type: "array", items: capabilitySource },
-    supplementary_sources: { type: "array", items: capabilitySource },
-  },
-};
-const sourceOutput = {
-  type: "object", additionalProperties: false,
-  properties: {
-    slug: { type: "string" }, provider_slug: { type: ["string", "null"] }, logo_url: { type: ["string", "null"] },
-    name: { type: "string" }, description: { type: "string" }, category: { type: "string" },
-    categories: { type: "array", items: { type: "string" } },
-    service_count: { type: "integer", minimum: 1, description: "Services within this one source; do not count them as separate sources." },
-    matching_service_count: { type: "integer", minimum: 1 },
-    services: { type: "array", items: { type: "object", additionalProperties: false, properties: { slug: { type: "string" }, name: { type: "string" }, description: { type: "string" }, category: { type: "string" } } } },
-    readiness: { type: "object", additionalProperties: true },
-    tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
-    endpoint_count: { type: "integer", minimum: 0, description: "Published endpoints in this source, not chatbot tools." },
-    capabilities: { type: "array", items: { type: "string" } }, input_types: { type: "array", items: { type: "string" } },
-    executable_capabilities: { type: "array", items: { type: "string" } },
-    capability_roles: { type: "object", additionalProperties: { type: "string", enum: ["primary", "supplementary"] } },
-  },
-};
-const sourcesOutput = {
-  type: "object", additionalProperties: false,
-  properties: {
-    protocol_version: { type: "string", const: "2" }, sources: { type: "array", items: sourceOutput },
-    total: { type: "integer", minimum: 0 }, offset: { type: "integer", minimum: 0 },
-    next_offset: { type: ["integer", "null"], minimum: 0 }, categories: { type: "array", items: { type: "string" } },
-    tags: { type: "array", items: { type: "string" } }, sectors: { type: "array", items: { type: "string" } },
-    capabilities: { type: "array", items: { type: "string" } }, notice: { type: "string" }, ...errorFields,
-    capability_groups: { type: "array", items: capabilityGroup },
-    selected_capability: { anyOf: [capabilityGroup, { type: "null" }] },
-  },
-  anyOf: [{ required: ["protocol_version", "sources", "total", "offset", "categories", "tags", "sectors", "capabilities", "notice"] }, { required: ["error_code", "message"] }],
-};
+const sourcesOutput = sourcesOutputSchema(errorFields);
 const actionOutput = {
   type: "object", additionalProperties: false, required: ["action_id", "kind", "label", "requires_authorization", "input_schema"],
   properties: { action_id: { type: "string", format: "uuid" }, kind: { type: "string" }, label: { type: "string" }, requires_authorization: { type: "boolean" }, input_schema: { type: "object" } },
@@ -108,7 +67,7 @@ export function createV2Runtime(options = {}) {
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [
-    { name: "apiosk_sources", title: "Browse Apiosk sources", description: "Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. Pulse Network is one source with nested services; never count or list those services as separate sources in an overview. Recommend sources that match the person's need. Use only when the person asks to browse sources. Do not substitute a source list for a failed data request. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.", inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
+    { name: "apiosk_sources", title: "Browse Apiosk sources", description: `Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. ${GROUPED_SOURCES_TOOL_TEXT} Recommend sources that match the person's need. Use only when the person asks to browse sources. Do not substitute a source list for a failed data request. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.`, inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     { name: "apiosk_discover", title: "Plan a data request", description: "Start a NEW data question; preserve the user's wording, source, entity, period and requested deliverable. Use one call for multi-source supplier onboarding and due diligence, including ownership/controllers, filed accounts, VAT, directors/officers, screening, a combined PDF and a short summary. Never add latest, a year, freshness, a company number or a VAT number that was not requested or returned by a source. Returns one plan, total price ceiling or required clarification. No provider purchase. When approval_mode is chatbot, tell the person to approve in the card; do not ask for an extra yes/no answer or send them to an external link. Continue the SAME question through apiosk_execute with returned next_actions.", inputSchema: discover, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_execute", title: "Continue an Apiosk task", description: "Use a returned next_action to execute, supply input, select an entity, poll or cancel. Paid steps require saved plan approval and the current quote_ref. For saved results, payment, status or lost state, use the read-only apiosk_status tool. Never invent action IDs or change payment identity on retry.", inputSchema: execute, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_status", title: "Read saved Apiosk results", description: "Read an existing task's saved results, actual charges and current status. Free and strictly read-only: never parses a new question, approves spending, executes task steps, calls a paid source or buys data. Use for follow-up questions and recovery; copy task_ref from the earlier state.state_ref.", inputSchema: { type: "object", additionalProperties: false, required: ["task_ref"], properties: { task_ref: { type: "string", format: "uuid" } } }, outputSchema: taskOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true } },
@@ -179,13 +138,7 @@ export function createV2Runtime(options = {}) {
         let {result} = received;
         if (!response.ok) return failure(gatewayFailure(result, recover || args.state?.state_ref));
         if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
-        if (browsing) {
-          const { catalog_total: _catalogTotal, ...publicResult } = result;
-          result = { ...publicResult,
-          sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
-          notice: "Browsing is free. Published sources may have execution or coverage restrictions. Capability groups list primary sources; supplementary sources are optional enrichment. Each source is counted once. Pulse Network is one source; its nested services are not additional sources. Apiosk checks the exact question and price before any purchase.",
-          };
-        }
+        if (browsing) result = presentSources(result);
         if (!browsing) {
           result = { ...result,
             ...(result.proposal && { proposal: { ...result.proposal, label: "Data request", currency: displayCurrency(result.proposal.currency) } }),
