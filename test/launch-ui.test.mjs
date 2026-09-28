@@ -829,3 +829,22 @@ test('the report PDF joins the answer only when the question asked for a documen
   assert.ok(labels(details).includes('Download PDF')&&labels(details).includes('Download evidence'));
  }
 });
+
+test('an automatically approved plan says so, and a plan above the rule still asks for a click',async()=>{
+  const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
+  const base={protocol_version:'2',proposal:{label:'Daily rate',currency:'USD',max_total_atomic:'115000',approval_url:'https://app.apiosk.com/?task=task',steps:['statistics.query'],step_details:[{title:'Rate',status:'pending',source:{name:'ECB'}}],expires_at:'2999-01-01T00:00:00Z',quote_ref:'quote'},errors:[],state:{state_ref:'task',revision:1}};
+  const running=harness(APIO_V2_CARD_HTML);await running.initialize();
+  await running.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{...base,status:'running',
+    context_view:{execution_mode:'server',worker_active:true,approval_mode:'chatbot',auto_approval:{active:true,applied:true,limit_atomic:'500000'}},
+    billing:{currency:'USD',total_charged:'0',authorization_active:true,approved_via:'connection_auto',quote_ref:'quote'},next_actions:[]}}});
+  const ran=flatten(running.nodes.get('sections').children[0]);
+  assert.ok(ran.includes('Approved automatically up to 0.115 USD · within this connection’s limits'),ran.join('|'));
+  assert.ok(!running.nodes.get('sections').querySelectorAll('button').some(b=>b.textContent.startsWith('Approve up to')));
+  const waiting=harness(APIO_V2_CARD_HTML);await waiting.initialize();
+  await waiting.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{...base,status:'ready',
+    context_view:{execution_mode:'server',approval_mode:'chatbot',auto_approval:{active:true,applied:false,reason:'above_auto_limit',message:'This request needs Approve.'}},
+    billing:{currency:'USD',total_charged:'0',authorization_active:false},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]}}});
+  const asked=flatten(waiting.nodes.get('sections').children[0]);
+  assert.ok(asked.includes('This request needs Approve.'));
+  assert.ok(waiting.nodes.get('sections').querySelectorAll('button').some(b=>b.textContent.startsWith('Approve up to')));
+});

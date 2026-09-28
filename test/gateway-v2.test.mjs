@@ -262,3 +262,30 @@ test('European capability discovery preserves primary and supplementary sources 
   assert.equal(validation.valid,true,JSON.stringify(validation));
  }
 });
+
+test('an automatic approval is reported only when the gateway applied it',async()=>{
+ const id='00000000-0000-4000-8000-000000000002';
+ const running={protocol_version:'2',status:'running',state:{state_ref:id},proposal:{max_total_atomic:'115000',currency:'USD'},
+  billing:{authorization_active:true,approved_via:'connection_auto',total_charged:'0',currency:'USD'},
+  context_view:{auto_approval:{active:true,limit_atomic:'500000',applied:true,reason:null,message:null}},next_actions:[],errors:[]};
+ const applied=await createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(running)}).callTool('apiosk_discover',{question:'Daily ECB rate'});
+ assert.match(applied.content.at(-1).text,/approved automatically under the connection's automatic-approval rule/);
+ assert.doesNotMatch(applied.content.at(-1).text,/card can approve/);
+ // A live rule that did not cover this plan claims nothing: the card approves.
+ const waiting={...running,status:'ready',billing:{authorization_active:false,approved_via:null,currency:'USD'},
+  context_view:{auto_approval:{active:true,limit_atomic:'100000',applied:false,reason:'above_auto_limit',message:'This request needs Approve.'}}};
+ const asked=await createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(waiting)}).callTool('apiosk_discover',{question:'Daily ECB rate'});
+ assert.match(asked.content.at(-1).text,/The interactive card can approve and execute this task/);
+ assert.doesNotMatch(asked.content.at(-1).text,/approved automatically/);
+ // `applied` without an active authorization is never read as an approval.
+ const inconsistent={...waiting,context_view:{auto_approval:{active:true,applied:true}}};
+ const guarded=await createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(inconsistent)}).callTool('apiosk_discover',{question:'Daily ECB rate'});
+ assert.doesNotMatch(guarded.content.at(-1).text,/approved automatically/);
+});
+
+test('the discover tool tells the model when a plan was already approved automatically',async()=>{
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>{throw new Error('no transport')}});
+ const discover=(await runtime.listTools()).find(t=>t.name==='apiosk_discover');
+ assert.match(discover.description,/context_view\.auto_approval\.applied is true/);
+ assert.match(discover.description,/do not ask for approval/);
+});
