@@ -1,7 +1,7 @@
 // The tool surface, asserted by name.
 //
 // This test is the thing that stops the drawer refilling. Since 2.0 the only
-// runtime is Gateway v2: four model-visible tools and one app-only approval
+// runtime is Gateway v2: six model-visible tools and one app-only approval
 // tool the interactive card calls. Every other time this fails, something grew
 // back.
 
