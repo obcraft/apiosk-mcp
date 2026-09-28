@@ -54,4 +54,3 @@ function renderCbsAnnual(view){
 }
 `;
 
-export const V2_CBS_STYLE = '.cbs-table-wrap{overflow-x:auto}.cbs-table{width:100%;border-collapse:collapse;font-size:12px;text-align:left}.cbs-table th,.cbs-table td{padding:9px 7px;border-bottom:1px solid color-mix(in srgb,CanvasText 12%,transparent)}.cbs-table th{font-weight:600}.cbs-table td:nth-child(3){white-space:nowrap;font-variant-numeric:tabular-nums}';

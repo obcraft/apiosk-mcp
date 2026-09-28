@@ -17,6 +17,9 @@ import { listApioskTools, SERVER_BASE_VERSION } from "../src/create-server.mjs";
 const EXPECTED = [
   "apiosk_sources",
   "apiosk_discover",
+  // The Ask page's own steps: a chatbot-filled capability object, then one endpoint.
+  "apiosk_search",
+  "apiosk_prepare",
   "apiosk_execute",
   "apiosk_status",
   // App-only: the card calls it after the person clicks Approve.

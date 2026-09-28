@@ -14,6 +14,20 @@ For a simple source overview, finish after the card and optional short confirmat
 
 Catalog entries help choose a source; they do not promise that a specific question is supported. Once the person chooses a source and question, call `apiosk_discover` to check support and price, preserving the exact returned source name and the person's requirements. Ask for missing inputs; do not submit a placeholder or buy data while browsing.
 
+## Search with a capability object (the Ask page's steps)
+
+For a direct lookup from one source (a local time, a rate, a registry record), prefer `apiosk_search` then `apiosk_prepare`: these are the Ask page's own steps. For multi-source research or a written analysis, use `apiosk_discover`.
+
+Fill `apiosk_search.parsed_request` exactly as the Ask page's parser does:
+- `language`: ISO 639-1 code of the person's wording.
+- `subjects`: every entity the request is about. `id` s1, s2, … in order; `label` exactly as written; `type` a singular English noun (company, person, address, city, vehicle); `identifiers` only values written literally, with snake_case keys such as kvk_number, vat_number, postcode, license_plate, otherwise `{}`.
+- `capabilities`: one per piece of data requested. `slug` is an English dot path from general to specific (domain.topic.detail) describing the data, never the subject: letters and digits only, lowerCamelCase for a two-word part, never hyphens or underscores (company.financial.statements, location.time.current). `domain` is the slug's first part. `inputs` and `outputs` are short English concept names. `subject_id` names the subject it concerns, or null. `source_hint` is a source the person named, or null. `confidence` is 0 to 1.
+- `deliverable`: `format` chat unless the person asks for a file; `operations` only those requested.
+
+The result lists, per capability, up to three ranked Apiosk sources: the ranking the Ask page shows. Only a candidate with `availability: "supported"` can run. Its `endpoint` object is the input contract: each `inputs[].field` is an exact key for `apiosk_prepare.input`, `required` marks the fields that must be filled, and `schema` gives the value format. `price.buyer_atomic` is the per-call price in micro USD. Fill inputs only from the person's words or earlier source results; ask for anything missing, never guess or send a placeholder. When `lookup` is present, a `company.name` can seed the identifiers it lists.
+
+Then call `apiosk_prepare` with that candidate's `endpoint_id`, `capability` and `input`. It returns the same task, price ceiling and card as `apiosk_discover`; continue exactly as there: the person approves in the card, and results arrive through `apiosk_execute` and `apiosk_status`. Searching and preparing are free; nothing is bought before approval. A prepared source returns its data as delivered, without a written analysis; present it without adding figures. If no candidate is supported, say so and offer `apiosk_discover` or `apiosk_sources`; never invent a source or an endpoint id.
+
 ## Starting and continuing
 
 Use `apiosk_discover` for a NEW data question. Preserve names, sources, countries and periods. Pass the latest complete `state` for a new question about the same task; omit it for a separate task. Do not silently weaken a requirement to make it executable.

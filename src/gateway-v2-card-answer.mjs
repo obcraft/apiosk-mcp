@@ -38,28 +38,31 @@ export function ukSupplierSummary(data, results) {
     note:'Missing evidence is not a failed check. A screening candidate is not a confirmed sanctions finding.'};
 }
 
+// The generic answer mirrors the App's Ask task view (GatewayV2Outputs): the
+// full answer text, then blocks (answer_schema_version 2) or the presentation
+// table. Without an analysis there is no answer section: the source result is
+// drawn directly (see gateway-v2-card-research.mjs).
 export const V2_CARD_ANSWER = `
 ${ukSupplierSummary.toString()}
 function renderResearchAnswer(data,results){
  const uk=ukSupplierSummary(data,results),analysis=data.context_view?.analysis;
- if(!uk&&!analysis&&!results.length)return null;
- const s=section(uk?formatDisplayNarrative(uk.subject,data):analysis?'Answer':'Result');s.classList.add('answer-section');s.classList.add('research-answer');
+ if(!uk&&!analysis)return null;
+ let s;
  if(uk){
+  s=section(formatDisplayNarrative(uk.subject,data));s.classList.add('answer-section','research-answer');
   const headline=el('p','answer-verdict',uk.label);headline.setAttribute('role','status');s.append(headline,el('p','answer-summary',uk.summary));
   const checks=el('dl','answer-checks');
   for(const check of uk.checks){const row=el('div','answer-check '+check.status);row.append(el('dt','',check.label),el('dd','',formatDisplayNarrative(check.detail,data)));checks.append(row)}
   s.append(checks,el('p','meta answer-caveat',uk.note));
- }else if(analysis?.observations?.length){
-  if(data.status==='partial'||analysis.status==='partial')s.append(el('p','answer-verdict','Partial answer'));
-  for(const observation of analysis.observations.slice(0,4))s.append(el('p','answer-summary',formatDisplayNarrative(observation.text,data)));
-  if(analysis.limitations?.length)s.append(el('p','notice',formatDisplayNarrative(analysis.limitations[0],data)));
- }else{s.append(el('p','answer-summary',data.context_view?.analyzing?'Preparing an answer from the saved sources…':'Source data returned. A verified assessment is not available yet.'))}
+ }else{
+  s=el('section','section answer-section research-answer');s.setAttribute('aria-label','Answer');sections.append(s);
+  const question=data.context_view?.conversation?.at(-1)?.question||'',value=answerText(analysis,{results,question});
+  if(data.status==='partial'||analysis.status==='partial')s.append(el('p','meta answer-partial','Some information is missing. Review the available results in Sources and details.'));
+  if(value)s.append(renderAnswerText(value,{results,analysis}));
+  const detail=isBlocksAnswer(analysis)?renderAnswerBlocks(analysis):renderAnswerPresentation(question,results,analysis);
+  if(detail)s.append(detail);
+ }
  const links=el('div','result-links');s.append(links);
- return {section:s,links,title:uk?'Supplier verification':analysis?'Answer':'Source result',subtitle:uk?'Based on saved source evidence.':'Results and source details below.'};
+ return {section:s,links,title:uk?'Supplier verification':'Answer',subtitle:uk?'Based on saved source evidence.':'Based on the saved source results.'};
 }
-`;
-
-export const V2_ANSWER_STYLE = `
-.research-answer{padding:14px 15px}.research-answer .section-title{margin-bottom:8px}.answer-verdict{font-size:17px;font-weight:650;margin:4px 0 6px}.answer-summary{font-size:12px;line-height:1.5;margin:6px 0}.answer-checks{margin:10px 0}.answer-check{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;padding:5px 0;font-size:12px;line-height:1.4}.answer-check dt{font-weight:600}.answer-check dd{margin:0;overflow-wrap:anywhere}.answer-check.unknown dd,.answer-check.review dd{font-weight:500}.answer-caveat{font-size:10px;line-height:1.4;margin:8px 0}.source-results-section{padding:8px 15px}.source-results-section>.section-title{display:none}.source-results-toggle{margin:0;opacity:1}.source-results-toggle>summary{font-size:12px;font-weight:600;padding:8px 0;cursor:pointer}.source-results-toggle>summary:focus-visible{outline:2px solid var(--apiosk);outline-offset:3px}.source-results-list{display:grid;gap:6px;margin-top:8px;overflow-x:auto}.source-result-group{min-width:740px;margin:0;border:1px solid color-mix(in srgb,CanvasText 10%,transparent);border-radius:10px;opacity:1}.source-result-summary{display:grid;grid-template-columns:24px minmax(130px,1.25fr) minmax(110px,1fr) repeat(4,minmax(76px,.7fr)) 16px;align-items:center;gap:9px;padding:9px 10px;cursor:pointer;list-style:none}.source-result-summary::-webkit-details-marker{display:none}.source-result-summary::after{content:'›';grid-column:8;grid-row:1;justify-self:end;font-size:15px;opacity:.55}.source-result-group[open]>.source-result-summary::after{transform:rotate(90deg)}.source-result-name{font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.source-result-cell{display:grid;min-width:0;gap:1px}.source-result-label{font-size:8px;text-transform:uppercase;letter-spacing:.04em;opacity:.5;white-space:nowrap}.source-result-value{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.source-result-details{border-top:1px solid color-mix(in srgb,CanvasText 8%,transparent)}.source-result-details>.section{padding:12px 10px}.source-results-toggle .analysis-notes{margin-top:12px}
-@media(max-width:480px){.research-answer,.source-results-section{padding:12px}.answer-check{grid-template-columns:100px minmax(0,1fr);gap:8px}.research-answer .section-title h3{font-size:15px}}
 `;

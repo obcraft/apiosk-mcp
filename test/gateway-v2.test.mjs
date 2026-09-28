@@ -10,14 +10,14 @@ test('approval card displays source scope without interpreting it as HTML',()=>{
  assert.match(html,/context_view\?\.coverage_notices/);
  assert.match(html,/el\('p','notice',notice\)/);
 });
-test('v2 exposes four model tools and an app-only approval tool',async()=>{
- const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
+test('v2 exposes six model tools and an app-only approval tool',async()=>{
+ const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_search','apiosk_prepare','apiosk_execute','apiosk_status','apiosk_approve']);
  for(const tool of tools){const uri=tool.name==='apiosk_approve'?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],tool.name==='apiosk_approve'?undefined:APIO_V2_CHATGPT_CARD_URI);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,tool.name==='apiosk_approve'?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);
  assert.ok(tools.find(t=>t.name==='apiosk_status').outputSchema.properties.status.enum.includes('cancelled'));
- for (const name of ['apiosk_discover','apiosk_execute','apiosk_status']) {
+ for (const name of ['apiosk_discover','apiosk_prepare','apiosk_execute','apiosk_status']) {
    const description=tools.find(t=>t.name===name).description;
    assert.match(description,/only a brief confirmation/);
    assert.match(description,/unless the user explicitly requests those details/);

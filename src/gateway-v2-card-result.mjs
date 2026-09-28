@@ -1,11 +1,32 @@
 import { V2_SOURCE_VALUE_FORMAT } from './source-value-format.mjs';
-// Source JSON stays unchanged; filing fields receive display-only formatting.
+import { V2_CARD_BODY } from './gateway-v2-card-body.mjs';
+// One source result, as the App shows it: the readable answer body (purchase
+// panel), filing fields and KVK company rows (GatewayV2Result), then the full
+// source data collapsed. Source JSON stays unchanged; formatting is display-only.
 export const V2_CARD_RESULT = `
 ${V2_SOURCE_VALUE_FORMAT}
-function scalarRows(value,depth=0){if(depth>1||value==null)return[];if(Array.isArray(value))return value.filter(v=>v==null||typeof v!=='object').slice(0,6).map((v,i)=>[i+1,v]);if(typeof value!=='object')return[['Result',value]];return Object.entries(value).filter(([k,v])=>!k.startsWith('@')&&!['raw','items','data'].includes(k)&&(v==null||typeof v!=='object')).slice(0,14).map(([k,v])=>[pretty(k),v])}
+${V2_CARD_BODY}
 function filingRows(fields,depth=0,rows=[],currency=null){if(depth>12||!Array.isArray(fields))return rows;for(const field of fields.slice(0,200)){if(rows.length>=100)break;if(field&&typeof field.key==='string'&&['string','number','boolean'].includes(typeof field.value))rows.push([field.key.replace(/([a-z])([A-Z])/g,'$1 $2'),formatSourceValue(field.value,field.key,sourceCurrency(field)||currency)]);if(field?.opendataFields)filingRows(field.opendataFields,depth+1,rows,currency)}return rows}
-function renderResult(data){if(data.result==null)return;byId('title').textContent=data.status==='partial'?'Partial source result':'Source result';byId('subtitle').textContent='Returned by the selected source and ready for your assistant.';const source=data.result&&data.result.source||{},s=section('Result'),wrap=el('div','result'),grid=el('div','result-grid');let body=displayData(data.result&&data.result.data!=null?data.result.data:data.result);const companies=Array.isArray(body?.resultaten)&&body.resultaten.every(r=>typeof r.naam==='string'&&typeof r.kvkNummer==='string')?body.resultaten:null;
- const report=data.result?.report;if(report?.format==='pdf'&&typeof report.url==='string'&&report.url.startsWith('https://')){const download=el('button','text-action','Download PDF');download.onclick=()=>window.apiosk.openLink(report.url);const links=el('div','result-links');links.append(download);wrap.append(links)}
- if(companies){wrap.append(el('p','meta',companies.length+' results shown'+(typeof body.totaal==='number'?' of '+body.totaal:'')+(body.pagina?' · Page '+body.pagina:'')));for(const row of companies){const line=el('div','result-row');line.append(el('div','value',row.naam),el('div','value','KVK '+row.kvkNummer+(row.adres?.binnenlandsAdres?.plaats?' · '+row.adres.binnenlandsAdres.plaats:'')));grid.append(line)}if(body.volgende)wrap.append(el('p','meta','The source has more results; this is the current page.'))}
- const filing=Array.isArray(body?.opendataFields),currency=sourceCurrency(body);if(filing)wrap.append(el('p','meta','Selected fields from the deposited annual accounts. '+(currency?'Currency: '+currency+'.':'No currency is specified in this response.')));const rows=companies?[]:filing?filingRows(body.opendataFields,0,[],currency):scalarRows(body).map(([key,value])=>[key,formatSourceValue(value,key,currency,data.result)]);for(const [k,v] of rows.slice(0,6)){const row=el('div','result-row');row.append(el('div','key',k),el('div','value',typeof v==='string'&&v.length>240?v.slice(0,240)+'…':v));grid.append(row)}const full=el('details','full-result'),toggle=el('summary','','Details');full.append(toggle);full.ontoggle=()=>window.apiosk.resize();if(rows.length||companies)wrap.append(grid);else full.append(el('div','notice','The source returned structured data. Open the JSON details below.'));const details=el('details'),summary=el('summary','','Source data'),pre=el('pre','',JSON.stringify(data.result,null,2));details.append(summary,pre);full.append(details);if(source.retrieved_at)full.append(el('p','meta','Retrieved '+new Date(source.retrieved_at).toLocaleString()));wrap.append(sourceLine(source));if(typeof source.url==='string'&&source.url.startsWith('https://')){const links=el('div','result-links'),link=el('button','text-action','View source');link.onclick=()=>window.apiosk.openLink(source.url);links.append(link);wrap.append(links)}wrap.append(full);s.append(wrap)}
+function resultBody(result){return result&&typeof result==='object'?result.data!==undefined?result.data:result.preview_data!==undefined?result.preview_data:result:result}
+function companyTable(companies,body){
+ const wrap=el('div','result-companies'),region=el('div','body-table-wrap'),table=el('table','body-table'),head=el('tr'),thead=el('thead'),tbody=el('tbody');
+ wrap.append(el('p','meta',companies.length+' results shown'+(typeof body.totaal==='number'?' of '+body.totaal:'')+(typeof body.pagina==='number'?' · Page '+body.pagina:'')));
+ for(const label of ['Company','KVK number','City'])head.append(el('th','',label));thead.append(head);
+ for(const row of companies){const tr=el('tr');for(const value of [row.naam,row.kvkNummer,row.adres?.binnenlandsAdres?.plaats??'—'])tr.append(el('td','',value));tbody.append(tr)}
+ table.append(thead,tbody);region.append(table);wrap.append(region);
+ if(body.volgende)wrap.append(el('p','meta','The source has more results. This response contains the current page.'));
+ return wrap}
+function renderResult(data){if(data.result==null)return;byId('title').textContent=data.status==='partial'?'Partial source result':'Source result';byId('subtitle').textContent='Returned by the selected source.';
+ const result=data.result,source=result&&result.source||{},subject=result?.subject?.label,s=section(typeof subject==='string'&&subject?'Result · '+formatDisplayNarrative(subject,result):'Result'),wrap=el('div','result'),body=displayData(resultBody(result)),currency=sourceCurrency(body);
+ const companies=Array.isArray(body?.resultaten)&&body.resultaten.every(r=>typeof r?.naam==='string'&&typeof r?.kvkNummer==='string')?body.resultaten:null,filing=Array.isArray(body?.opendataFields);
+ const report=result?.report,links=el('div','result-links');wrap.append(links);
+ if(report?.format==='pdf'&&typeof report.url==='string'&&report.url.startsWith('https://')){const download=el('button','text-action','Download PDF');download.onclick=()=>window.apiosk.openLink(report.url);links.append(download)}
+ if(companies)wrap.append(companyTable(companies,body));
+ else if(filing){wrap.append(el('p','meta','Selected fields from the deposited annual accounts. '+(currency?'Currency: '+currency+'.':'No currency is specified in this response.')));const dl=el('dl','body-fields');for(const [key,value] of filingRows(body.opendataFields,0,[],currency)){const row=el('div','result-row');row.append(el('dt','key',key),el('dd','value',value));dl.append(row)}wrap.append(dl)}
+ else wrap.append(answerBody(resultBody(result)));
+ const origin=el('div','result-source');origin.append(sourceLine(source));
+ if(typeof source.url==='string'&&source.url.startsWith('https://')){const link=el('button','text-action','View source');link.onclick=()=>window.apiosk.openLink(source.url);origin.append(link)}
+ if(source.retrieved_at)origin.append(el('span','meta','Retrieved '+new Date(source.retrieved_at).toLocaleString()));
+ const full=el('details','full-result');full.append(el('summary','','Full source data'),el('pre','',JSON.stringify(result,null,2)));full.ontoggle=()=>window.apiosk.resize();
+ wrap.append(origin,full);s.append(wrap)}
 `;

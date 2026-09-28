@@ -30,6 +30,14 @@
       "description": "Plan a new data question: one plan, one total price ceiling or the clarification it needs. Nothing is bought until the person approves."
     },
     {
+      "name": "apiosk_search",
+      "description": "Search sources the way the Ask page does, with a capability object the chatbot fills in. Returns ranked sources and each runnable endpoint's inputs. Free; buys nothing."
+    },
+    {
+      "name": "apiosk_prepare",
+      "description": "Prepare one searched endpoint with its filled-in inputs: the same task, price ceiling and approval card as discover. Nothing is bought until the person approves."
+    },
+    {
       "name": "apiosk_execute",
       "description": "Continue a task with a returned next_action: supply input, select an entity, run an approved step or cancel. Paid steps require the saved approval and current quote."
     },

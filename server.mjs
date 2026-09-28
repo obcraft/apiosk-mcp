@@ -285,6 +285,7 @@ for (const icon of SERVER_INFO.icons) {
 for (const asset of [
   { filename: "wordmark-black-320.png", type: "image/png" },
   { filename: "wordmark-white-320.png", type: "image/png" },
+  { filename: "inter-latin-400-normal.woff2", type: "font/woff2" },
   { filename: "inter-latin-500-normal.woff2", type: "font/woff2" },
   { filename: "inter-latin-600-normal.woff2", type: "font/woff2" },
 ]) {

@@ -69,10 +69,20 @@ export function sourcesOutputSchema(errorFields) {
 }
 
 /** A browse result as the chatbot sees it: no internal readiness fields and the public notice. */
+// A grouped provider lists every member's capabilities: Pulse Network alone
+// carries hundreds. Hosts and models need a readable page, not the index.
+const LISTED_CAPABILITIES = 12;
+const FACET_LIMIT = 200;
+const facet = values => Array.isArray(values) ? values.filter(value => !String(value).startsWith("operation.")).slice(0, FACET_LIMIT) : [];
+
 export function presentSources(result) {
   const { catalog_total: _catalogTotal, ...publicResult } = result;
-  return { ...publicResult,
-    sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, ...source }) => source),
+  return { ...publicResult, tags: facet(result.tags), capabilities: facet(result.capabilities),
+    sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, executable_capabilities: _executable, input_types: _inputs, readiness, capabilities, services, ...source }) => ({ ...source,
+      ...(readiness && { readiness: { contracts: readiness.contracts } }),
+      ...(Array.isArray(capabilities) && { capabilities: facet(capabilities).slice(0, LISTED_CAPABILITIES) }),
+      ...(Array.isArray(services) && { services: services.map(service => typeof service.description === "string" ? { ...service, description: service.description.slice(0, 200) } : service) }),
+    })),
     notice: `Browsing is free. Published sources may have execution or coverage restrictions. Capability groups list primary sources; supplementary sources are optional enrichment. Each source is counted once. ${GROUPED_SOURCES_NOTICE} Apiosk checks the exact question and price before any purchase.`,
   };
 }

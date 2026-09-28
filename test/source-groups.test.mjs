@@ -52,3 +52,24 @@ test('presentation never forwards the gateway notice or internal readiness flags
   assert.equal(shown.catalog_total, undefined);
   assert.notEqual(shown.notice, 'internal');
 });
+
+test('a source page larger than a task view is read and trimmed to what hosts display', async () => {
+  // Pulse Network lists every member capability: the live page passed 256 KB
+  // and the whole browse failed as "temporarily unavailable".
+  const capabilities = Array.from({ length: 4000 }, (_, i) => `pulse.operation_${String(i).padStart(4, '0')}.lookup`);
+  const pulse = { slug: 'pulsenetwork', name: 'Pulse Network', category: 'intelligence', service_count: 916, capabilities, executable_capabilities: capabilities, input_types: ['company.name'],
+    readiness: { contracts: { accepted_contracts: 916 }, coverage_notices: capabilities }, services: [{ slug: 'tax-pulse', name: 'TaxPulse', description: 'x'.repeat(900) }] };
+  const page = { protocol_version: '2', sources: [pulse], total: 1, offset: 0, next_offset: null, categories: ['intelligence'], tags: capabilities, sectors: [], capabilities: [...capabilities, 'operation.hidden'], notice: 'n' };
+  assert.ok(JSON.stringify(page).length > 256 * 1024);
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(page) });
+  const result = await runtime.callTool('apiosk_sources', {});
+  assert.equal(result.isError, undefined);
+  const [source] = result.structuredContent.sources;
+  assert.equal(source.capabilities.length, 12);
+  assert.equal(source.executable_capabilities, undefined);
+  assert.deepEqual(source.readiness, { contracts: { accepted_contracts: 916 } });
+  assert.equal(source.services[0].description.length, 200);
+  assert.equal(result.structuredContent.capabilities.length, 200);
+  assert.ok(!result.structuredContent.capabilities.includes('operation.hidden'));
+  assert.ok(result.content[0].text.length < 64 * 1024);
+});

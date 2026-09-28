@@ -148,24 +148,38 @@ export function uiResourceMeta(description) {
   };
 }
 
+// The App's design tokens (app/src/index.css), both themes. Dark follows the
+// host's data-theme, else the system preference, and swaps the whole set.
+const LIGHT_TOKENS = "color-scheme:light;--background:#fafafa;--background-2:oklch(.975 .004 265);--surface:oklch(1 0 0);--surface-muted:oklch(.965 .005 265);--surface-soft:#f4f4f5;--card:oklch(1 0 0);--foreground:#303036;--heading:#232329;--muted:oklch(.52 .02 265);--faint:oklch(.62 .018 265);--border:#e9e9ed;--border-2:#dddde3;--border-3:oklch(.82 .01 265);--accent:#6349db;--accent-fg:#fff;--accent-line:rgb(99 73 219/.4);--accent-wash:rgb(99 73 219/.07);--accent-wash-strong:rgb(99 73 219/.13);--secondary:oklch(.96 .006 265);--secondary-fg:oklch(.26 .02 265);--button-primary-bg-hover:#553cc5;--button-secondary-bg:oklch(1 0 0);--button-secondary-fg:oklch(.26 .02 265);--input-bg:oklch(1 0 0);--hover:oklch(.21 .02 265/.05);--success-bg:#e8faf1;--success-fg:#057857;--success-border:#c9efdc;--warning-bg:#fdf5e6;--warning-fg:#b26a12;--warning-border:#f2e2c4;--danger-bg:#fff2f4;--danger-fg:#b42318;--danger-border:#fecdd3";
+const DARK_TOKENS = "color-scheme:dark;--background:oklch(.148 .014 265);--background-2:oklch(.172 .014 265);--surface:oklch(.185 .015 265);--surface-muted:oklch(.225 .015 265);--surface-soft:oklch(.258 .015 265);--card:oklch(.185 .015 265);--foreground:oklch(.925 .008 265);--heading:oklch(.975 .004 265);--muted:oklch(.715 .018 265);--faint:oklch(.565 .02 265);--border:rgba(255,255,255,.08);--border-2:rgba(255,255,255,.12);--border-3:rgba(255,255,255,.18);--accent:#c3a0ff;--accent-fg:#25153c;--accent-line:rgb(195 160 255/.45);--accent-wash:rgb(195 160 255/.12);--accent-wash-strong:rgb(195 160 255/.2);--secondary:oklch(.265 .018 265);--secondary-fg:oklch(.93 .008 265);--button-primary-bg-hover:#d2b8ff;--button-secondary-bg:oklch(.225 .015 265);--button-secondary-fg:oklch(.925 .008 265);--input-bg:oklch(.172 .014 265);--hover:rgba(255,255,255,.06);--success-bg:rgba(16,185,129,.14);--success-fg:#6ee7b7;--success-border:rgba(16,185,129,.28);--warning-bg:rgba(251,191,36,.14);--warning-fg:#fbbf24;--warning-border:rgba(251,191,36,.28);--danger-bg:rgba(244,63,94,.14);--danger-fg:#fda4af;--danger-border:rgba(244,63,94,.28)";
+const FONT = weight => `@font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-${weight}-normal.woff2") format("woff2");font-style:normal;font-weight:${weight};font-display:swap}`;
+
 /**
  * Embedded cards follow the chat host, falling back to the system theme.
+ *
+ * The App's type rules: Inter 400 body without letter-spacing, 500 for names
+ * and headings, 600 only at 16px and 24px; four sizes (12/14/16/24); no
+ * uppercase micro-caps; no monospace face. Radii: 6px controls, 8px panels,
+ * 12px cards.
  */
 export const APIOSK_UI_STYLE = `
-@font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-500-normal.woff2") format("woff2");font-style:normal;font-weight:500;font-display:swap}
-@font-face{font-family:Inter;src:url("https://mcp.apiosk.com/brand/inter-latin-600-normal.woff2") format("woff2");font-style:normal;font-weight:600;font-display:swap}
-:root{color-scheme:light dark;font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;--apiosk-accent:#6349db;--apiosk-accent-fg:#fff;--apiosk-accent-line:rgb(99 73 219/.4);--apiosk-accent-wash:rgb(99 73 219/.07)}
-:root[data-theme=dark]{--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--apiosk-accent:#c3a0ff;--apiosk-accent-fg:#25153c;--apiosk-accent-line:rgb(195 160 255/.45);--apiosk-accent-wash:rgb(195 160 255/.12)}}
-*{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:CanvasText;font-weight:500;letter-spacing:-.011em;-webkit-font-smoothing:antialiased}
-.card{border:1px solid color-mix(in srgb,CanvasText 14%,transparent);border-radius:12px;padding:16px;background:Canvas;color:CanvasText}
-.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.58}
-h2{font-size:17px;line-height:1.25;margin:2px 0 0;font-weight:600;letter-spacing:-.025em}
-.meta,.hint,.status{font-size:12px;line-height:1.45;opacity:.72}
-.status{margin-top:12px;min-height:18px}.status.error{color:#b94848;opacity:1}.status.ok{color:#167a50;opacity:1}
-button{border:0;border-radius:10px;padding:10px 12px;font:inherit;font-weight:600;letter-spacing:-.016em;cursor:pointer}
-.primary{background:var(--apiosk-accent);color:var(--apiosk-accent-fg)}.secondary{background:color-mix(in srgb,CanvasText 9%,transparent);color:CanvasText}
-button:disabled{opacity:.5;cursor:default}
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+${[400, 500, 600].map(FONT).join("\n")}
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif;${LIGHT_TOKENS}}
+:root[data-theme=dark]{${DARK_TOKENS}}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){${DARK_TOKENS}}}
+*{box-sizing:border-box}body{margin:0;padding:12px;background:transparent;color:var(--foreground);font-size:14px;line-height:20px;font-weight:400;font-feature-settings:normal;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+h1,h2,h3,h4{color:var(--heading);font-weight:500;margin:0}
+pre,code{font:inherit}
+::selection{background:var(--accent-wash-strong);color:var(--heading)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.card{border:1px solid var(--border-2);border-radius:12px;padding:16px;background:var(--card);color:var(--foreground)}
+h2{font-size:16px;line-height:24px;font-weight:600;letter-spacing:-.011em}
+.meta,.hint,.status{font-size:12px;line-height:16px;color:var(--muted)}
+.status{margin-top:12px;min-height:16px}.status.error{color:var(--danger-fg)}.status.ok{color:var(--success-fg)}
+button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;border:1px solid var(--border-2);border-radius:6px;padding:0 12px;background:var(--button-secondary-bg);color:var(--button-secondary-fg);font:inherit;font-size:14px;line-height:20px;font-weight:500;cursor:pointer;transition:background-color .15s,color .15s}
+button:hover{background:var(--secondary)}
+.primary{border-color:transparent;background:var(--accent);color:var(--accent-fg)}.primary:hover{background:var(--button-primary-bg-hover)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
 .hidden{display:none}
 `;

@@ -96,7 +96,9 @@ test('supplier answer precedes one collapsed source group and opening it never p
   assert.ok(disclosure.querySelectorAll('.source-result-group').every(group=>!group.open));
   assert.equal(disclosure.querySelectorAll('pre').length,8,'every original source response is retained');
   assert.ok(flatten(disclosure).includes('VAT remains unverified because no UK VAT candidate was found.'));
-  assert.ok(sections.children[0].querySelectorAll('button').some(b=>b.textContent==='Download PDF'));
+  // As in the App: no document was asked for, so the report waits in details.
+  assert.ok(!sections.children[0].querySelectorAll('button').some(b=>b.textContent==='Download PDF'));
+  assert.ok(disclosure.querySelectorAll('button').some(b=>b.textContent==='Download PDF'));
   disclosure.open=true;disclosure.ontoggle();
   assert.equal(calls.length,0);
   await h.globals({toolOutput:{...data,state:{...data.state,revision:10}}});
@@ -692,7 +694,8 @@ test('company names use readable casing throughout the card without changing sel
  assert.ok(rendered.includes('Result · Orion Beheer BV'));
  assert.ok(rendered.includes('Orion Beheer BV is registered.'));
  assert.ok(rendered.includes('Orion Beheer BV'));
- assert.ok(rendered.includes('KVK 01234567 · Amsterdam'));
+ const cells=h.nodes.get('sections').querySelectorAll('td').map(n=>n.textContent);
+ assert.deepEqual(cells,['Orion Beheer BV','01234567','Amsterdam']);
  assert.ok(h.nodes.get('sections').querySelectorAll('pre').some(node=>node.textContent.includes(raw)));
  assert.equal(result.data.resultaten[0].naam,raw);
 });
@@ -703,4 +706,126 @@ test('evidence bundle download opens the saved archive without calling a paid to
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{report:{format:'pdf',evidence_url}},result:{data:{name:'Example'}}},openExternal:({href})=>opened.push(href),callTool:async(...args)=>calls.push(args)});
  const button=h.nodes.get('sections').querySelectorAll('button').find(n=>n.textContent==='Download evidence');
  assert.ok(button); await button.onclick(); assert.deepEqual(opened,[evidence_url]);assert.deepEqual(calls,[]);
+});
+
+test('the card carries the App tokens for both themes and its type rules',()=>{
+ const css=APIO_V2_CARD_HTML.match(/<style>([\s\S]*?)<\/style>/)[1];
+ assert.doesNotMatch(css,/CanvasText|Canvas\b|color-mix|monospace|uppercase/);
+ assert.match(css,/:root\{[^}]*--card:oklch\(1 0 0\)[^}]*--foreground:#303036/);
+ assert.match(css,/:root\[data-theme=dark\]\{[^}]*--card:oklch\(\.185 \.015 265\)[^}]*--danger-fg:#fda4af/);
+ assert.match(css,/@media\(prefers-color-scheme:dark\)\{:root:not\(\[data-theme=light\]\)\{[^}]*--foreground:oklch\(\.925 \.008 265\)/);
+ assert.deepEqual([...new Set([...css.matchAll(/font-size:(\d+)px/g)].map(m=>Number(m[1])))].sort((a,b)=>a-b),[12,14,16,24]);
+ assert.match(css,/body\{[^}]*font-weight:400/);
+ assert.doesNotMatch(css,/letter-spacing:\.0[3-9]/);
+ for(const weight of [400,500,600])assert.match(css,new RegExp('inter-latin-'+weight+'-normal\\.woff2'));
+});
+
+const searchView={protocol_version:'2',view:'source_search',apiosk_sources_searched:112,catalog_version:'c1',notice:'Prices are per call.',
+ parsed_request:{capabilities:[{slug:'company.profile',name:'Company profile',description:'Registered company details'},{slug:'time.current',name:'Current time'},{slug:'weather.current',name:'Current weather'}]},
+ matches:[
+  {slug:'company.profile',query:'company profile',operations:['lookup'],coinbase:[],coinbase_status:'skipped',apiosk:[
+   {origin:'apiosk',name:'KVK Basisprofiel',description:'Dutch company register profile',source_slug:'kvk',capability:'company.profile',endpoint_id:'e1',url:null,method:'GET',price:'0.001',network:null,calls_30d:12,availability:'supported',logo_url:null,
+    endpoint:{endpoint_id:'e1',capability:'company.profile',name:'KVK Basisprofiel',description:'Profile',source:{slug:'kvk',name:'KVK',logo_url:null,url:'https://kvk.nl'},inputs:[{field:'company_registry.kvknummer',required:true,schema:{type:'string'}},{field:'company.name',required:false,schema:{}}],lookup:null,price:{currency:'USDC',provider_atomic:'1000',buyer_atomic:'1100'}}},
+   {origin:'apiosk',name:'OpenCorporates',description:'Global registry index',source_slug:'opencorporates',capability:'company.profile',endpoint_id:null,url:null,method:'GET',price:null,network:null,calls_30d:null,availability:'discovery_only',logo_url:null,endpoint:null}]},
+  {slug:'time.current',query:'current time',operations:[],apiosk:[],coinbase_status:'complete',coinbase:[{origin:'coinbase',name:'Clock API',description:'x402 time service',source_slug:null,capability:null,endpoint_id:null,url:null,method:'GET',price:'0.0025 USD',network:'base',calls_30d:null,availability:'unverified',logo_url:null}]},
+  {slug:'weather.current',query:'weather',operations:[],apiosk:[],coinbase:[],coinbase_status:'unavailable'}]};
+
+test('a source search lists candidates per requested capability and offers nothing to buy',async()=>{
+ const calls=[],h=harness(APIO_V2_CARD_HTML,{toolOutput:searchView,callTool:async(...args)=>{calls.push(args);return{structuredContent:searchView}}});
+ const sections=h.nodes.get('sections'),texts=flatten(sections);
+ assert.equal(h.nodes.get('title').textContent,'3 matching sources');
+ assert.equal(h.nodes.get('subtitle').textContent,'Searched 112 Apiosk sources. Nothing is bought from this list.');
+ assert.deepEqual(sections.querySelectorAll('h3').map(n=>n.textContent),['Company profile','Current time','Current weather','About these results']);
+ assert.deepEqual(sections.querySelectorAll('.search-name').map(n=>n.textContent),['KVK Basisprofiel','OpenCorporates','Clock API']);
+ assert.deepEqual(sections.querySelectorAll('.search-price').map(n=>n.textContent),['0.0011 USD','—','0.0025 USD']);
+ assert.deepEqual(sections.querySelectorAll('.search-state').map(n=>n.textContent),['Available','Discovery only','Unverified']);
+ assert.deepEqual(sections.querySelectorAll('.search-inputs').map(n=>n.textContent),['Needs KVK number'],'only required inputs of supported rows');
+ for(const line of ['Registered company details','No matching source was found for this part of the question.','Coinbase Bazaar search is unavailable right now.','Prices are per call.'])assert.ok(texts.includes(line),line);
+ assert.equal(sections.querySelectorAll('button').length,0);
+ await h.tick(100);await h.tick(350);assert.deepEqual(calls,[]);
+});
+
+test('existing views still render after a source search',async()=>{
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:searchView}});
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{protocol_version:'2',sources:[{name:'Registry',category:'company data'}],total:1,offset:0,next_offset:null}}});
+ assert.equal(h.nodes.get('title').textContent,'1 matching source');
+ assert.equal(h.nodes.get('sections').querySelectorAll('.search-row').length,0);
+});
+
+test('a single-endpoint result reads as the App answer body, not as a missing assessment',async()=>{
+ const opened=[],result={result_ref:'r1',subject:{label:'ACME BV'},source:{name:'Registry',provider:'registry'},data:{data:{id:'abc123',name:'ACME BV',website:'https://acme.example',employees:12,address:{city:'UTRECHT'},filings:[{year:2023,revenue:100},{year:2024,revenue:120}]}}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{},result},openExternal:({href})=>opened.push(href)});
+ const sections=h.nodes.get('sections'),texts=flatten(sections);
+ assert.equal(h.nodes.get('title').textContent,'Source result');
+ assert.ok(!texts.some(t=>/assessment is not available|Sources and details/.test(t)));
+ assert.equal(sections.children[0].querySelector('h3').textContent,'Result · Acme BV');
+ assert.deepEqual(sections.querySelectorAll('dt').map(n=>n.textContent),['Name','Website','Employees','City'],'plumbing such as id stays out of the reader');
+ assert.ok(texts.includes('Acme BV')&&texts.includes('Utrecht')&&texts.includes('12'));
+ assert.deepEqual(sections.querySelectorAll('th').map(n=>n.textContent),['Year','Revenue']);
+ assert.deepEqual(sections.querySelectorAll('td').map(n=>flatten(n).join('')),['2023','100','2024','120']);
+ const link=sections.querySelectorAll('a')[0];assert.equal(link.href,'https://acme.example');
+ link.onclick({preventDefault(){}});assert.deepEqual(opened,['https://acme.example']);
+ const full=sections.querySelectorAll('details').find(d=>d.children[0].textContent==='Full source data');
+ assert.ok(!full.open);assert.match(full.querySelector('pre').textContent,/abc123/);
+});
+
+test('research answers show every observation, period headings, all specific limitations and the follow-up',()=>{
+ const results=[{result_ref:'a',source:{name:'KVK'},data:{fiscal_year:'2023',revenue:'1250000',currency:'EUR'}},{result_ref:'b',source:{name:'KVK'},data:{fiscal_year:'2024',revenue:'1500000',currency:'EUR'}}];
+ const generic='Some source information is unavailable. The answer uses the available results.';
+ const analysis={status:'completed',follow_up_question:'Compare with 2022?',limitations:[generic,'Filed accounts are unaudited.','Group figures are not consolidated.'],observations:[
+  {text:'Revenue was 1250000 EUR.',evidence:[{result_ref:'a',pointer:'/data/revenue',value:'1250000'}]},{text:'Revenue rose to 1500000 EUR.',evidence:[{result_ref:'b',pointer:'/data/revenue',value:'1500000'}]},
+  {text:'Third finding.',evidence:[]},{text:'Fourth finding.',evidence:[]},{text:'Fifth finding.',evidence:[]}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{analysis,results}}});
+ const answer=h.nodes.get('sections').children[0],texts=flatten(answer);
+ assert.equal(h.nodes.get('title').textContent,'Answer');
+ assert.deepEqual(answer.querySelectorAll('h3').map(n=>n.textContent),['Reporting period 2023','Reporting period 2024','Key findings','Source notes']);
+ for(const line of ['€ 1,250,000.','€ 1,500,000.','Fifth finding.','Filed accounts are unaudited.','Group figures are not consolidated.','Compare with 2022?'])assert.ok(texts.includes(line),line);
+ assert.ok(!texts.includes(generic),'generic caveats stay in details');
+ assert.ok(flatten(h.nodes.get('sections').querySelector('.source-results-toggle')).includes(generic));
+});
+
+test('version 2 answer blocks render a sortable, filterable table, bars and a generic fallback',()=>{
+ const analysis={status:'completed',answer_schema_version:2,observations:[{text:'Two companies matched.',evidence:[]}],limitations:[],source_index:[{result_ref:'r',name:'Registry'}],blocks:[
+  {id:'n',kind:'narrative',observation_ids:['o1'],provisional:false,produced_by:'model'},
+  {id:'t',kind:'data_table',title:'Companies',provisional:false,produced_by:'model',collection:{result_ref:'r',rows_pointer:'/data/items',row_indices:[0,1]},columns:[{id:'name',label:'Name',pointer:'/name',role:'label'},{id:'emp',label:'Employees',pointer:'/employees',role:'number'}],rows:[{row_index:1,cells:[{value:'Beta'},{value:null}]},{row_index:0,cells:[{value:'Alpha'},{value:1200}]}],sort:{column_id:'emp',direction:'desc'},coverage:{selected:2,fetched:2,total_available:9,paginated:true,scope:'fetched_page'}},
+  {id:'b',kind:'bar_chart',value_label:'Employees',provisional:false,produced_by:'model',bars:[{id:'b1',label:'Alpha',rank:1,fact:{value:1200,result_ref:'r',pointer:'/data/items/0/employees'}},{id:'b2',label:'Beta'}]},
+  {id:'k',kind:'kpi',title:'Headcount',provisional:false,produced_by:'model',cards:[{id:'c',label:'Total employees',fact:{value:1200,derivation_id:'sum'}}]}]};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{analysis,results:[{result_ref:'r',source:{name:'Registry'},data:{items:[]}}]}}});
+ const answer=h.nodes.get('sections').children[0],texts=flatten(answer);
+ assert.ok(texts.includes('Two companies matched.'));
+ assert.ok(!texts.some(t=>/narrative/.test(t)));
+ const [table,generic]=answer.querySelectorAll('table');
+ assert.deepEqual(table.querySelectorAll('th').map(n=>n.textContent),['Name','Employees']);
+ assert.deepEqual(table.querySelectorAll('.fact-value,.body-muted').map(n=>n.textContent),['Alpha','1.200','Beta','Unknown'],'sorted descending, nulls last');
+ assert.ok(texts.includes('Registry · /data/items/0/name'));
+ assert.ok(texts.includes('2 selected · 2 fetched · 9 total available'));
+ const filter=answer.querySelector('.block-filter');filter.value='bet';filter.oninput();
+ assert.ok(flatten(answer).includes('2 selected · 2 fetched · 9 total available · 1 match the filter'));
+ assert.deepEqual(answer.querySelectorAll('table')[0].querySelectorAll('.fact-value,.body-muted').map(n=>n.textContent),['Beta','Unknown']);
+ assert.deepEqual(answer.querySelectorAll('.bar-label').map(n=>n.textContent),['#1 Alpha','Beta']);
+ assert.equal(answer.querySelectorAll('.bar-fill').length,1);
+ assert.deepEqual(generic.querySelectorAll('th').map(n=>n.textContent),['Field','Value','Source']);
+ assert.deepEqual(generic.querySelectorAll('td').map(n=>flatten(n).join('')),['Total employees','1.200','Calculated']);
+});
+
+test('a presentation table formats cited values without dumping the source rows',()=>{
+ const analysis={status:'completed',observations:[{text:'Revenue by year.',evidence:[]}],limitations:[],presentation:{kind:'table',title:'Revenue',columns:[{value:'Year'},{value:'Revenue'},{value:'Currency'}],rows:[[{value:'2023'},{value:'1250000',result_ref:'a',pointer:'/data/revenue'},{value:'EUR'}]]}};
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{analysis,results:[{result_ref:'a',source:{name:'KVK'},data:{revenue:'1250000'}}]}}});
+ const answer=h.nodes.get('sections').children[0];
+ assert.deepEqual(answer.querySelectorAll('th').map(n=>n.textContent),['Year','Revenue','Currency']);
+ assert.deepEqual(answer.querySelectorAll('td').map(n=>flatten(n).join('')),['2023','€ 1,250,000','EUR']);
+ assert.ok(flatten(answer).includes('1 rows shown. Based on saved source data. Missing values are unknown.'));
+});
+
+test('the report PDF joins the answer only when the question asked for a document',()=>{
+ const base={...v2Ready,status:'succeeded',next_actions:[],context_view:{analysis:{status:'completed',observations:[{text:'Done.',evidence:[]}],limitations:[]},report:{format:'pdf',url:'https://api.apiosk.com/r.pdf',evidence_url:'https://api.apiosk.com/e.zip'},results:[{result_ref:'a',source:{name:'KVK'},data:{name:'Acme'}}]}};
+ for(const [question,inAnswer] of [['Prepare a due diligence report for Acme',true],['Is Acme active?',false]]){
+  const data={...base,context_view:{...base.context_view,conversation:[{question}]}};
+  const sections=harness(APIO_V2_CARD_HTML,{toolOutput:data}).nodes.get('sections'),labels=node=>node.querySelectorAll('button').map(b=>b.textContent);
+  assert.equal(labels(sections.children[0]).includes('Download PDF'),inAnswer,question);
+  assert.ok(!labels(sections.children[0]).includes('Download evidence'));
+  const details=sections.querySelector('.source-results-toggle');
+  assert.ok(labels(details).includes('Download PDF')&&labels(details).includes('Download evidence'));
+ }
 });

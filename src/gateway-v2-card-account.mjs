@@ -1,8 +1,3 @@
-export const V2_ACCOUNT_STYLE = `
-.account-links{display:flex;align-items:center;gap:5px;flex:0 0 auto}.account-links button{padding:6px 8px;border:1px solid color-mix(in srgb,CanvasText 10%,transparent);background:Canvas;color:CanvasText;font-size:10px;white-space:nowrap}.account-links button:hover{background:color-mix(in srgb,CanvasText 6%,transparent)}
-@media(max-width:480px){.account-links{width:100%}.account-links button{flex:1}}
-`;
-
 export const V2_ACCOUNT_MARKUP = `<nav class="account-links hidden" id="account-shortcuts" aria-label="Apiosk account shortcuts"><button type="button" id="balance-shortcut">Balance</button><button type="button" id="history-shortcut">History</button></nav>`;
 
 // Workspace scoping and destinations remain Gateway output, never client input.
