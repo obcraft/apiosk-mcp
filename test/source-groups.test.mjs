@@ -68,7 +68,7 @@ test('a source page larger than a task view is read and trimmed to what hosts di
   assert.equal(source.capabilities.length, 12);
   assert.equal(source.executable_capabilities, undefined);
   assert.deepEqual(source.readiness, { contracts: { accepted_contracts: 916 } });
-  assert.equal(source.services[0].description.length, 200);
+  assert.equal(source.services[0].description.length, 120);
   assert.equal(result.structuredContent.capabilities.length, 200);
   assert.ok(!result.structuredContent.capabilities.includes('operation.hidden'));
   assert.ok(result.content[0].text.length < 64 * 1024);
