@@ -64,7 +64,9 @@ export function sourcesOutputSchema(errorFields) {
       capability_groups: { type: "array", items: capabilityGroup },
       selected_capability: { anyOf: [capabilityGroup, { type: "null" }] },
     },
-    anyOf: [{ required: ["protocol_version", "sources", "total", "offset", "categories", "tags", "sectors", "capabilities", "notice"] }, { required: ["error_code", "message"] }],
+    // tags and capabilities come with the first unfiltered page only (the gateway
+    // leaves them out of filtered calls and later pages), so they are optional.
+    anyOf: [{ required: ["protocol_version", "sources", "total", "offset", "categories", "sectors", "notice"] }, { required: ["error_code", "message"] }],
   };
 }
 
@@ -77,7 +79,11 @@ const facet = values => Array.isArray(values) ? values.filter(value => !String(v
 
 export function presentSources(result) {
   const { catalog_total: _catalogTotal, ...publicResult } = result;
-  return { ...publicResult, tags: facet(result.tags), capabilities: facet(result.capabilities),
+  // Absent is not empty: an omitted list must not read as "no tags exist".
+  const facets = Array.isArray(result.tags) || Array.isArray(result.capabilities);
+  return { ...publicResult,
+    ...(Array.isArray(result.tags) && { tags: facet(result.tags) }),
+    ...(Array.isArray(result.capabilities) && { capabilities: facet(result.capabilities) }),
     sources: result.sources.map(({ available_in_v2: _available, can_answer_questions: _canAnswer, executable_capabilities: _executable, input_types: _inputs, readiness, capabilities, services, tags, categories, ...source }) => ({ ...source,
       ...(readiness && { readiness: { contracts: readiness.contracts } }),
       ...(Array.isArray(capabilities) && { capabilities: facet(capabilities).slice(0, LISTED_CAPABILITIES) }),
@@ -86,6 +92,6 @@ export function presentSources(result) {
       ...(Array.isArray(categories) && { categories: categories.slice(0, LISTED_CAPABILITIES) }),
       ...(Array.isArray(services) && { services: services.map(service => typeof service.description === "string" ? { ...service, description: service.description.slice(0, 120) } : service) }),
     })),
-    notice: `Browsing is free. Published sources may have execution or coverage restrictions. Capability groups list primary sources; supplementary sources are optional enrichment. Each source is counted once. ${GROUPED_SOURCES_NOTICE} Apiosk checks the exact question and price before any purchase.`,
+    notice: `Browsing is free. Published sources may have execution or coverage restrictions. Capability groups list primary sources; supplementary sources are optional enrichment. Each source is counted once. ${GROUPED_SOURCES_NOTICE} Apiosk checks the exact question and price before any purchase.${facets ? "" : " The tag and capability lists come with the first unfiltered page."}`,
   };
 }
