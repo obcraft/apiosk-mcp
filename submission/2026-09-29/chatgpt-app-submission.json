@@ -1,0 +1,142 @@
+{
+  "$schema": "https://developers.openai.com/plugins/schemas/chatgpt-app-submission.v1.json",
+  "schema_version": 1,
+  "tools": {
+    "apiosk_sources": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads the published Apiosk source catalogue and returns paginated source metadata. It does not create tasks, change account data, buy data or execute provider calls.",
+        "open_world_justification": "Queries the fixed Apiosk source catalogue through the configured Gateway. Users cannot supply arbitrary destinations or ask this tool to contact a provider endpoint.",
+        "destructive_justification": "Does not delete, overwrite or revoke any data or resources. It only returns catalogue information."
+      }
+    },
+    "apiosk_discover": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates and stores a task, execution plan and price quote. If the connection has an applicable automatic-approval rule, it may also authorize and start work within that existing mandate; otherwise the user must approve the displayed plan.",
+        "open_world_justification": "Plans requests about external companies, public records and other data sources, and may start external provider work under an applicable pre-authorized spending rule. Its scope is not limited to records already stored in Apiosk.",
+        "destructive_justification": "Creates task and quote records and may append authorized usage and billing records. It does not expose operations for deleting or overwriting user files or upstream records. Financial side effects are disclosed and bounded by the account spending mandate."
+      }
+    },
+    "apiosk_search": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Searches and ranks source listings for a structured capability request. It does not create a paid execution, authorize spending or invoke the returned provider offers.",
+        "open_world_justification": "Searches the configured Apiosk source catalogue through the fixed Gateway search endpoint. Results are catalogue entries; the tool does not visit arbitrary result URLs or execute the listed services.",
+        "destructive_justification": "Does not delete, overwrite or revoke resources. Searching returns candidate source metadata and input requirements only."
+      }
+    },
+    "apiosk_prepare": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Creates a persisted task and quote for one selected catalogue endpoint and supplied inputs. This changes task state, so it is not marked read-only. Preparation does not itself purchase the endpoint.",
+        "open_world_justification": "Prepares a selected endpoint from the configured catalogue inside Apiosk. It validates inputs and produces a quote; it does not execute the external provider or accept arbitrary network destinations.",
+        "destructive_justification": "Creates a task and quote without deleting or overwriting existing user or provider data. Paid execution remains separately controlled by the saved approval and spending limits."
+      }
+    },
+    "apiosk_execute": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": true,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Changes an existing task by applying a returned action, such as supplying input, selecting an entity, continuing approved work or stopping remaining work. Executing an approved paid step can charge the connected balance within the saved ceiling.",
+        "open_world_justification": "Approved task actions can retrieve data from external API providers and public sources. Execution is restricted to the saved task and returned action identifiers.",
+        "destructive_justification": "Does not expose deletion or overwrite operations for upstream records or user files. Cancellation stops future work while preserving existing results and charges. Approved executions can create usage charges, and the tool is therefore explicitly not read-only."
+      }
+    },
+    "apiosk_status": {
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Reads an existing task, saved results, actual charges and current status. It never replans, approves spending, dispatches provider work or buys data.",
+        "open_world_justification": "Reads only an owner-scoped task and results already held by Apiosk. It does not contact the original sources or follow arbitrary URLs.",
+        "destructive_justification": "Does not delete or overwrite tasks, results, approvals or billing records. It is a read-only recovery and status operation."
+      }
+    },
+    "apiosk_approve": {
+      "annotations": {
+        "readOnlyHint": false,
+        "openWorldHint": false,
+        "destructiveHint": false
+      },
+      "justifications": {
+        "read_only_justification": "Records authorization for the exact displayed quote and maximum total, then starts server execution within the connected account spending limits. It can reserve and charge balance. It is app-only and invoked by the approval button, not by the model.",
+        "open_world_justification": "Accepts only an existing Apiosk task state, quote reference and price ceiling. It has no arbitrary URL, provider or destination input. External retrieval is performed by the separately bounded task execution.",
+        "destructive_justification": "Adds a quote-bound authorization and starts the existing task; it does not delete or overwrite user files or upstream records. Financial effects are real, explicitly approved and bounded by the displayed ceiling."
+      }
+    }
+  },
+  "test_cases": [
+    {
+      "description": "Browse published company-data sources without purchasing.",
+      "user_prompt": "Which sources in Apiosk can provide Dutch company registration information?",
+      "tools_triggered": "apiosk_sources",
+      "expected_output": "A source list grounded in the published catalogue, with source names, coverage and pagination when needed. No task approval, provider execution or charge."
+    },
+    {
+      "description": "Search by structured capabilities and prepare one source quote. Use a demo connection with manual approval enabled.",
+      "user_prompt": "Find an API for the registered name and address of Coolblue B.V. from KVK. Show the source and total price before running anything.",
+      "tools_triggered": "apiosk_search; apiosk_prepare after required inputs are available",
+      "expected_output": "The host builds the capability object from the request without inventing identifiers. Search returns ranked source candidates and their endpoint input fields. A selected supported endpoint is prepared using known values; missing required inputs trigger clarification. Preparation returns a task and quote for review, without a purchase."
+    },
+    {
+      "description": "Clarify an incomplete data question instead of inventing a company identity. Use a demo connection with manual approval enabled.",
+      "user_prompt": "Retrieve the official registration record for a company.",
+      "tools_triggered": "apiosk_discover; apiosk_execute only after the user supplies the missing company identity through a returned action",
+      "expected_output": "A targeted question asks which company is intended. The host uses only returned action identifiers to continue the same task. It does not guess an identity or buy a record before approval."
+    },
+    {
+      "description": "Run a complete approved request with one price ceiling. Precondition: funded dedicated demo account, manual approval enabled, and per-call/day limits sufficient for the displayed quote. The reviewer clicks Approve only after reviewing the plan.",
+      "user_prompt": "Who controls Monzo Bank Limited according to Companies House? Show the plan and total price first.",
+      "tools_triggered": "apiosk_discover; apiosk_approve only from the user-operated card; apiosk_execute for returned continuation actions if needed; apiosk_status for progress",
+      "expected_output": "The card shows the requested company, relevant sources, planned items and total ceiling. A chat message alone never authorizes spending. After the reviewer explicitly approves, the backend executes the saved plan within its cap. Results retain source attribution, and actual charges or source-specific limitations are reported without fabricating missing information."
+    },
+    {
+      "description": "Recover saved results and charges after the previous approved test, without buying the same work again.",
+      "user_prompt": "Show the saved results and actual amount charged for that Monzo request again. Do not run it again.",
+      "tools_triggered": "apiosk_status",
+      "expected_output": "The host reuses the earlier state.state_ref as task_ref. The response reads saved results, billing and current status. No new discovery, preparation, approval or paid provider call is made."
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "description": "Rewrite user-supplied text without external data.",
+      "user_prompt": "Rewrite this sentence more politely: Send me the report now.",
+      "tools_triggered": "None",
+      "expected_output": "The assistant rewrites the sentence using the conversation content and does not call Apiosk."
+    },
+    {
+      "description": "Answer a simple arithmetic question without external data.",
+      "user_prompt": "What is 18 multiplied by 7?",
+      "tools_triggered": "None",
+      "expected_output": "The assistant answers 126 without invoking Apiosk or creating a data request."
+    },
+    {
+      "description": "Summarize content already supplied in the conversation.",
+      "user_prompt": "Summarize this text in one sentence: Our team finished the prototype on Tuesday and will collect customer feedback next week.",
+      "tools_triggered": "None",
+      "expected_output": "The assistant summarizes the provided text directly. No source search, paid request or external retrieval is needed."
+    }
+  ]
+}
