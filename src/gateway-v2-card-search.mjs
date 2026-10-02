@@ -26,8 +26,9 @@ function renderSourceSearch(data){
  byId('subtitle').textContent=Number.isInteger(data.apiosk_sources_searched)?'Searched '+data.apiosk_sources_searched+' Apiosk sources. Nothing is bought from this list.':'Nothing is bought from this list.';
  if(!matches.length)section('Sources').append(el('p','meta','No requested capability was recognised. Rephrase the question or browse all sources.'));
  for(const match of matches){
-  const capability=capabilities.find(c=>c?.slug===match.slug),candidates=[...(match.apiosk||[]),...(match.coinbase||[])];
+  const capability=capabilities.find(c=>c?.slug===match.slug&&(match.subject_id===undefined||c.subject_id===match.subject_id)),candidates=[...(match.apiosk||[]),...(match.coinbase||[])];
   const s=section(capability?.name||pretty(match.slug||'Requested data'),candidates.length===1?'1 source':candidates.length+' sources');s.classList.add('search-section');
+  const subject=(data.parsed_request?.subjects||[]).find(subject=>subject.id===match.subject_id);if(subject)s.append(el('p','meta','For '+subject.label));
   if(capability?.description)s.append(el('p','meta search-capability',capability.description));
   const list=el('div','search-list');list.setAttribute('role','list');
   for(const candidate of candidates){const row=searchRow(candidate);row.setAttribute('role','listitem');list.append(row)}

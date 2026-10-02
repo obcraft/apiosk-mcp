@@ -8,7 +8,7 @@ import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 
 export const ASK_TOOLS = Object.freeze(["apiosk_search", "apiosk_prepare"]);
 
-const SEARCH_NOTICE = "Searching is free and buys nothing. Only candidates with availability \"supported\" can run: fill each required endpoint.inputs field from the person's words or earlier results, ask for anything missing, then call apiosk_prepare with that candidate's endpoint_id, capability and input.";
+const SEARCH_NOTICE = "Searching is free and buys nothing. Each candidate covers its listed capability, not necessarily the complete request. Only candidates with availability \"supported\" can run: fill each required endpoint.inputs field from the person's words or earlier results, ask for anything missing, then call apiosk_prepare with that candidate's endpoint_id, capability and input. For a request combining several checks, call apiosk_discover once with the complete question to get one plan and total price ceiling; do not prepare and approve separate purchases as if they were one dossier.";
 
 export function askDefinitions(errorFields, taskOutput) {
   const searchOutput = {
@@ -44,7 +44,13 @@ export function askRequest(name, args) {
 /** The card's source search view (`view: "source_search"`). */
 export function presentSearch(result, parsed) {
   if (!Array.isArray(result?.matches)) throw new Error("Unexpected protocol");
-  return { protocol_version: "2", view: "source_search", parsed_request: parsed, matches: result.matches,
+  // A missing match is still a requested requirement. Keep it visible so a
+  // source returned for one check cannot make the whole dossier look covered.
+  const matchesCapability = (match, capability) => match.slug === capability.slug && (match.subject_id !== undefined
+    ? match.subject_id === capability.subject_id : (parsed?.subjects?.length || 0) <= 1 || !capability.subject_id);
+  const missing = (parsed?.capabilities || []).filter(capability => !result.matches.some(match => matchesCapability(match, capability)))
+    .map(capability => ({ slug: capability.slug, query: capability.name, ...(capability.subject_id ? { subject_id: capability.subject_id } : {}), apiosk: [], coinbase: [], coinbase_status: "complete" }));
+  return { protocol_version: "2", view: "source_search", parsed_request: parsed, matches: [...result.matches, ...missing],
     ...(Number.isInteger(result.apiosk_sources_searched) && { apiosk_sources_searched: result.apiosk_sources_searched }),
     ...(typeof result.catalog_version === "string" && { catalog_version: result.catalog_version }), notice: SEARCH_NOTICE };
 }

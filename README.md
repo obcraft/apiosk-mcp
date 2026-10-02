@@ -89,6 +89,14 @@ token the tools answer `unauthorized`. The hosted server uses OAuth instead.
 claude mcp add --transport http apiosk https://mcp.apiosk.com/mcp
 ```
 
+### Claude Team and Enterprise
+
+An organization owner adds a custom Web connector in **Organization settings → Connectors** with the URL `https://mcp.apiosk.com/mcp`. Choose OAuth sign-in and **Register automatically** for the OAuth client: Apiosk publishes a dynamic registration endpoint; its current metadata does not advertise client-ID metadata documents. Members then connect individually in **Customize → Connectors** and authorize their Apiosk account and spending limits.
+
+Send a complete multi-part workflow to `apiosk_discover` for one plan and price ceiling. The user approves that plan in the card or Apiosk approval page, unless a previously configured connection rule already covers it. Reading a saved task with `apiosk_status` never buys it again. Missing source access or data coverage remains visible in the returned task.
+
+See [Claude's custom connector setup](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp). A custom connector does not require an Apiosk listing in the connector directory.
+
 ### Claude Desktop, Cursor, Windsurf, Cline, Continue, Goose
 
 ```json

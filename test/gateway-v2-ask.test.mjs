@@ -64,3 +64,28 @@ test('an unusable search reply is reported, never shown as an empty result', asy
   const result = await runtime.callTool('apiosk_search', { parsed_request: parsed });
   assert.equal(result.isError, true);
 });
+
+test('a missing check remains visible when another part of the professional request has matches', async () => {
+  const request = { ...parsed, capabilities: [parsed.capabilities[0], { ...parsed.capabilities[0], slug: 'company.credit.score', name: 'Credit score' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ matches: [
+    { slug: 'location.time.current', apiosk: [{ availability: 'supported', endpoint_id: endpoint.endpoint_id, endpoint }], coinbase: [], coinbase_status: 'complete' },
+  ] }) });
+  const result = await runtime.callTool('apiosk_search', { parsed_request: request });
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(result.structuredContent.matches[1], { slug: 'company.credit.score', query: 'Credit score', subject_id: 's1', apiosk: [], coinbase: [], coinbase_status: 'complete' });
+  assert.match(result.structuredContent.notice, /apiosk_discover once with the complete question/);
+  assert.match(result.structuredContent.notice, /not necessarily the complete request/);
+});
+
+test('a match for one subject does not hide the same missing check for another subject', async () => {
+  const request = { ...parsed, subjects: [...parsed.subjects, { ...parsed.subjects[0], id: 's2', label: 'Paris' }],
+    capabilities: [parsed.capabilities[0], { ...parsed.capabilities[0], subject_id: 's2' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ matches: [
+    { slug: 'location.time.current', subject_id: 's1', apiosk: [{ availability: 'supported', endpoint_id: endpoint.endpoint_id, endpoint }], coinbase: [], coinbase_status: 'complete' },
+  ] }) });
+  const result = await runtime.callTool('apiosk_search', { parsed_request: request });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.matches.length, 2);
+  assert.equal(result.structuredContent.matches[1].subject_id, 's2');
+  assert.deepEqual(result.structuredContent.matches[1].apiosk, []);
+});

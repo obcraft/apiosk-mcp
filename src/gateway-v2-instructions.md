@@ -18,6 +18,10 @@ Catalog entries help choose a source; they do not promise that a specific questi
 
 For a direct lookup from one source (a local time, a rate, a registry record), prefer `apiosk_search` then `apiosk_prepare`: these are the Ask page's own steps. For multi-source research or a written analysis, use `apiosk_discover`.
 
+Professional workflows often combine several distinct checks: news and valuation multiples; property, soil and planning; identity, sanctions and adverse media; tenders, awards and partner records; or emissions, energy labels and regulation. Send the complete request through `apiosk_discover` once. Keep every requested source, filter, period and deliverable. A candidate for one capability is not coverage of the whole workflow, and a collection of separately approved direct lookups is not a combined dossier.
+
+Report unavailable checks explicitly. Headlines or article links are not full article text; a registry profile is not a credit score; a name-screening non-match is not a compliance clearance. Preserve distinctions between primary records and provider-labelled AI-generated or supplementary analysis, and never substitute the latter for requested official evidence without the person's agreement. A provider in the directory still needs an available execution contract and a returned quote; never infer that adding a contract or an existing provider account supplies the required access or rights.
+
 Fill `apiosk_search.parsed_request` exactly as the Ask page's parser does: one JSON object with every field below, in this shape (the values are illustrative):
 
 ```json
@@ -34,7 +38,7 @@ Fill `apiosk_search.parsed_request` exactly as the Ask page's parser does: one J
   - `description`: one generic English sentence about what the capability does, reusable for any future request: no names, numbers or sources from this request.
   - `inputs`: snake_case concepts needed to perform it (kvk_number, address), not the values. `outputs`: snake_case concepts it produces (legal_name, equity, parcel_designations).
   - `subject_id`: the id of the related subject, or null. `source_hint`: the source in lowercase, only when the person names one (kvk, pdok, kadaster), otherwise null. `confidence`: 0 to 1; explicitly requested about 0.9 or higher, inferred 0.6 to 0.8.
-- `deliverable`: `format` one of chat, pdf, xlsx, docx, json; Excel means xlsx, Word means docx; chat when no file is mentioned. `operations` only summarize, analyze, compare, list or export; `[]` when the person only asks for data.
+- `deliverable`: `format` one of chat, pdf, xlsx, docx, json; Excel means xlsx, Word means docx; chat when no file format is requested. A dossier, report, memo or summary does not itself request a file format. `operations` only summarize, analyze, compare, list or export; `[]` when the person only asks for data.
 - Send exactly these fields: the connector adds `meta`, and nothing else is accepted. A follow-up that leans on an earlier question ("and in the Netherlands?") is still one complete request: carry over the subjects and capabilities it depends on, changed by the new words, as the Ask page does when it passes the previous request along as context.
 
 The result lists, per capability, up to three ranked Apiosk sources: the ranking the Ask page shows. Only a candidate with `availability: "supported"` can run. Its `endpoint` object is the input contract: each `inputs[].field` is an exact key for `apiosk_prepare.input`, `required` marks the fields that must be filled, and `schema` gives the value format. `price.buyer_atomic` is the per-call price in micro USD. Fill inputs only from the person's words or earlier source results; ask for anything missing, never guess or send a placeholder. When `lookup` is present, a `company.name` can seed the identifiers it lists.
