@@ -12,12 +12,13 @@ import { V2_CARD_SOURCES } from "./gateway-v2-card-sources.mjs";
 import { V2_CARD_SEARCH } from "./gateway-v2-card-search.mjs";
 import { V2_CARD_COMPACT } from "./gateway-v2-card-compact.mjs";
 import { V2_CARD_STYLE } from "./gateway-v2-card-style.mjs";
+import { V2_SOURCE_USAGE_NOTICE } from "./source-usage-notice.mjs";
 import { APIOSK_UI_BRIDGE, APIOSK_UI_STYLE, uiResourceMeta } from "./ui-bridge.mjs";
 
-export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v56.html";
-export const APIO_V2_CHATGPT_CARD_URI="ui://apiosk/gateway-v2-card-v20-chatgpt.html";
-export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v55.html", "ui://apiosk/gateway-v2-card-v54.html"];
-export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:55},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:9},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
+export const APIO_V2_CARD_URI="ui://apiosk/gateway-v2-card-v57.html";
+export const APIO_V2_CHATGPT_CARD_URI="ui://apiosk/gateway-v2-card-v21-chatgpt.html";
+export const APIO_V2_MODERN_CARD_URIS = [APIO_V2_CARD_URI, "ui://apiosk/gateway-v2-card-v56.html", "ui://apiosk/gateway-v2-card-v55.html", "ui://apiosk/gateway-v2-card-v54.html"];
+export const APIO_V2_CARD_LEGACY_URIS = [...Array.from({length:56},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+1}.html`), ...Array.from({length:10},(_,i)=>`ui://apiosk/gateway-v2-card-v${i+11}-chatgpt.html`)];
 
 const SOURCE_LOGO_ORIGINS = ["https://mcp.apiosk.com", "https://api.apiosk.com", "https://overheid.io", "https://agentbodega.store", "https://pulse.theaslangroupllc.com", "https://www.browserbase.com", "https://www.cityfalcon.ai", "https://crowdpull.click", "https://eodhd.com", "https://exa.ai", "https://www.gleif.org", "https://www.linkup.so", "https://stableenrich.dev", "https://www.tavily.com", "https://x402.webbersites.com"];
 
@@ -70,6 +71,7 @@ ${V2_CARD_SOURCES}
 ${V2_CARD_SEARCH}
 function sourceLine(source){const line=el('div','step-source'),logo=sourceLogo(source);logo.classList.add('mini');line.append(logo,el('span','',source.name||source.provider||'Apiosk source'));return line}
 function sourceBadge(source){const badge=el('div','source-badge'),logo=sourceLogo(source);logo.classList.add('mini');badge.append(logo,el('span','',source.name||source.provider||'Source'));return badge}
+${V2_SOURCE_USAGE_NOTICE}
 function renderPlan(data){const p=data.proposal;if(!p)return;const formatted=money(p.max_total_atomic,p.currency,true),price=el('div','request-price');if(formatted)price.append(el('span','price-label','Maximum total'),el('strong','',formatted),el('span','price-note','From your Apiosk balance'));const s=section('Data request',price),list=el('div','steps');s.classList.add('request-section');planSurface=s;(p.steps||[]).forEach((step,i)=>{const d=(p.step_details||[])[i]||{},row=el('div','step'),copy=el('div'),source=d.source||{},title=el('div','step-title-line');title.append(el('div','step-title',d.title||pretty(step)),el('span','state '+text(d.status||'pending'),d.status||'pending'));copy.append(sourceLine(source),title);row.append(el('span','step-no',text(i+1)+'.'),copy);list.append(row)});s.append(list)}
 ${V2_CARD_CHOICES}
 ${V2_CARD_CLARIFICATION}

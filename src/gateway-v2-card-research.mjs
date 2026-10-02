@@ -36,6 +36,8 @@ renderResult=function(data){
  let primary=null,primarySection=null;
  if(!surface&&!analysis&&!data.context_view?.analyzing&&results.length){primary=data.result??results.at(-1);renderSingleResult({...data,result:primary});primarySection=sections.lastElementChild}
  const rest=primary?results.filter(r=>r!==primary&&!(r?.result_ref&&r.result_ref===primary.result_ref)):results;
+ const noticeSources=[...results.map(r=>r?.source),data.result?.source];
+ if(sourceUsageNotices(noticeSources).length)appendSourceUsageNotices(section('Source information'),noticeSources);
  const report=data.context_view?.report,question=data.context_view?.conversation?.at(-1)?.question||'';
  const pdf=report?.format==='pdf'&&typeof report.url==='string'&&report.url.startsWith('https://')?report.url:null,zip=typeof report?.evidence_url==='string'&&report.evidence_url.startsWith('https://')?report.evidence_url:null;
  const notes=analysis&&!verdict?detailNotes(analysis,data,cbs):null;

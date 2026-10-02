@@ -1,4 +1,5 @@
 import { addDossierDiscovery } from './gateway-v2-workflows.mjs';
+import { sourceUsageNotices } from './source-usage-notice.mjs';
 import { attachReportLinks } from './gateway-v2-report-links.mjs';
 import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
@@ -163,6 +164,12 @@ export function createV2Runtime(options = {}) {
           const charged = formatDisplayMoney(result.billing?.total_charged, result.billing?.currency, result.context_view?.money_display);
           const prices = [maximum && `Maximum total price: ${maximum}.`, charged && `Actual charge so far: ${charged}.`].filter(Boolean).join(' ');
           if (prices) reply.content.unshift({ type: 'text', text: prices + (result.context_view?.money_display?.fallback_reason ? ' Display currency conversion is unavailable; amounts are shown in USD.' : '') });
+          const noticeSources = [
+            ...(result.proposal?.step_details || []).map(step => step.source),
+            ...(result.context_view?.results || []).map(item => item.source),
+            result.result?.source,
+          ];
+          for (const notice of sourceUsageNotices(noticeSources)) reply.content.push({ type: 'text', text: notice.text + (notice.url ? ` ${notice.label}: ${notice.url}` : '') });
         }
         if (result.status === 'needs_input') reply.content.push({type:'text',text:CLARIFICATION_GUIDANCE});
         // Say what the gateway did, never more: only an applied rule is an automatic approval.

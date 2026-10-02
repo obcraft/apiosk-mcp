@@ -222,6 +222,34 @@ test('conversation messages use content blocks and honor host rejection',async()
 });
 
 const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};
+test('source access terms are visible before approval and on saved result recovery',async()=>{
+ const notice={text:'ECB reference rates are available free of charge from the original source.',url:'https://www.ecb.europa.eu/',label:'Free ECB data'};
+ const source={name:'Frankfurter',provider:'frankfurter',usage_notice:notice};
+ const pending={...v2Ready,proposal:{...v2Ready.proposal,step_details:[{source},{source}]}};
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:pending}});
+ const before=h.nodes.get('sections').querySelectorAll('.source-usage-notice');
+ assert.equal(before.length,1,'repeated source steps show one notice');
+ assert.ok(flatten(before[0]).includes(notice.text));
+ for(let node=before[0];node;node=node.parentElement)assert.notEqual(node.tagName,'DETAILS','notice must not be collapsed');
+ const result={result_ref:'saved-rate',data:{base:'EUR',quote:'USD',rate:1.1225},source};
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{...pending,status:'succeeded',proposal:null,next_actions:[],result,context_view:{results:[result]}}}});
+ const after=h.nodes.get('sections').querySelectorAll('.source-usage-notice');
+ assert.equal(after.length,1);
+ assert.ok(flatten(after[0]).includes(notice.text));
+ for(let node=after[0];node;node=node.parentElement)assert.notEqual(node.tagName,'DETAILS');
+ assert.equal(h.sent.filter(message=>message.method==='tools/call').length,0,'display/recovery never buys data');
+});
+test('a displayed saved result retains its notice when context contains a different lookup result',async()=>{
+ const notice={text:'Reference rate data is available free of charge from the ECB.',url:'https://www.ecb.europa.eu/',label:'Free ECB data'};
+ const result={result_ref:'saved-rate',data:{base:'EUR',quote:'USD',rate:1.1225},source:{name:'Frankfurter',usage_notice:notice}};
+ const lookup={result_ref:'saved-lookup',data:{currency:'USD'},source:{name:'Currency lookup'}};
+ const h=harness(APIO_V2_CARD_HTML);await h.initialize();
+ await h.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{status:'succeeded',state:{state_ref:'task',revision:2},result,context_view:{results:[lookup]},next_actions:[]}}});
+ const notices=h.nodes.get('sections').querySelectorAll('.source-usage-notice');
+ assert.equal(notices.length,1);
+ assert.ok(flatten(notices[0]).includes(notice.text));
+});
 test('EUR card approval, live completion and balance display retain the original micro USD authorization',async()=>{
  const calls=[];
  const data={...v2Ready,context_view:{execution_enabled:true,approval_mode:'chatbot',money_display:{base_currency:'USD',currency:'EUR',rate:'0.92000000'}},proposal:{...v2Ready.proposal,max_total_atomic:'114446'}};

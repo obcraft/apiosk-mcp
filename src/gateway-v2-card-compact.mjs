@@ -13,6 +13,7 @@ renderPlan=function(data){
  if(sources.length)s.append(el('p','meta',sources.length+(sources.length===1?' source':' sources')));
  const price=el('div','request-price');price.append(el('span','price-label','Maximum total'),el('strong','',money(p.max_total_atomic,p.currency,true)));s.append(price);
  s.append(el('p','meta','Approve once. The entire request stays within this amount.'));
+ appendSourceUsageNotices(s,details.map(d=>d.source));
  // A live rule that did not cover this plan says why, so the click is not a surprise.
  const auto=data.context_view?.auto_approval;if(auto?.active&&!auto.applied&&auto.message)s.append(el('p','meta',auto.message));
  const disclosure=el('details','compact-details'),list=el('div','compact-sources');disclosure.append(el('summary','','Details'));

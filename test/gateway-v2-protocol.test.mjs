@@ -6,6 +6,14 @@ import { createApioskMcpServer, resolveServerPresentation } from '../src/create-
 import { V2_INSTRUCTIONS } from '../src/gateway-v2.mjs';
 import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_MODERN_CARD_URIS } from '../src/gateway-v2-card.mjs';
 
+test('source notice cards invalidate both host caches while keeping the preceding resources compatible',()=>{
+ assert.notEqual(APIO_V2_CARD_URI,'ui://apiosk/gateway-v2-card-v56.html');
+ assert.notEqual(APIO_V2_CHATGPT_CARD_URI,'ui://apiosk/gateway-v2-card-v20-chatgpt.html');
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v56.html'));
+ assert.ok(APIO_V2_MODERN_CARD_URIS.includes('ui://apiosk/gateway-v2-card-v56.html'));
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v20-chatgpt.html'));
+});
+
 for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and resource share the same contract`,async()=>{
  const env={APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082'};
  const server=createApioskMcpServer({env,hostedAuthEnabled:true,legacyUiMime:host==='chatgpt'});

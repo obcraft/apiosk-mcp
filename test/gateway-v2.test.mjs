@@ -95,6 +95,25 @@ test('saved status is a separate read-only tool with only authenticated GET and 
  const unauth=createApioskMcpRuntime({env,hostedAuthEnabled:true,fetchImpl:async()=>{throw new Error('must not fetch')}});
  assert.equal((await unauth.callTool('apiosk_status',{task_ref:id})).structuredContent.error_code,'unauthorized');
 });
+test('text-only hosts receive one source access notice at quote and saved-result access',async()=>{
+ const id='00000000-0000-4000-8000-000000000001';
+ const notice={text:'ECB data is available free of charge; Apiosk charges for retrieval.',url:'https://www.ecb.europa.eu/',label:'Free ECB source'};
+ const source={name:'Frankfurter',usage_notice:notice};
+ const saved={result_ref:'saved-rate',source,data:{base:'EUR',quote:'USD',rate:1.1}};
+ const requests=[];
+ for(const payload of [
+  {status:'requires_approval',proposal:{max_total_atomic:'54348',currency:'USD',step_details:[{source},{source}]}},
+  {status:'succeeded',result:saved,context_view:{results:[saved]}},
+ ]){
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{requests.push({url,...options});return Response.json({protocol_version:'2',state:{state_ref:id},next_actions:[],errors:[],...payload})}});
+  const response=await runtime.callTool('apiosk_status',{task_ref:id});
+  const notices=response.content.filter(item=>item.type==='text'&&item.text.startsWith(notice.text));
+  assert.equal(notices.length,1);
+  assert.match(notices[0].text,/Free ECB source: https:\/\/www\.ecb\.europa\.eu\//);
+ }
+ assert.equal(requests.length,2);
+ assert.ok(requests.every(request=>request.method==='GET'&&request.body===undefined));
+});
 test('transport errors do not expose upstream credentials and preserve recovery identity',async()=>{
  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>{throw new Error('secret-in-upstream-error')}});
  const response=await runtime.callTool('apiosk_execute',{recover_task_ref:'00000000-0000-4000-8000-000000000001'});
