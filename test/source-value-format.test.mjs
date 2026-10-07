@@ -11,7 +11,7 @@ test('financial display groups exact digits and preserves signs, decimals and ze
 test('currency comes only from source metadata and identifiers are never grouped', () => {
   assert.equal(formatSourceValue('191534000', 'AssetsCurrent', sourceCurrency({currency:'EUR'})), '€ 191,534,000');
   assert.equal(formatSourceValue('191534000', 'AssetsCurrent'), '191,534,000');
-  for (const [key,value] of [['FinancialYear','2020'],['SbiBusinessCode','6201'],['kvkNummer','30204462'],['DocumentAdoptionDate','2021-05-28'],['AccountId','00123456']]) assert.equal(formatSourceValue(value,key,'EUR'),value);
+  for (const [key,value] of [['FinancialYear','2020'],['SbiBusinessCode','6201'],['kvkNummer','30204462'],['DocumentAdoptionDate','2021-05-28'],['AccountId','00123456'],['/data/rsin','815839091'],['/data/datumAanvang','20050421'],['jaar','2020']]) assert.equal(formatSourceValue(value,key,'EUR'),value);
   assert.equal(formatSourceValue('10000','EmployeeCount','EUR'),'10,000');
   assert.equal(sourceCurrency({unit:'iso4217:EUR'}),'EUR');
 });

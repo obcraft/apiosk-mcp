@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { answerText, answerDocumentRequested } from '../src/gateway-v2-card-answer-text.mjs';
+import { answerText, answerDocumentRequested, answerLocale, answerValueContext, answerValue } from '../src/gateway-v2-card-answer-text.mjs';
 import { unwrapEnvelope, pairsToRecord, withoutPlumbing, readBlocks, isNoiseKey } from '../src/gateway-v2-card-body.mjs';
 import { presentationTable } from '../src/gateway-v2-card-presentation.mjs';
 import { sortTableRows, filterTableRows, blockFacts, isBlocksAnswer } from '../src/gateway-v2-card-blocks.mjs';
@@ -33,6 +33,42 @@ test('answer text falls back to the limitations when nothing specific remains', 
   const generic = 'The returned source response contains no usable records for this question. No finding can be supported from it.';
   assert.equal(answerText({ status: 'unavailable', observations: [], limitations: [generic] }, { results: [], question: '' }), generic);
   assert.equal(answerText(null, { results: [], question: '' }), '');
+});
+
+test('named-company research keeps source language, filing units and missing website evidence distinct', () => {
+  const activity = 'Overige diensten op het gebied van informatietechnologie en computer';
+  const results = [
+    { result_ref: 'profile', currency: 'USD', data: { statutaireNaam: 'Mollie B.V.', sbiOmschrijving: activity, rsin: '815839091' } },
+    { result_ref: 'accounts', currency: 'USD', charged_atomic: '108696', data: { year: '2020', Assets: '194495000', ResultAfterTax: '-5166000' } },
+  ];
+  const analysis = { status: 'partial', limitations: ['The source does not specify the currency.', 'Website information and DNS records were not returned.'], observations: [
+    { text: 'The registered activity is ' + activity + '.', evidence: [{ result_ref: 'profile', pointer: '/data/sbiOmschrijving', value: activity }] },
+    { text: 'Assets were 194495000 and the net result was -5166000.', evidence: [
+      { result_ref: 'accounts', pointer: '/data/Assets', value: '194495000' },
+      { result_ref: 'accounts', pointer: '/data/ResultAfterTax', value: '-5166000' },
+    ] },
+  ] };
+  const question = 'Can you look up Mollie B.V. by name and combine its registered details, available annual financial figures and website information?';
+  assert.equal(answerLocale(question, analysis), 'en-US');
+  const text = answerText(analysis, { question, results });
+  assert.match(text, /Reporting period 2020/);
+  assert.match(text, /Assets were 194,495,000 and the net result was -5,166,000/);
+  assert.match(text, /Website information and DNS records were not returned/);
+  assert.doesNotMatch(text, /[$€£]|latest|Verslagperiode/);
+  const evidence = analysis.observations[1].evidence[0];
+  assert.equal(answerValueContext(evidence, results).currency, null);
+  results[1].data.currency = 'EUR';
+  assert.equal(answerValueContext(evidence, results).currency, 'EUR');
+  assert.match(answerText(analysis, { question, results }), /Assets were € 194,495,000/);
+});
+
+test('company identifiers and dates stay literal, and search counts are never amounts', () => {
+  for (const [field, value] of [['/data/rsin', '815839091'], ['/data/datumAanvang', '20050421'], ['jaar', '2020']]) {
+    assert.equal(answerValue(value, field, 'EUR', 'nl-NL'), value);
+  }
+  for (const field of ['totalResults', 'ResultCount', 'ResultItems', 'ResultMatches']) {
+    assert.equal(answerValue('1000', field, 'EUR'), '1,000');
+  }
 });
 
 test('a report joins the answer only when a document was asked for', () => {

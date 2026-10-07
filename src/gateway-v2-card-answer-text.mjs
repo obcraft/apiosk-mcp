@@ -14,9 +14,23 @@ const ANSWER_PERIOD_KEYS = ['fiscal_year', 'financial_year', 'year', 'fiscalYear
 
 function answerRecord(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
 export function answerLocale(question, analysis) {
-  const text = (analysis?.observations || []).map(o => o?.text || '').join(' ') || question || '';
-  const dutch = text.match(/\b(de|het|een|zijn|voor|van|heeft|bedraagt|jaarrekening|omzet|winst|volgens|toont|werden)\b/gi) ?? [];
-  return dutch.length >= 2 ? 'nl-NL' : 'en-US';
+  // Registry descriptions and source quotations retain their own language;
+  // they must not change the answer's headings or financial number format.
+  const narrative = (analysis?.observations || []).map(observation => {
+    const sourceText = (observation.evidence || []).map(e => e.value)
+      .filter(value => typeof value === 'string' && value.length >= 3)
+      .sort((a, b) => b.length - a.length);
+    return sourceText.reduce((text, value) => text.replaceAll(value, ' '), observation.text || '');
+  }).join(' ');
+  const detect = text => {
+    const prose = String(text || '').replace(/https?:\/\/\S+|"[^"\n]*"|“[^”\n]*”/g, ' ');
+    const dutch = new Set(prose.match(/\b(de|het|een|zijn|voor|van|heeft|bedraagt|volgens|toont|werden|en|is|dit|deze|wordt|met|geen|niet|kan|kun|welke|geef)\b/gi)?.map(word => word.toLowerCase()));
+    const english = new Set(prose.match(/\b(the|a|an|are|for|of|has|have|according|shows|were|and|is|this|these|with|no|not|can|could|which|what|show|get)\b/gi)?.map(word => word.toLowerCase()));
+    if (dutch.size >= 2 && dutch.size > english.size) return 'nl-NL';
+    if (english.size >= 2 && english.size > dutch.size) return 'en-US';
+    return null;
+  };
+  return detect(narrative) ?? detect(question) ?? 'en-US';
 }
 /** The App's formatSourceValue, with its locale: Dutch groups with dots. */
 export function answerValue(value, key = '', currency = null, locale = 'en-US') {
@@ -24,11 +38,11 @@ export function answerValue(value, key = '', currency = null, locale = 'en-US') 
   if (isLiteralField(key)) return raw;
   if (typeof value === 'string') value = formatDisplayText(value, key);
   const label = String(key).split('/').at(-1).replace(/[\s_.-]/g, '');
-  if (/year|date|code|identifier|kvk|postcode|postal|phone|iban/i.test(label) || /(?:^id$|Id$|ID$|Number$|Nummer$)/.test(label)) return raw;
+  if (/year|date|datum|code|identifier|kvk|postcode|postal|phone|iban|^(?:bouwjaar|jaar|rsin)$/i.test(label) || /(?:^id$|Id$|ID$|Number$|Nummer$)/.test(label)) return raw;
   if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return formatDisplayNarrative(String(value ?? ''));
   const negative = raw.startsWith('-'), unsigned = negative ? raw.slice(1) : raw, [whole, fraction] = unsigned.split('.'), dutch = locale.startsWith('nl');
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, dutch ? '.' : ',') + (fraction == null ? '' : (dutch ? ',' : '.') + fraction);
-  const monetary = /^(?:(?:total|net|gross))?(Assets|Liabilities|Equity|Receivables|Cash|Property|Provisions|Share|RetainedEarnings|FinancialIncome|Income|Result|Depreciation|EmployeeBenefits|Operating|GrossMargin|Impairment|SumOfExpenses|Revenue|Profit|Turnover|Amount|Balance|Price|Cost|Tax|Bedrag|Omzet|Winst|Kosten)/i.test(label) && !/ratio|percent|rate|count|margin|sharesoutstanding|sharesissued/i.test(label);
+  const monetary = /^(?:(?:total|net|gross))?(Assets|Liabilities|Equity|Receivables|Cash|Property|Provisions|Share|RetainedEarnings|FinancialIncome|Income|Result|Depreciation|EmployeeBenefits|Operating|GrossMargin|Impairment|SumOfExpenses|Revenue|Profit|Turnover|Amount|Balance|Price|Cost|Tax|Bedrag|Omzet|Winst|Kosten)/i.test(label) && !/ratio|percent|rate|count|margin|sharesoutstanding|sharesissued|records|items|matches|^(?:total)?results?$/i.test(label);
   const code = monetary ? sourceCurrency(currency) : null, symbol = code && ({ EUR: '€', USD: '$', GBP: '£' }[code] || code);
   return (negative ? '-' : '') + (symbol ? symbol + ' ' : '') + grouped;
 }
@@ -40,7 +54,9 @@ export function answerValueContext(evidence, results) {
     if (!Array.isArray(node)) parents.unshift(answerRecord(node));
     node = node != null && typeof node === 'object' ? node[part.replaceAll('~1', '/').replaceAll('~0', '~')] : undefined;
   }
-  const currencyOwner = parents.find(p => p.currency != null || p.currencyCode != null || p.unit != null);
+  // The saved envelope currency prices the API call, not the source's data.
+  const sourceParents = /^\/(?:data|preview_data)(?:\/|$)/.test(pointer) ? parents.slice(0, -1) : parents;
+  const currencyOwner = sourceParents.find(p => p.currency != null || p.currencyCode != null || p.unit != null);
   const period = parents.flatMap(p => ANSWER_PERIOD_KEYS.map(k => p[k])).find(v => /^(?:19|20)\d{2}(?:-\d{2}-\d{2})?$/.test(String(v)));
   return { currency: sourceCurrency(currencyOwner), period: period == null ? null : String(period), field: String(parents[0]?.key ?? pointer.split('/').at(-1) ?? '') };
 }

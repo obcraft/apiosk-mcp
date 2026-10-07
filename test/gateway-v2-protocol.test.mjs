@@ -7,11 +7,11 @@ import { V2_INSTRUCTIONS } from '../src/gateway-v2.mjs';
 import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_MODERN_CARD_URIS } from '../src/gateway-v2-card.mjs';
 
 test('source notice cards invalidate both host caches while keeping the preceding resources compatible',()=>{
- assert.notEqual(APIO_V2_CARD_URI,'ui://apiosk/gateway-v2-card-v56.html');
- assert.notEqual(APIO_V2_CHATGPT_CARD_URI,'ui://apiosk/gateway-v2-card-v20-chatgpt.html');
- assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v56.html'));
- assert.ok(APIO_V2_MODERN_CARD_URIS.includes('ui://apiosk/gateway-v2-card-v56.html'));
- assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v20-chatgpt.html'));
+ assert.notEqual(APIO_V2_CARD_URI,'ui://apiosk/gateway-v2-card-v57.html');
+ assert.notEqual(APIO_V2_CHATGPT_CARD_URI,'ui://apiosk/gateway-v2-card-v21-chatgpt.html');
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v57.html'));
+ assert.ok(APIO_V2_MODERN_CARD_URIS.includes('ui://apiosk/gateway-v2-card-v57.html'));
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v21-chatgpt.html'));
 });
 
 for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and resource share the same contract`,async()=>{

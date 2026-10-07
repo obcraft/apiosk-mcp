@@ -10,9 +10,9 @@ export function formatSourceValue(value, key = '', currency = null, nameContext)
   const raw = String(value ?? '');
   if (isLiteralField(key)) return raw;
   if (typeof value === 'string') value = formatDisplayText(value, key);
-  const label = String(key).replace(/[\s_.-]/g, '');
+  const label = String(key).split('/').at(-1).replace(/[\s_.-]/g, '');
   // Identifiers, calendar years and dates are labels, not amounts.
-  if (/year|date|code|identifier|kvk|postcode|postal|phone|iban/i.test(label) || /(?:^id$|Id$|ID$|Number$|Nummer$)/.test(label)) return raw;
+  if (/year|date|datum|code|identifier|kvk|postcode|postal|phone|iban|^(?:bouwjaar|jaar|rsin)$/i.test(label) || /(?:^id$|Id$|ID$|Number$|Nummer$)/.test(label)) return raw;
   if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw)) return formatDisplayNarrative(String(value ?? ''), nameContext);
   const negative = raw.startsWith('-'), unsigned = negative ? raw.slice(1) : raw;
   const [whole, fraction] = unsigned.split('.');
