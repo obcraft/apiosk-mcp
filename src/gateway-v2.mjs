@@ -1,4 +1,4 @@
-import { addDossierDiscovery } from './gateway-v2-workflows.mjs';
+import { addWorkflowDiscovery } from './gateway-v2-workflows.mjs';
 import { sourceUsageNotices } from './source-usage-notice.mjs';
 import { attachReportLinks } from './gateway-v2-report-links.mjs';
 import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
@@ -65,7 +65,7 @@ export function createV2Runtime(options = {}) {
   // Optional means omit it. Advertising null makes some chatbot models eagerly
   // send nulls for every unused field, which weakens the wire contract.
   discover.properties.state = schemas.state;
-  addDossierDiscovery(discover);
+  addWorkflowDiscovery(discover);
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [

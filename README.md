@@ -35,7 +35,7 @@ endpoints.
 | Tool | What it does | Gateway v2 route | Spends |
 | --- | --- | --- | --- |
 | `apiosk_sources` | Browse published data sources by name, category, sector, tag or capability. Paginated with `next_offset`. | `GET /v2/sources` | no |
-| `apiosk_discover` | Plan a NEW data question: one plan with `proposal.max_total_atomic` as the total price ceiling, or the clarification it needs. A fixed company or tender dossier can be started with `workflow` instead of `question`. | `POST /v2/discover`, `POST /v2/workflows/{slug}/start` | no |
+| `apiosk_discover` | Plan a NEW data question: one plan with `proposal.max_total_atomic` as the total price ceiling, or the clarification it needs. Fixed Pre-KYB Screening, company and tender workflows can be started with `workflow` instead of `question`. | `POST /v2/discover`, `POST /v2/workflows/{slug}/start` | no |
 | `apiosk_search` | Search sources the way the Ask page does, with a `parsed_request` capability object the chatbot fills in itself (the Ask parser's schema). Returns ranked sources per capability; each runnable candidate carries `endpoint.inputs`, the exact input keys for `apiosk_prepare`. | `POST /v2/ask-v2/search` | no |
 | `apiosk_prepare` | Prepare one searched endpoint with its filled-in `input`: the same task, price ceiling and approval card as `apiosk_discover`. | `POST /v2/ask-v2/prepare` | no |
 | `apiosk_execute` | Continue the same task with a returned `next_actions` entry: supply input, select an entity, run an approved step, cancel. | `POST /v2/execute` | only an approved step |
