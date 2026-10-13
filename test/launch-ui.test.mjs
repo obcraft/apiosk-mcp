@@ -781,6 +781,34 @@ test('existing views still render after a source search',async()=>{
  assert.equal(h.nodes.get('sections').querySelectorAll('.search-row').length,0);
 });
 
+test('empty source search shows the exact no-results copy without an input form',()=>{
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...searchView,matches:[]}});
+ const sections=h.nodes.get('sections');
+ assert.equal(h.nodes.get('title').textContent,'No results');
+ assert.ok(flatten(sections).includes('We couldn’t find any results for you. Try a different question.'));
+ assert.equal(sections.querySelectorAll('form').length,0);
+ assert.equal(sections.querySelectorAll('button').length,0);
+});
+
+test('unsupported discovery shows existing source matches without asking for generic context',()=>{
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{status:'unsupported',state:{state_ref:'task',revision:1},context_view:{capability_intake:searchView,conversation:[{question:'Compare options',reply:'Sources are available.'}]},next_actions:[],errors:[]}});
+ const sections=h.nodes.get('sections');
+ assert.equal(h.nodes.get('title').textContent,'3 matching sources');
+ assert.deepEqual(sections.querySelectorAll('.search-name').map(n=>n.textContent),['KVK Basisprofiel','OpenCorporates','Clock API']);
+ assert.equal(sections.querySelectorAll('form').length,0);
+ assert.ok(!flatten(sections).includes('One detail is needed'));
+});
+
+test('unsupported request with no sources relays the gateway message without a clarification form',()=>{
+ const message='We couldn’t find any results for you. Try a different question.';
+ const h=harness(APIO_V2_CARD_HTML,{toolOutput:{status:'unsupported',state:{state_ref:'task',revision:1},context_view:{capability_intake:{matches:[]},conversation:[{question:'Uncovered data',reply:message}]},next_actions:[],errors:[]}});
+ const sections=h.nodes.get('sections');
+ assert.equal(h.nodes.get('title').textContent,'No results');
+ assert.ok(flatten(sections).includes(message));
+ assert.equal(sections.querySelectorAll('form').length,0);
+ assert.equal(sections.querySelectorAll('button').find(n=>n.textContent==='Check status')?.textContent,'Check status');
+});
+
 test('a single-endpoint result reads as the App answer body, not as a missing assessment',async()=>{
  const opened=[],result={result_ref:'r1',subject:{label:'ACME BV'},source:{name:'Registry',provider:'registry'},data:{data:{id:'abc123',name:'ACME BV',website:'https://acme.example',employees:12,address:{city:'UTRECHT'},filings:[{year:2023,revenue:100},{year:2024,revenue:120}]}}};
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,status:'succeeded',next_actions:[],context_view:{},result},openExternal:({href})=>opened.push(href)});

@@ -1,6 +1,7 @@
 // Runs inside the card: the source search view (`view: "source_search"`), as
 // the App's Ask v2 source table draws it. Read-only: nothing here quotes,
 // approves or buys; a row only says what a source is, costs and needs.
+import { NO_RESULTS } from './gateway-v2-ask.mjs';
 export const V2_CARD_SEARCH = `
 function searchPriceAtomic(candidate){
  const exact=candidate?.endpoint?.price?.buyer_atomic;if(typeof exact==='string'&&/^\\d+$/.test(exact))return exact;
@@ -22,9 +23,9 @@ function searchRow(candidate){
 function renderSourceSearch(data){
  const matches=Array.isArray(data.matches)?data.matches:[],capabilities=data.parsed_request?.capabilities||[],seen=new Set();let total=0;
  for(const match of matches)for(const candidate of [...(match.apiosk||[]),...(match.coinbase||[])]){const key=candidate.endpoint_id||candidate.url||(candidate.source_slug||candidate.name)+':'+(candidate.capability||'');if(!seen.has(key)){seen.add(key);total++}}
+ if(!total){const incomplete=matches.some(match=>['pending','unavailable'].includes(match.coinbase_status));byId('title').textContent=incomplete?'Search incomplete':'No results';byId('subtitle').textContent='';section('Sources').append(el('p','notice',data.message||(incomplete?'Some sources could not be searched. Try again shortly.':${JSON.stringify(NO_RESULTS)})));return}
  byId('title').textContent=total===1?'1 matching source':total+' matching sources';
  byId('subtitle').textContent=Number.isInteger(data.apiosk_sources_searched)?'Searched '+data.apiosk_sources_searched+' Apiosk sources. Nothing is bought from this list.':'Nothing is bought from this list.';
- if(!matches.length)section('Sources').append(el('p','meta','No requested capability was recognised. Rephrase the question or browse all sources.'));
  for(const match of matches){
   const capability=capabilities.find(c=>c?.slug===match.slug&&(match.subject_id===undefined||c.subject_id===match.subject_id)),candidates=[...(match.apiosk||[]),...(match.coinbase||[])];
   const s=section(capability?.name||pretty(match.slug||'Requested data'),candidates.length===1?'1 source':candidates.length+' sources');s.classList.add('search-section');
@@ -36,5 +37,12 @@ function renderSourceSearch(data){
   if(match.coinbase_status==='unavailable')s.append(el('p','meta','Coinbase Bazaar search is unavailable right now.'));
  }
  if(data.notice)section('About these results').append(el('p','meta',data.notice));
+}
+function renderUnsupported(data){
+ const intake=data.context_view?.capability_intake;
+ if(Array.isArray(intake?.matches)&&intake.matches.some(match=>(match.apiosk?.length||0)+(match.coinbase?.length||0)>0)){renderSourceSearch(intake);return}
+ byId('title').textContent='No results';byId('subtitle').textContent='';
+ const message=data.context_view?.conversation?.at(-1)?.reply||(data.errors||[]).find(error=>error.message)?.message||${JSON.stringify(NO_RESULTS)};
+ section('Sources').append(el('p','notice',message));
 }
 `;

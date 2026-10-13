@@ -1,5 +1,6 @@
 export const V2_CARD_CLARIFICATION = `
 function renderInput(data){
+ if(data.status!=='needs_input')return;
  const action=(data.next_actions||[]).find(a=>a.kind==='supply_input');
  if(!action){renderClarification(data);return}
  const schema=action.input_schema?.properties?.value||{},raw=text(action.label).replace(/^Provide\\s+/i,'').trim();

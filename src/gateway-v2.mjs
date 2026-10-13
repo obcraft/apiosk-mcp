@@ -1,7 +1,7 @@
 import { addWorkflowDiscovery } from './gateway-v2-workflows.mjs';
 import { sourceUsageNotices } from './source-usage-notice.mjs';
 import { attachReportLinks } from './gateway-v2-report-links.mjs';
-import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE } from "./gateway-v2-recovery.mjs";
+import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE, UNSUPPORTED_GUIDANCE } from "./gateway-v2-recovery.mjs";
 import { formatDisplayMoney } from "./display-money.mjs";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -172,9 +172,10 @@ export function createV2Runtime(options = {}) {
           for (const notice of sourceUsageNotices(noticeSources)) reply.content.push({ type: 'text', text: notice.text + (notice.url ? ` ${notice.label}: ${notice.url}` : '') });
         }
         if (result.status === 'needs_input') reply.content.push({type:'text',text:CLARIFICATION_GUIDANCE});
+        if (result.status === 'unsupported') reply.content.push({type:'text',text:UNSUPPORTED_GUIDANCE});
         // Say what the gateway did, never more: only an applied rule is an automatic approval.
         const autoApproved = result.context_view?.auto_approval?.applied === true && result.billing?.authorization_active === true;
-        if (!browsing && result.state?.state_ref) reply.content.push({ type: "text", text: `This is a snapshot. ${autoApproved ? "This task was approved automatically under the connection's automatic-approval rule, within its limits, and the server is executing it." : "The interactive card can approve and execute this task after this response."} Before answering ANY later follow-up about its results, payment or status, recover current evidence by calling apiosk_status with ONLY {"task_ref":"${result.state.state_ref}"}. This read is free and never buys or approves. Never conclude that nothing was bought or saved from this earlier snapshot. Preserve source values exactly. Only report a currency or unit when the source explicitly supplies it; otherwise say it was not specified. The Apiosk billing currency does not establish the currency of the source data. ${V2_RESULT_PRESENTATION}` });
+        if (!browsing && result.state?.state_ref) reply.content.push({ type: "text", text: `This is a snapshot. ${autoApproved ? "This task was approved automatically under the connection's automatic-approval rule, within its limits, and the server is executing it." : result.proposal ? "The interactive card can approve and execute this task after this response." : "Use the returned status and next actions to continue this task."} Before answering ANY later follow-up about its results, payment or status, recover current evidence by calling apiosk_status with ONLY {"task_ref":"${result.state.state_ref}"}. This read is free and never buys or approves. Never conclude that nothing was bought or saved from this earlier snapshot. Preserve source values exactly. Only report a currency or unit when the source explicitly supplies it; otherwise say it was not specified. The Apiosk billing currency does not establish the currency of the source data. ${V2_RESULT_PRESENTATION}` });
         return reply;
       } catch (error) {
         // Transport errors may contain credential-bearing URLs or upstream text:

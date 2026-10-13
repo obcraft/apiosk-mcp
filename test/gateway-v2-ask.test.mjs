@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
 import schemas from '../src/gateway-v2-contracts.json' with { type: 'json' };
+import { NO_RESULTS } from '../src/gateway-v2-ask.mjs';
 
 const env = { APIOSK_GATEWAY_V2_URL: 'http://127.0.0.1:8082', APIOSK_CONNECT_TOKEN: 'fixture' };
 // What a chatbot fills in for "what time is it in Amsterdam? check via Apiosk".
@@ -63,6 +64,40 @@ test('an unusable search reply is reported, never shown as an empty result', asy
   const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ unexpected: true }) });
   const result = await runtime.callTool('apiosk_search', { parsed_request: parsed });
   assert.equal(result.isError, true);
+  assert.notEqual(result.structuredContent.message, NO_RESULTS);
+});
+
+test('a completed empty source search has the exact no-results message', async () => {
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ matches: [] }) });
+  const result = await runtime.callTool('apiosk_search', { parsed_request: parsed });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.message, NO_RESULTS);
+  assert.equal(result.structuredContent.matches[0].slug, parsed.capabilities[0].slug);
+});
+
+test('an incomplete external search is not presented as a confirmed empty result', async () => {
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ matches: [{ slug: parsed.capabilities[0].slug, apiosk: [], coinbase: [], coinbase_status: 'unavailable' }] }) });
+  const result = await runtime.callTool('apiosk_search', { parsed_request: parsed });
+  assert.equal(result.structuredContent.message, 'Some sources could not be searched. Try again shortly.');
+});
+
+test('prepare preserves the gateway clarification and does not imply approval without a plan', async () => {
+  const task = { protocol_version: '2', status: 'needs_input', context_view: { conversation: [{ question: 'Time in a city', reply: 'Which city?' }] }, proposal: null, result: null, state: { state_ref: 'saved-task' }, next_actions: [{ kind: 'supply_input', label: 'City' }], errors: [] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(task) });
+  const result = await runtime.callTool('apiosk_prepare', { endpoint_id: endpoint.endpoint_id, input: {} });
+  assert.deepEqual(result.structuredContent, task);
+  assert.match(result.content.map(item => item.text).join('\n'), /actual missing detail/);
+  assert.doesNotMatch(result.content.map(item => item.text).join('\n'), /card can approve/);
+});
+
+test('unsupported discovery preserves matching sources without clarification guidance', async () => {
+  const task = { protocol_version: '2', status: 'unsupported', context_view: { capability_intake: { parsed_request: parsed, matches: [{ slug: parsed.capabilities[0].slug, apiosk: [{ name: 'World Time', availability: 'discovery_only' }], coinbase: [] }] } }, proposal: null, result: null, next_actions: [], state: { state_ref: 'saved-task' }, errors: [] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(task) });
+  const result = await runtime.callTool('apiosk_discover', { question: 'Time in Amsterdam' });
+  assert.deepEqual(result.structuredContent, task);
+  const text = result.content.map(item => item.text).join('\n');
+  assert.match(text, /show those sources with their actual availability/);
+  assert.doesNotMatch(text, /task needs an actual missing detail|card can approve/);
 });
 
 test('a missing check remains visible when another part of the professional request has matches', async () => {
