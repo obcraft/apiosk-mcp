@@ -160,7 +160,7 @@ test('the v2 card renders sources and a priced plan from structured content',asy
   const planSection=plan.nodes.get('sections').children[0];
   const flatten=n=>[n.textContent,...n.children.flatMap(c=>flatten(c))];
   assert.equal(planSection.children[0].children[0].textContent,'Your plan');
-  assert.ok(flatten(planSection).includes('Approve up to 0.097826 USD'));
+  assert.ok(flatten(planSection).includes('Approve up to 0.10 USD'));
   assert.ok(flatten(planSection).includes('Details'));
   assert.ok(!flatten(planSection).includes('pending'));
   assert.equal(plan.nodes.get('status-pill').textContent,'Approval needed');
@@ -257,13 +257,13 @@ test('EUR card approval, live completion and balance display retain the original
  const done={...approved,status:'succeeded',state:{...data.state,revision:3},next_actions:[],billing:{...approved.billing,currency:'USD',total_charged:'23000',balance_available:'12986468'},result:{data:{name:'Saved result'}}};
  const h=harness(APIO_V2_CARD_HTML,{toolOutput:data,callTool:async(name,args)=>{calls.push({name,args});return{structuredContent:name==='apiosk_approve'?approved:done}}});
  const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to'));
- assert.equal(button.textContent,'Approve up to 0.105291 EUR');
+ assert.equal(button.textContent,'Approve up to 0.11 EUR');
  await button.onclick();await h.tick(350);
  assert.equal(calls[0].args.max_total_atomic,'114446');
  assert.equal(calls[0].args.quote_ref,'quote');
  assert.deepEqual(calls.map(c=>c.name),['apiosk_approve','apiosk_execute']);
  const visible=h.nodes.get('sections').querySelectorAll('b,strong,summary,p').map(n=>n.textContent).join(' ');
- assert.match(visible,/0.02116 EUR/);assert.match(visible,/11.947551 EUR/);assert.doesNotMatch(visible,/USD|USDC/);
+ assert.match(visible,/0.02 EUR/);assert.match(visible,/11.95 EUR/);assert.doesNotMatch(visible,/USD|USDC/);
 });
 test('in-chat approval requires a click, uses the exact displayed cap once and continues without an external link',async()=>{
  const calls=[];let release,links=0;
@@ -328,7 +328,7 @@ test('approval budget messages show the required amount and the blocked limit in
   const button=h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent.startsWith('Approve up to'));
   await button.onclick();
   const message=h.nodes.get('feedback-text').textContent;
-  assert.ok(message.includes('up to 0.811163 EUR'));
+  assert.ok(message.includes('up to 0.82 EUR'));
   assert.ok(message.includes(fragment));
   assert.ok(message.includes('ask a smaller question'));
   assert.ok(message.includes('Nothing was purchased by this approval attempt.'));
@@ -765,7 +765,7 @@ test('a source search lists candidates per requested capability and offers nothi
  assert.equal(h.nodes.get('subtitle').textContent,'Searched 112 Apiosk sources. Nothing is bought from this list.');
  assert.deepEqual(sections.querySelectorAll('h3').map(n=>n.textContent),['Company profile','Current time','Current weather','About these results']);
  assert.deepEqual(sections.querySelectorAll('.search-name').map(n=>n.textContent),['KVK Basisprofiel','OpenCorporates','Clock API']);
- assert.deepEqual(sections.querySelectorAll('.search-price').map(n=>n.textContent),['0.0011 USD','—','0.0025 USD']);
+ assert.deepEqual(sections.querySelectorAll('.search-price').map(n=>n.textContent),['< 0.01 USD','—','< 0.01 USD']);
  assert.deepEqual(sections.querySelectorAll('.search-state').map(n=>n.textContent),['Available','Discovery only','Unverified']);
  assert.deepEqual(sections.querySelectorAll('.search-inputs').map(n=>n.textContent),['Needs KVK number'],'only required inputs of supported rows');
  for(const line of ['Registered company details','No matching source was found for this part of the question.','Coinbase Bazaar search is unavailable right now.','Prices are per call.'])assert.ok(texts.includes(line),line);
@@ -894,7 +894,7 @@ test('an automatically approved plan says so, and a plan above the rule still as
     context_view:{execution_mode:'server',worker_active:true,approval_mode:'chatbot',auto_approval:{active:true,applied:true,limit_atomic:'500000'}},
     billing:{currency:'USD',total_charged:'0',authorization_active:true,approved_via:'connection_auto',quote_ref:'quote'},next_actions:[]}}});
   const ran=flatten(running.nodes.get('sections').children[0]);
-  assert.ok(ran.includes('Approved automatically up to 0.115 USD · within this connection’s limits'),ran.join('|'));
+  assert.ok(ran.includes('Approved automatically up to 0.12 USD · within this connection’s limits'),ran.join('|'));
   assert.ok(!running.nodes.get('sections').querySelectorAll('button').some(b=>b.textContent.startsWith('Approve up to')));
   const waiting=harness(APIO_V2_CARD_HTML);await waiting.initialize();
   await waiting.message({jsonrpc:'2.0',method:'ui/notifications/tool-result',params:{structuredContent:{...base,status:'ready',

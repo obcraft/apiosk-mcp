@@ -167,11 +167,11 @@ test('v2 omits optional nulls instead of forwarding chatbot placeholder values',
  assert.equal(body.state,undefined);assert.equal(body.context_delta,undefined);
 });
 
-test('model-facing prices preserve sub-cent units and include free recovery for later questions',async()=>{
+test('model-facing prices are shown at cents and include free recovery for later questions',async()=>{
  const id='00000000-0000-4000-8000-000000000001';
  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({protocol_version:'2',status:'ready',state:{state_ref:id},proposal:{max_total_atomic:'76087',currency:'USDC'},billing:{total_charged:'23',currency:'USD'},next_actions:[],errors:[]})});
  const reply=await runtime.callTool('apiosk_discover',{question:'Annual accounts'});
- assert.equal(reply.content[0].text,'Maximum total price: 0.076087 USD. Actual charge so far: 0.000023 USD.');
+ assert.equal(reply.content[0].text,'Maximum total price: 0.08 USD. Actual charge so far: < 0.01 USD.');
  assert.match(reply.content.at(-1).text,new RegExp(id));assert.match(reply.content.at(-1).text,/This read is free and never buys or approves/);
  assert.equal(reply.structuredContent.billing.total_charged,'23');
 });
@@ -182,14 +182,14 @@ test('historic billing metadata is fiat-only without changing source currency, s
  const reply=await runtime.callTool('apiosk_discover',{question:'Annual accounts'});
  assert.equal(reply.structuredContent.proposal.currency,'USD');assert.equal(reply.structuredContent.billing.currency,'USD');assert.equal(reply.structuredContent.result.currency,'USD');
  assert.deepEqual(reply.structuredContent.result.data,original.result.data);assert.deepEqual(reply.structuredContent.state,original.state);assert.equal(reply.structuredContent.proposal.max_total_atomic,original.proposal.max_total_atomic);
- assert.match(reply.content[0].text,/9007199254\.740993 USD/);
+ assert.match(reply.content[0].text,/9007199254\.75 USD/);
 });
 
 test('EUR account preference reaches model prices without changing the signed cap or source figures',async()=>{
  const original={protocol_version:'2',status:'ready',state:{state_ref:'task',state_token:'signed'},context_view:{money_display:{base_currency:'USD',preferred_currency:'EUR',currency:'EUR',rate:'0.92000000',as_of_date:'2026-08-21'}},proposal:{currency:'USD',max_total_atomic:'114446'},billing:{currency:'USD',total_charged:'23000'},result:{data:{currency:'GBP',amount:'123.45'}},next_actions:[],errors:[]};
  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(original)});
  const reply=await runtime.callTool('apiosk_discover',{question:'Company check'});
- assert.equal(reply.content[0].text,'Maximum total price: 0.105291 EUR. Actual charge so far: 0.02116 EUR.');
+ assert.equal(reply.content[0].text,'Maximum total price: 0.11 EUR. Actual charge so far: 0.02 EUR.');
  assert.deepEqual(reply.structuredContent,{...original,proposal:{...original.proposal,label:'Data request'}});
  const tool=(await runtime.listTools()).find(t=>t.name==='apiosk_discover');
  assert.match(tool.description,/account display currency/);
