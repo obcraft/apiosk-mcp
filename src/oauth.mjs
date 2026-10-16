@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import express from "express";
+import { resolveGatewayV2Url } from "./runtime.mjs";
 
 import { OAuthClientMetadataSchema } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { createOAuthMetadata, getOAuthProtectedResourceMetadataUrl } from "@modelcontextprotocol/sdk/server/auth/router.js";
@@ -863,6 +864,9 @@ class ApioskHostedOAuthProvider {
     // authoritative store for connect tokens, so we validate by calling
     // its /v1/me endpoint, one source of truth, no shared secret.
     const trimmed = typeof token === "string" ? token.trim() : "";
+    if (/^apk_(access_|live_|org_live_)/.test(trimmed)) {
+      return this.verifyGatewayV2TokenAccess(trimmed);
+    }
     if (/^aw_(live|test)_/i.test(trimmed)) {
       return this.verifyConnectTokenAccess(trimmed);
     }
@@ -889,6 +893,39 @@ class ApioskHostedOAuthProvider {
         // reads extra.apiosk_connect_token).
         apiosk_connect_token: payload.apioskConnectToken,
       },
+    };
+  }
+
+  async verifyGatewayV2TokenAccess(token) {
+    // Unity Catalog bearer connections use the same credentials as stdio.
+    // Gateway v2 owns their validity, workspace and scopes. Its authenticated,
+    // read-only catalog endpoint verifies sources:read without planning or buying.
+    const base = new URL(resolveGatewayV2Url(this.env));
+    if (base.username || base.password || base.search || base.hash || base.pathname !== "/" ||
+        !(base.protocol === "https:" || (base.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(base.hostname)))) {
+      throw new Error("Invalid Gateway v2 origin");
+    }
+    const response = await fetch(new URL("/v2/sources?limit=1", base), {
+      headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error(`Gateway rejected bearer token or source access (HTTP ${response.status})`);
+    }
+    const data = await response.json();
+    if (data?.protocol_version !== "2" || !Array.isArray(data.sources)) {
+      throw new Error("Unexpected Gateway v2 authentication response");
+    }
+    // No credential cache: revoked/expired keys are checked on every request.
+    // The opaque client ID is not a user identity or a copy of the secret.
+    return {
+      token,
+      clientId: `gateway-v2-${crypto.createHash("sha256").update(token).digest("hex")}`,
+      scopes: [DEFAULT_SCOPE],
+      resource: new URL(this.mcpServerUrl.href),
+      extra: { apiosk_connect_token: token },
     };
   }
 

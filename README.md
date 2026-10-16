@@ -79,9 +79,22 @@ and `apiosk`.
 For stdio, set `APIOSK_CONNECT_TOKEN` to an Apiosk agent token
 (`apk_access_…` from a connection made in the Apiosk app, or a legacy
 `apk_live_…` agent key). Every tool acts for that connected account; without a
-token the tools answer `unauthorized`. The hosted server uses OAuth instead.
+token the tools answer `unauthorized`. The hosted server supports OAuth and
+direct bearer credentials; see the [Databricks guide](docs/databricks.md).
 
 ## Agent configuration
+
+### Databricks
+
+Register `https://mcp.apiosk.com/mcp` as an external MCP server in Unity
+Gateway. Use **Dynamic Client Registration** with scopes
+`mcp:tools offline_access` for per-user OAuth. Select the six model tools;
+exclude the app-only `apiosk_approve` tool. Hosts without interactive cards
+use the existing `proposal.approval_url` fallback.
+
+See the [Databricks setup and validation guide](docs/databricks.md) for
+connection fields, bearer credentials, a workspace smoke test and Marketplace
+publication requirements.
 
 ### Claude Code
 
