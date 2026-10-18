@@ -30,7 +30,7 @@ function detailNotes(analysis,data,cbs){
  return notes.children.length?notes:null}
 renderResult=function(data){
  const results=data.context_view?.results?.length?data.context_view.results:data.result==null?[]:[data.result],analysis=data.context_view?.analysis;
- const preKyb=preKybVerdictView(preKybVerdictAnalysis(data)),verdict=preKyb||supplierVerdictView(supplierVerdictAnalysis(data)),cbs=verdict?null:cbsAnnualView(data,results);const surface=preKyb?renderPreKybVerdict(preKyb):verdict?renderSupplierVerdict(verdict):cbs?renderCbsAnnual(cbs):renderResearchAnswer(data,results);
+ const verdict=supplierVerdictView(supplierVerdictAnalysis(data)),cbs=verdict?null:cbsAnnualView(data,results);const surface=verdict?renderSupplierVerdict(verdict):cbs?renderCbsAnnual(cbs):renderResearchAnswer(data,results);
  // Without an analysis the source result is the answer, drawn as the App's
  // purchase panel draws it: the primary result open, lookups under details.
  let primary=null,primarySection=null;
