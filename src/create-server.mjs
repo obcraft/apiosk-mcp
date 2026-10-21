@@ -10,6 +10,8 @@ import {
 import { createApioskMcpRuntime, resolveGatewayV2Url } from "./runtime.mjs";
 import { V2_INSTRUCTIONS, V2_DESCRIPTION, V2_RESOURCE } from "./gateway-v2.mjs";
 import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_MODERN_CARD_URIS, gatewayV2CardHtml, gatewayV2CardMeta } from "./gateway-v2-card.mjs";
+import { COMPANY_CARD_URI, COMPANY_CHATGPT_CARD_URI, companyCheckCardHtml, companyCheckCardMeta } from './company-checks-card.mjs';
+import { COMPANY_CHECK_INSTRUCTIONS } from './company-checks.mjs';
 
 /**
  * One sentence, defined once.
@@ -106,7 +108,9 @@ export const SERVER_INFO = {
 
 // Shown to every connecting MCP client/agent as server-level guidance: the
 // Gateway v2 host contract, synced from gateway/contracts/host-instructions.md.
-export const SERVER_INSTRUCTIONS = V2_INSTRUCTIONS;
+// The original Ask contract remains byte-for-byte unchanged. This narrow
+// addendum introduces only the independently authorized monitoring workflow.
+export const SERVER_INSTRUCTIONS = V2_INSTRUCTIONS + '\n\nAdditional company-monitoring workflow (only for requests to follow companies over time and email new signals): alongside the original tools above, use the five apiosk_company_check tools. Resolve company identities first, then use apiosk_company_check rather than treating the monitoring request as a one-off research question. Read apiosk://company-checks/host-contract for scheduling and email recovery. ' + COMPANY_CHECK_INSTRUCTIONS;
 
 function resolveRuntime(options = {}) {
   return options.runtime || createApioskMcpRuntime(options);
@@ -158,6 +162,9 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ListResourcesRequestSchema, async () => ({
     resources: [
       V2_RESOURCE,
+      { uri: 'apiosk://company-checks/host-contract', name: 'Company checks and host scheduling', mimeType: 'text/markdown' },
+      { uri: COMPANY_CARD_URI, name: 'Apiosk company check', mimeType: 'text/html;profile=mcp-app', _meta: companyCheckCardMeta(gatewayUrl) },
+      { uri: COMPANY_CHATGPT_CARD_URI, name: 'Apiosk company check for ChatGPT', mimeType: 'text/html+skybridge', _meta: companyCheckCardMeta(gatewayUrl) },
       { uri: APIO_V2_CARD_URI, name: "Apiosk Gateway v2 interactive card", mimeType: "text/html;profile=mcp-app", _meta: cardMeta },
       { uri: APIO_V2_CHATGPT_CARD_URI, name: "Apiosk card for ChatGPT", mimeType: "text/html+skybridge", _meta: cardMeta },
       ...APIO_V2_CARD_LEGACY_URIS.map((uri) => ({
@@ -172,6 +179,10 @@ export function createApioskMcpServer(options = {}) {
   server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
     const { uri } = request.params;
     if (uri === V2_RESOURCE.uri) return { contents: [{ uri, mimeType: V2_RESOURCE.mimeType, text: V2_INSTRUCTIONS }] };
+    if (uri === 'apiosk://company-checks/host-contract') return { contents: [{ uri, mimeType: 'text/markdown', text: COMPANY_CHECK_INSTRUCTIONS }] };
+    if (uri === COMPANY_CARD_URI || uri === COMPANY_CHATGPT_CARD_URI) {
+      return { contents: [{ uri, mimeType: uri === COMPANY_CHATGPT_CARD_URI ? 'text/html+skybridge' : 'text/html;profile=mcp-app', text: companyCheckCardHtml(gatewayUrl), _meta: companyCheckCardMeta(gatewayUrl) }] };
+    }
     if (uri === APIO_V2_CHATGPT_CARD_URI || APIO_V2_MODERN_CARD_URIS.includes(uri) || APIO_V2_CARD_LEGACY_URIS.includes(uri)) {
       return { contents: [{ uri, mimeType: cardMime(uri), text: cardHtml, _meta: cardMeta }] };
     }

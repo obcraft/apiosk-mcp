@@ -63,6 +63,44 @@ Every response carries `state.state_ref`. If state is lost or a response was
 interrupted, call `apiosk_status` with `{"task_ref": "<state_ref>"}`. It reads
 only; it never parses, approves or buys.
 
+### Company monitoring in Claude and ChatGPT
+
+Use: “Volg bedrijf X, Y en Z. Controleer iedere maandag op wijzigingen in
+bedrijfsgegevens, mogelijke vermeldingen op sanctielijsten en relevante
+nieuwsberichten. Mail me alleen nieuwe signalen, met bronnen.”
+
+`apiosk_company_check` starts or recovers a check for one to three Dutch
+companies. Resolve each name to its exact eight-digit `kvk_number` first. No CSV,
+invoice balance or insolvency account is needed. Supply `companies` on first use,
+a UUID `check_id`, and one stable `occurrence` per scheduled date. Preserve those
+IDs on retries. Existing prices, approval and spending limits apply per run.
+
+- `apiosk_company_check_result`: retain completed source evidence and compare
+  available KVK fields, possible OpenSanctions matches and dated news results.
+- `apiosk_company_check_read`: reopen history or original evidence for free,
+  including after the original task expires.
+- `apiosk_company_check_email`: prepare a durable email containing only new
+  signals, sources and material coverage gaps. An empty update suppresses email.
+  Send exactly once through the host's authorized mail connector, only when
+  `dispatch_allowed` is true. This tool does not send.
+- `apiosk_company_check_acknowledge`: confirm the prepared email using the real
+  connector's successful-send receipt. Viewing a card is not email delivery.
+  An ambiguous send blocks another handoff until reconciled.
+
+Claude/ChatGPT owns scheduling and the email connector. Verify that both are
+available for the selected host/account, persist the check ID in the scheduled
+prompt, and confirm the schedule from the host's creation response. Gateway does
+not create a host task, send email, or bypass approval. A host task notification
+is not the requested sourced email. An unattended check needs an existing
+connection spending rule covering the plan and the host's connector permissions.
+
+The separate MCP Apps and ChatGPT cards show evidence, dates, unknown coverage
+and actual costs. A name match is never a confirmed sanctioned identity. News is
+bounded to the selected Exa/Tavily result set and the last seven days; it is not
+an exhaustive press archive. The first KVK snapshot establishes a baseline.
+See [usage, email recovery and rollout](docs/company-checks.md). Apply the new
+Gateway migration and deploy Gateway and MCP before using these tools live.
+
 The complete host contract the tools follow is served as the MCP resource
 `apiosk://v2/host-contract` and in the server instructions.
 
