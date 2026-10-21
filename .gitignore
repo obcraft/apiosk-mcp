@@ -16,3 +16,4 @@ build
 
 # Raw review reports contain private operational metadata.
 /.local/release-review-20261013/
+/.local/company-monitor/

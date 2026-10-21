@@ -36,6 +36,19 @@ test('transport ambiguity does not retry or replace the occurrence',async()=>{
  const response=await runtime.callTool('apiosk_company_check',args);
  assert.equal(calls,1);assert.equal(response.isError,true);assert.equal(response.structuredContent.check_id,check_id);assert.equal(response.structuredContent.occurrence,args.occurrence);
 });
+test('stale Gateway routes are an explicit deployment error, not an uncertain purchase',async()=>{
+ for(const status of [404,405]){
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>new Response('Not found',{status})});
+  const r=await runtime.callTool('apiosk_company_check',args);
+  assert.equal(r.isError,true);assert.equal(r.structuredContent.error_code,'company_check_route_unavailable');
+  assert.equal(r.structuredContent.check_id,check_id);assert.equal(r.structuredContent.occurrence,args.occurrence);
+ }
+});
+test('missing monitor migration is preserved as a concrete storage blocker',async()=>{
+ const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json({errors:[{code:'company_check_storage_not_ready',message:'Apply the monitor migration.'}]},{status:503})});
+ const r=await runtime.callTool('apiosk_company_check',args);
+ assert.equal(r.isError,true);assert.equal(r.structuredContent.error_code,'company_check_storage_not_ready');
+});
 test('original evidence reopens through a read-only request with both saved identifiers',async()=>{
  let seen;const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{seen={url,...options};return Response.json({view:'company_check_evidence',source:{document:{data:{status:'active'}}}})}});
  const response=await runtime.callTool('apiosk_company_check_read',{check_id,occurrence:args.occurrence,result_ref:check_id});

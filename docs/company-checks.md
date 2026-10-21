@@ -90,3 +90,9 @@ and [Tavily Search](https://docs.tavily.com/documentation/api-reference/endpoint
 Apply the Gateway migration, deploy Gateway then MCP, refresh installed hosts,
 and verify actual source-to-email execution in each. Protocol tests and fixtures
 are not proof of a deployed source, created schedule, purchase or delivered mail.
+
+For a resumable local source/evidence/mail-receipt check through a fresh production
+MCP process, use `examples/run-company-monitor-local.mjs --help` and the exact
+steps in [the local acceptance report](company-checks-local-test.md). A missing
+token, blocked connection, unfinished approval, partial coverage or missing mail
+receipt is a blocked run, never a passed acceptance test.

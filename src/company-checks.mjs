@@ -57,6 +57,10 @@ export function withCompanyChecks(runtime, options) {
           const metadata = new URL('/.well-known/oauth-protected-resource/mcp', env.APIOSK_MCP_PUBLIC_BASE_URL || `http://localhost:${env.PORT || 3000}`).href;
           return { ...failed({ error_code: 'unauthorized', message: 'Reconnect Apiosk, then recover the same company check.' }), _meta: { 'mcp/www_authenticate': [`Bearer resource_metadata="${metadata}", error="invalid_token", scope="mcp:tools"`] } };
         }
+        if ([404, 405].includes(response.status) && !response.headers.get('content-type')?.includes('application/json')) {
+          await response.body?.cancel();
+          return failed({ error_code: 'company_check_route_unavailable', message: 'This Gateway has not loaded the company-monitoring routes. Restart or deploy the updated Gateway, then recover the same check and occurrence.', check_id, occurrence: args.occurrence, delivery_id: args.delivery_id });
+        }
         const reader = response.body?.getReader();
         if (!reader) throw new Error('empty');
         const chunks = []; let bytes = 0;
