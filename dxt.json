@@ -26,16 +26,12 @@
       "description": "Browse published data sources by name, category, sector, tag or capability. Free and paginated; creates no task and buys nothing."
     },
     {
+      "name": "apiosk_ask",
+      "description": "Ask a question one source answers: Apiosk reads it, ranks its sources and pre-fills their inputs. Called again with a chosen source, it prepares that source's price and approval card. Nothing is bought until the person approves."
+    },
+    {
       "name": "apiosk_discover",
-      "description": "Plan a new data question: one plan, one total price ceiling or the clarification it needs. Nothing is bought until the person approves."
-    },
-    {
-      "name": "apiosk_search",
-      "description": "Search sources the way the Ask page does, with a capability object the chatbot fills in. Returns ranked sources and each runnable endpoint's inputs. Free; buys nothing."
-    },
-    {
-      "name": "apiosk_prepare",
-      "description": "Prepare one searched endpoint with its filled-in inputs: the same task, price ceiling and approval card as discover. Nothing is bought until the person approves."
+      "description": "Plan a new data question across several sources: one plan, one total price ceiling or the clarification it needs. Nothing is bought until the person approves."
     },
     {
       "name": "apiosk_execute",

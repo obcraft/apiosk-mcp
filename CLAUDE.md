@@ -8,10 +8,16 @@ asks for.
 
 Since 2.0 there is ONE runtime, Gateway v2 (src/gateway-v2.mjs), for the hosted
 server and for stdio alike. src/runtime.mjs only resolves the gateway:
-`APIOSK_GATEWAY_V2_URL`, else https://gateway.apiosk.com. The surface is five
-tools, defined in src/gateway-v2.mjs:
+`APIOSK_GATEWAY_V2_URL`, else https://gateway.apiosk.com. The surface is six
+tools (five for the model, one for the card), defined in src/gateway-v2.mjs and
+src/gateway-v2-ask.mjs:
 
 - apiosk_sources  — GET /v2/sources. Free source browsing, paginated.
+- apiosk_ask      — POST /v2/ask with only the question: Apiosk's own parser
+  and source search, ranked candidates with pre-filled inputs, no task. Called
+  again with a candidate's endpoint_id and input: POST /v2/ask-v2/prepare, one
+  priced source and its approval card. The chatbot never fills in a capability
+  object.
 - apiosk_discover — POST /v2/discover (or POST /v2/workflows/:slug/start for a
   fixed dossier). One plan, one total price ceiling, or a clarification. No
   purchase.

@@ -35,9 +35,8 @@ endpoints.
 | Tool | What it does | Gateway v2 route | Spends |
 | --- | --- | --- | --- |
 | `apiosk_sources` | Browse published data sources by name, category, sector, tag or capability. Paginated with `next_offset`. | `GET /v2/sources` | no |
-| `apiosk_discover` | Plan a NEW data question: one plan with `proposal.max_total_atomic` as the total price ceiling, or the clarification it needs. Fixed Pre-KYB Screening, company and tender workflows can be started with `workflow` instead of `question`. | `POST /v2/discover`, `POST /v2/workflows/{slug}/start` | no |
-| `apiosk_search` | Search sources the way the Ask page does, with a `parsed_request` capability object the chatbot fills in itself (the Ask parser's schema). Returns ranked sources per capability; each runnable candidate carries `endpoint.inputs`, the exact input keys for `apiosk_prepare`. | `POST /v2/ask-v2/search` | no |
-| `apiosk_prepare` | Prepare one searched endpoint with its filled-in `input`: the same task, price ceiling and approval card as `apiosk_discover`. | `POST /v2/ask-v2/prepare` | no |
+| `apiosk_ask` | Ask a question one source answers, in the person's words. Apiosk reads it the way the Ask page does and returns ranked sources per requested piece of data, each runnable candidate with `endpoint.inputs`, `endpoint.input_values` (read from the question) and `endpoint.missing_inputs`. Called again with the same question plus a candidate's `endpoint_id`, `capability` and `input`, it prepares that one source: the same task, price ceiling and approval card as `apiosk_discover`. | `POST /v2/ask`, then `POST /v2/ask-v2/prepare` | no |
+| `apiosk_discover` | Plan a NEW data question across several sources: one plan with `proposal.max_total_atomic` as the total price ceiling, or the clarification it needs. Fixed Pre-KYB Screening, company and tender workflows can be started with `workflow` instead of `question`. | `POST /v2/discover`, `POST /v2/workflows/{slug}/start` | no |
 | `apiosk_execute` | Continue the same task with a returned `next_actions` entry: supply input, select an entity, run an approved step, cancel. | `POST /v2/execute` | only an approved step |
 | `apiosk_status` | Read a task's saved results, actual charges and status. Free and read-only; used for follow-ups and recovery. | `GET /v2/tasks/{id}` | no |
 | `apiosk_approve` | **App-only.** Called by the interactive card when the person clicks Approve; approves that exact ceiling within the connection's spending limits and starts server execution. Never invoked by the model. | `POST /v2/approve` | yes, within the approved ceiling |
@@ -88,7 +87,7 @@ direct bearer credentials; see the [Databricks guide](docs/databricks.md).
 
 Register `https://mcp.apiosk.com/mcp` as an external MCP server in Unity
 Gateway. Use **Dynamic Client Registration** with scopes
-`mcp:tools offline_access` for per-user OAuth. Select the six model tools;
+`mcp:tools offline_access` for per-user OAuth. Select the five model tools;
 exclude the app-only `apiosk_approve` tool. Hosts without interactive cards
 use the existing `proposal.approval_url` fallback.
 

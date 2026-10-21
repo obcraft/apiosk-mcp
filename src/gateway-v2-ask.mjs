@@ -1,15 +1,16 @@
-// The Ask page's own steps for a connected chatbot. The chatbot fills in the
-// capability object the Ask parser would produce (apiosk_search), then prepares
-// one ranked endpoint with the inputs that endpoint declares (apiosk_prepare).
-// The gateway ranks, prices and quotes; this module only shapes the calls and
-// adds no planner, pricing or balance logic of its own.
+// The Ask page for a connected chatbot, as one tool. With only a question,
+// Apiosk reads it and ranks its sources (POST /v2/ask: the App's parser and
+// source search, no task). With a chosen candidate's endpoint_id and input,
+// the same tool prepares that one source (POST /v2/ask-v2/prepare). The
+// gateway parses, ranks, prices and quotes; this module only shapes the calls
+// and adds no planner, pricing or balance logic of its own.
 import { randomUUID } from "node:crypto";
 import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 
-export const ASK_TOOLS = Object.freeze(["apiosk_search", "apiosk_prepare"]);
+export const ASK_TOOLS = Object.freeze(["apiosk_ask"]);
 export const NO_RESULTS = "We couldn’t find any results for you. Try a different question.";
 
-const SEARCH_NOTICE = "Searching is free and buys nothing. Each candidate covers its listed capability, not necessarily the complete request. Only candidates with availability \"supported\" can run: fill each required endpoint.inputs field from the person's words or earlier results, ask for anything missing, then call apiosk_prepare with that candidate's endpoint_id, capability and input. For a request combining several checks, call apiosk_discover once with the complete question to get one plan and total price ceiling; do not prepare and approve separate purchases as if they were one dossier.";
+const SEARCH_NOTICE = "Asking is free and buys nothing. Each candidate covers its listed capability, not necessarily the complete request. Only candidates with availability \"supported\" can run: call apiosk_ask again with the same question, that candidate's endpoint_id and capability, and input starting from its endpoint.input_values; fill a field listed in endpoint.missing_inputs only from the person's words or earlier results, and ask for anything missing. For a request combining several checks, call apiosk_discover once with the complete question to get one plan and total price ceiling; do not prepare and approve separate purchases as if they were one dossier.";
 
 export function askDefinitions(errorFields, taskOutput) {
   const searchOutput = {
@@ -22,29 +23,28 @@ export function askDefinitions(errorFields, taskOutput) {
     anyOf: [{ required: ["protocol_version", "view", "parsed_request", "matches", "notice"] }, { required: ["error_code", "message"] }],
   };
   return [
-    { name: "apiosk_search", title: "Search sources for a capability object",
-      description: "Search Apiosk's sources the way the Ask page does, with the capability object its parser would produce, filled in by you (the host instructions give the full rules and an example). parsed_request: language, the ISO 639-1 code of the person's wording; subjects, one per entity: id s1, s2…, label exactly as written, type a singular English noun, identifiers only values written literally with snake_case keys (kvk_number, vat_number, postcode, license_plate, iban), otherwise {}; capabilities, one per piece of data or action asked: slug an English dot path domain.topic.detail describing the data, never the subject, letters and digits only, lowerCamelCase for a two-word part (company.financial.statements, location.time.current); name a short English title without company names; description one generic English sentence with no names, numbers or sources from the request; domain the slug's first part (company, location, compliance, vehicle, finance, legal, procurement, document, research or general); inputs and outputs snake_case concepts, not values; subject_id or null; source_hint the lowercase source the person named (kvk) or null; confidence 0 to 1, about 0.9 when asked explicitly; deliverable: format chat unless a file is asked (pdf, xlsx, docx, json), operations only summarize, analyze, compare, list or export, [] for data only. Returns, per capability, the Ask page's ranked sources; each runnable candidate carries endpoint.inputs: the exact input keys, whether each is required, and its value schema for apiosk_prepare. Free: creates no task and buys nothing.",
-      inputSchema: schemas.search, outputSchema: searchOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
-    { name: "apiosk_prepare", title: "Prepare one source",
-      description: "Prepare one runnable apiosk_search candidate: pass its endpoint_id, capability and an input object whose keys are that candidate's endpoint.inputs fields, filled only from the person's words or earlier results, never placeholders. Returns the same task, price ceiling and approval card as apiosk_discover; nothing is bought until the person approves. Continue with apiosk_execute and apiosk_status.",
-      inputSchema: schemas.prepare, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
+    { name: "apiosk_ask", title: "Ask one source",
+      description: "Ask Apiosk a question that one source answers, in the person's own words: Apiosk reads the question the way its Ask page does and returns, per piece of data it found, up to three ranked sources. Each runnable candidate (availability \"supported\") carries endpoint.inputs, the values Apiosk already read from the question (endpoint.input_values), the required fields still missing (endpoint.missing_inputs) and its price. Free: creates no task and buys nothing. To run one candidate, call again with the same question plus its endpoint_id, capability and input (its input_values, completed only from the person's words or earlier results, never placeholders): that returns the same task, price ceiling and approval card as apiosk_discover, and nothing is bought until the person approves. For several sources, a combined dossier or an analysis, use apiosk_discover instead.",
+      inputSchema: schemas.ask, outputSchema: { type: "object", anyOf: [searchOutput, taskOutput] },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ];
 }
 
-/** The gateway request for an Ask tool: its exact wire body, nothing extra. */
+/** The gateway request for apiosk_ask: its exact wire body, nothing extra. */
 export function askRequest(name, args) {
-  if (name === "apiosk_search") {
-    // The gateway records who parsed the object; a chatbot parse has no model hash.
-    const meta = { model: "connected-chatbot", parsed_at: new Date().toISOString(), text_sha256: "" };
-    return { path: "/v2/ask-v2/search", body: { parsed_request: { ...args.parsed_request, meta }, origin: "apiosk" } };
-  }
+  if (!args.endpoint_id) return { path: "/v2/ask", body: { question: args.question } };
   return { path: "/v2/ask-v2/prepare", body: { request_id: args.request_id || randomUUID(), endpoint_id: args.endpoint_id,
-    ...(args.capability && { capability: args.capability }), input: args.input } };
+    ...(args.capability && { capability: args.capability }), input: args.input || {}, question: args.question } };
 }
 
-/** The card's source search view (`view: "source_search"`). */
-export function presentSearch(result, parsed) {
-  if (!Array.isArray(result?.matches)) throw new Error("Unexpected protocol");
+/** The card's source search view (`view: "source_search"`) from a /v2/ask answer. */
+export function presentSearch(answer) {
+  // An origin outage must never read as "no results": no Apiosk search, no view.
+  const result = answer?.searches?.apiosk, parsed = answer?.parsed_request;
+  if (!Array.isArray(result?.matches)) {
+    if (!answer?.errors?.some?.(error => error?.origin === "apiosk")) throw new Error("Unexpected protocol");
+    return { protocol_version: "2", view: "source_search", parsed_request: parsed || {}, matches: [], message: "Some sources could not be searched. Try again shortly.", notice: SEARCH_NOTICE };
+  }
   // A missing match is still a requested requirement. Keep it visible so a
   // source returned for one check cannot make the whole dossier look covered.
   const matchesCapability = (match, capability) => match.slug === capability.slug && (match.subject_id !== undefined

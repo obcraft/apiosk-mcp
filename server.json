@@ -113,9 +113,8 @@
       ],
       "tools": [
         "apiosk_sources",
+        "apiosk_ask",
         "apiosk_discover",
-        "apiosk_search",
-        "apiosk_prepare",
         "apiosk_execute",
         "apiosk_status",
         "apiosk_approve"

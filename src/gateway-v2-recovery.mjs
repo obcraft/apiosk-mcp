@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 // Gateway task errors are nested. Keep their recovery envelope while exposing
 // the server's safe diagnostic to older host cards that only read message.
 export function gatewayFailure(result, taskRef) {
- const diagnostic = result?.errors?.find(error => typeof error?.message === 'string');
- return { ...result,
+ // Task routes list errors[]; the public Ask route answers {error:{code,message}}.
+ const diagnostic = result?.errors?.find(error => typeof error?.message === 'string') || (typeof result?.error?.message === 'string' ? result.error : undefined);
+ const { error: _publicError, ...envelope } = result && typeof result === 'object' ? result : {};
+ return { ...envelope,
   ...(diagnostic && { error_code: diagnostic.code, message: diagnostic.message }),
   ...((taskRef || result?.state?.state_ref) && { recover_task_ref: taskRef || result.state.state_ref }),
  };

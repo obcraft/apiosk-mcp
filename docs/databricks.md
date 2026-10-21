@@ -47,8 +47,7 @@ Expose these tools in the service:
 
 - `apiosk_sources`: browse sources without buying data.
 - `apiosk_discover`: prepare a new data request.
-- `apiosk_search`: find sources for structured requirements.
-- `apiosk_prepare`: prepare a selected endpoint.
+- `apiosk_ask`: ask a question one source answers, then prepare the chosen source.
 - `apiosk_execute`: continue a returned action on the same task.
 - `apiosk_status`: read the existing task and saved results.
 

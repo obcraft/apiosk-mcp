@@ -101,7 +101,7 @@ test('Databricks-style HTTP clients: DCR/PKCE/refresh, bearer credentials, read-
     try {
       await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), { requestInit: { headers: { authorization: `Bearer ${token}` } } }));
       const { tools } = await client.listTools();
-      assert.equal(tools.filter(tool => tool._meta?.ui?.visibility?.includes('model')).length, 6);
+      assert.equal(tools.filter(tool => tool._meta?.ui?.visibility?.includes('model')).length, 5);
       assert.deepEqual(tools.find(tool => tool.name === 'apiosk_approve')._meta.ui.visibility, ['app']);
       const result = await client.callTool({ name: 'apiosk_sources', arguments: { limit: 1 } });
       assert.ok(!result.isError);

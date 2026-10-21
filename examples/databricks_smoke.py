@@ -24,7 +24,7 @@ def main():
 
     client = DatabricksMCPClient(server_url=server_url, workspace_client=workspace)
     names = {tool.name for tool in client.list_tools()}
-    expected = {"apiosk_sources", "apiosk_discover", "apiosk_search", "apiosk_prepare", "apiosk_execute", "apiosk_status"}
+    expected = {"apiosk_sources", "apiosk_ask", "apiosk_discover", "apiosk_execute", "apiosk_status"}
     if "apiosk_approve" in names:
         raise RuntimeError("Deselect the app-only apiosk_approve tool in the Databricks MCP service.")
     if not expected.issubset(names):

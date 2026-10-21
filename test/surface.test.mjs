@@ -1,7 +1,7 @@
 // The tool surface, asserted by name.
 //
 // This test is the thing that stops the drawer refilling. Since 2.0 the only
-// runtime is Gateway v2: six model-visible tools and one app-only approval
+// runtime is Gateway v2: five model-visible tools and one app-only approval
 // tool the interactive card calls. Every other time this fails, something grew
 // back.
 
@@ -16,10 +16,10 @@ import { listApioskTools, SERVER_BASE_VERSION } from "../src/create-server.mjs";
 // sorted: a list that reorders itself is a list a reviewer stops reading.
 const EXPECTED = [
   "apiosk_sources",
+  // The Ask page for one source: Apiosk reads the question, then prepares the chosen endpoint.
+  "apiosk_ask",
+  // The planner, for a question across several sources.
   "apiosk_discover",
-  // The Ask page's own steps: a chatbot-filled capability object, then one endpoint.
-  "apiosk_search",
-  "apiosk_prepare",
   "apiosk_execute",
   "apiosk_status",
   // App-only: the card calls it after the person clicks Approve.
