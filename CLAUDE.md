@@ -18,8 +18,8 @@ src/gateway-v2-ask.mjs:
   again with a candidate's endpoint_id and input: POST /v2/ask-v2/prepare, one
   priced source and its approval card. The chatbot never fills in a capability
   object.
-- apiosk_discover — POST /v2/discover (or POST /v2/workflows/:slug/start for a
-  fixed dossier). One plan, one total price ceiling, or a clarification. No
+- apiosk_discover — POST /v2/discover with a question (named workflows are
+  paused in the gateway). One plan, one total price ceiling, or a clarification. No
   purchase.
 - apiosk_execute  — POST /v2/execute with a returned next_actions entry.
 - apiosk_status   — GET /v2/tasks/:id. Free, read-only recovery and follow-ups.

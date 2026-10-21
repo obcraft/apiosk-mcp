@@ -1,4 +1,3 @@
-import { addWorkflowDiscovery } from './gateway-v2-workflows.mjs';
 import { sourceUsageNotices } from './source-usage-notice.mjs';
 import { attachReportLinks } from './gateway-v2-report-links.mjs';
 import { planningRetryId, gatewayFailure, CLARIFICATION_GUIDANCE, UNSUPPORTED_GUIDANCE } from "./gateway-v2-recovery.mjs";
@@ -65,7 +64,6 @@ export function createV2Runtime(options = {}) {
   // Optional means omit it. Advertising null makes some chatbot models eagerly
   // send nulls for every unused field, which weakens the wire contract.
   discover.properties.state = schemas.state;
-  addWorkflowDiscovery(discover);
   const execute = structuredClone(schemas.execute);
   execute.properties.state = schemas.state;
   const definitions = [
@@ -107,12 +105,11 @@ export function createV2Runtime(options = {}) {
       if (!validate.get(name)(cleanArgs).valid) return failure({ error_code: 'invalid_arguments', message: 'Use the tool schema and copy the latest gateway-issued state and action. Recovery takes only recover_task_ref.' });
       const recover = name === "apiosk_status" ? cleanArgs.task_ref : name === "apiosk_execute" && cleanArgs.recover_task_ref;
       if (recover && name === "apiosk_execute" && Object.keys(cleanArgs).some(k => !['recover_task_ref', 'request_id'].includes(k))) return failure({ error_code: 'invalid_recovery', message: 'Recover using only recover_task_ref and an optional request_id.' });
-      const workflow = name === "apiosk_discover" && cleanArgs.workflow;
       const ask = ASK_TOOLS.includes(name) && askRequest(name, cleanArgs), searching = ask?.path === "/v2/ask";
-      const body = ask ? ask.body : { ...(workflow ? { input: workflow.input } : cleanArgs), request_id: cleanArgs.request_id || randomUUID() };
+      const body = ask ? ask.body : { ...cleanArgs, request_id: cleanArgs.request_id || randomUUID() };
       if (name === "apiosk_execute" && !recover) body.idempotency_key ||= args.action_id;
       const browsing = name === "apiosk_sources";
-      const path = ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : workflow ? `/v2/workflows/${encodeURIComponent(workflow.slug)}/start` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : "/v2/execute";
+      const path = ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : "/v2/execute";
       try {
         const url = new URL(path, base);
         if (browsing) for (const [key, value] of Object.entries(cleanArgs)) url.searchParams.set(key, String(value));
