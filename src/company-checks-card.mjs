@@ -14,42 +14,42 @@ function companyText(parent,tag,value,className=''){const n=el(tag,className,val
 function companyDetails(parent,title,value){const d=el('details'),summary=el('summary','',title);d.append(summary,el('pre','',JSON.stringify(value,null,2)));parent.append(d)}
 function renderCompanyCheck(data){
   output=data;byId('card').classList.remove('hidden','plan-mode');sections.replaceChildren();feedback.classList.add('hidden');byId('price').classList.add('hidden');
-  byId('title').textContent='Apiosk · Bedrijfsmonitor';byId('subtitle').textContent='';
+  byId('title').textContent='Apiosk · Company monitor';byId('subtitle').textContent='';
   if(data.view==='company_check_history'){
-    if(data.latest){renderCompanyCheck(data.latest);companyDetails(section('Controlehistorie'),'Uitvoeringen',data.runs)}
-    else {companyText(section('Bedrijvenlijst'),'p','De bedrijvenlijst is opgeslagen. Er is nog geen afgeronde controle.');companyDetails(section('Uitvoeringen'),'Historie',data.runs)}
+    if(data.latest){renderCompanyCheck(data.latest);companyDetails(section('Check history'),'Runs',data.runs)}
+    else {companyText(section('Company list'),'p','The company list is saved. No check has completed yet.');companyDetails(section('Runs'),'History',data.runs)}
     window.apiosk.resize();return;
   }
-  if(data.view==='company_check_acknowledgement'){byId('status-pill').textContent='Opgeslagen';companyText(section('Meldingen'),'p','De verzendbevestiging van de mailkoppeling is opgeslagen. Deze signalen worden niet opnieuw gemaild.');window.apiosk.resize();return}
-  if(data.view==='company_check_delivery'){byId('status-pill').textContent=data.status==='suppressed'?'Geen e-mail nodig':data.status==='sent'?'Verzending bevestigd':'E-mailoverdracht';companyText(section('E-mail'),'p',data.status==='suppressed'?'Er zijn geen nieuwe signalen om te mailen.':data.dispatch_allowed?'Het bericht staat klaar voor de mailkoppeling. Het is nog niet verzonden.':'Controleer de eerdere verzending voordat je verdergaat. Niet opnieuw versturen.');if(data.payload)companyDetails(section('Bericht'),'Opgeslagen e-mail',data.payload);window.apiosk.resize();return}
-  if(data.view==='company_check_evidence'){byId('status-pill').textContent='Opgeslagen bronbewijs';companyDetails(section('Bronbewijs'),'Oorspronkelijk bronresultaat',data.source);window.apiosk.resize();return}
-  if(data.view==='company_check_pending'){byId('status-pill').textContent='In voorbereiding';companyText(section('Voortgang'),'p',data.message);window.apiosk.resize();return}
-  byId('status-pill').textContent=data.status==='completed'?'Uitgevoerd':'Onvolledige dekking';
-  byId('subtitle').textContent=data.checked_at?'Gecontroleerd op '+data.checked_at:'';
-  const summary=section('Overzicht'),grid=el('div','balances');
-  for(const [label,value] of [['Bedrijven',data.company_count],['Nieuwe signalen',data.new_signal_count],['Bronresultaten',data.source_count]]){const box=el('div','balance');box.append(el('span','',label),el('b','',value));grid.append(box)}summary.append(grid);
+  if(data.view==='company_check_acknowledgement'){byId('status-pill').textContent='Saved';companyText(section('Notifications'),'p','The email connector receipt is saved. These signals will not be emailed again.');window.apiosk.resize();return}
+  if(data.view==='company_check_delivery'){byId('status-pill').textContent=data.status==='suppressed'?'No email needed':data.status==='sent'?'Delivery confirmed':'Email handoff';companyText(section('Email'),'p',data.status==='suppressed'?'There are no new signals to email.':data.dispatch_allowed?'The message is ready for the email connector. It has not been sent yet.':'Check the earlier delivery before continuing. Do not send it again.');if(data.payload)companyDetails(section('Message'),'Saved email',data.payload);window.apiosk.resize();return}
+  if(data.view==='company_check_evidence'){byId('status-pill').textContent='Saved source evidence';companyDetails(section('Source evidence'),'Original source result',data.source);window.apiosk.resize();return}
+  if(data.view==='company_check_pending'){byId('status-pill').textContent='Preparing';companyText(section('Progress'),'p',data.message);window.apiosk.resize();return}
+  byId('status-pill').textContent=data.status==='completed'?'Completed':'Incomplete coverage';
+  byId('subtitle').textContent=data.checked_at?'Checked at '+data.checked_at:'';
+  const summary=section('Overview'),grid=el('div','balances');
+  for(const [label,value] of [['Companies',data.company_count],['New signals',data.new_signal_count],['Source results',data.source_count]]){const box=el('div','balance');box.append(el('span','',label),el('b','',value));grid.append(box)}summary.append(grid);
   for(const signal of data.new_signals||[]){
-    const s=section((signal.company_name||signal.kvk_number)+' — Handmatige beoordeling vereist');
+    const s=section((signal.company_name||signal.kvk_number)+' — Manual review required');
     
-    companyText(s,'p','KvK '+signal.kvk_number,'meta');
+    companyText(s,'p','KVK '+signal.kvk_number,'meta');
     companyText(s,'p',signal.message);
-    if(signal.carried_forward)companyText(s,'p','Eerder waargenomen, nog niet per e-mail bevestigd. Zie de oorspronkelijke brondatum.','meta');
-    companyText(s,'p',signal.change==='first_observation'?'Eerste waarneming; er is nog geen vorige controle.':'Niet eerder gemeld door deze controle.');
-    if(signal.previous!=null)companyDetails(s,'Verschil met vorige controle',{vorige:signal.previous,huidige:signal.current});
+    if(signal.carried_forward)companyText(s,'p','Previously observed, not yet confirmed by email. See the original source date.','meta');
+    companyText(s,'p',signal.change==='first_observation'?'First observation; there is no previous check yet.':'Not previously reported by this check.');
+    if(signal.previous!=null)companyDetails(s,'Difference from the previous check',{previous:signal.previous,current:signal.current});
     if(signal.url){const link=el('a','',signal.url);try{const u=new URL(signal.url);if(['https:','http:'].includes(u.protocol)){link.href=u.href;link.target='_blank';link.rel='noopener noreferrer';s.append(link)}}catch{}}
-    if(signal.published_at)companyText(s,'p','Gepubliceerd: '+signal.published_at,'meta');
-    companyDetails(s,'Bronbewijs en controletijdstip',signal.evidence);
+    if(signal.published_at)companyText(s,'p','Published: '+signal.published_at,'meta');
+    companyDetails(s,'Source evidence and check time',signal.evidence);
   }
-  if(!(data.new_signals||[]).length)companyText(section('Signalen'),'p','Geen nieuwe relevante signalen in de beschikbare brongegevens. Controleer ook de dekking hieronder.');
+  if(!(data.new_signals||[]).length)companyText(section('Signals'),'p','No new relevant signals in the available source data. Also check the coverage below.');
   const gaps=(data.coverage||[]).filter(c=>c.status!=='checked');
-  if(gaps.length){const s=section('Ontbrekende dekking');for(const g of gaps)companyText(s,'p','KvK '+g.kvk_number+': '+g.message,'notice')}
-  const cost=section('Werkelijke kosten per uitvoering');
-  if(data.billing?.total_charged!=null){const amount=money(data.billing.total_charged,data.billing.currency);if(amount)companyText(cost,'p','Totaal: '+amount)}
-  for(const source of (data.sources||[]).filter(s=>!s.historical)){const amount=money(source.charged_atomic,source.currency);companyText(cost,'p',(source.source?.name||source.source?.api_slug||'Bron')+': '+(amount||'Kosten niet gespecificeerd'))}
-  const notices=(data.sources||[]).map(s=>s.source);if(sourceUsageNotices(notices).length)appendSourceUsageNotices(section('Broninformatie'),notices);
-  companyDetails(section('Bronnen en details'),'Controledekking en bewaarde bronverwijzingen',{coverage:data.coverage,sources:data.sources});
-  const limitations=section('Toelichting');for(const note of data.limitations||[])companyText(limitations,'p',note,'meta');
-  companyText(limitations,'p','Claude of ChatGPT plant de herhaling en gebruikt de gekoppelde maildienst. Deze kaart bevestigt geen planning of verzending.','meta');
+  if(gaps.length){const s=section('Missing coverage');for(const g of gaps)companyText(s,'p','KVK '+g.kvk_number+': '+g.message,'notice')}
+  const cost=section('Actual cost per run');
+  if(data.billing?.total_charged!=null){const amount=money(data.billing.total_charged,data.billing.currency);if(amount)companyText(cost,'p','Total: '+amount)}
+  for(const source of (data.sources||[]).filter(s=>!s.historical)){const amount=money(source.charged_atomic,source.currency);companyText(cost,'p',(source.source?.name||source.source?.api_slug||'Source')+': '+(amount||'Cost not itemized'))}
+  const notices=(data.sources||[]).map(s=>s.source);if(sourceUsageNotices(notices).length)appendSourceUsageNotices(section('Source information'),notices);
+  companyDetails(section('Sources and details'),'Check coverage and saved source references',{coverage:data.coverage,sources:data.sources});
+  const limitations=section('Notes');for(const note of data.limitations||[])companyText(limitations,'p',note,'meta');
+  companyText(limitations,'p','Claude or ChatGPT schedules the repeat and uses the connected email service. This card confirms neither a schedule nor a delivery.','meta');
   window.apiosk.resize();
 }
 async function collectCompanyCheck(){
@@ -59,7 +59,7 @@ async function collectCompanyCheck(){
   try{const result=await window.apiosk.callTool('apiosk_company_check_result',{check_id:companyCheckContext.check_id,occurrence:companyCheckContext.occurrence});
     if(result?.view==='company_check'){companyCollected=key;renderCompanyCheck(result);await window.apiosk.context(result).catch(()=>{});if(window.apiosk.can.autoFollowUp)await window.apiosk.say('The saved company check is ready. Read apiosk_company_check_result for check_id '+companyCheckContext.check_id+' and occurrence '+companyCheckContext.occurrence+'. Use only new signals for the requested email. Prepare it with apiosk_company_check_email and send only if dispatch_allowed=true. Confirm only after a successful email connector receipt. Reading this card is not delivery. Do not start another purchase.').catch(()=>{})}
     else if(result?.error_code)showFeedback(result.message,'error');
-  }catch{showFeedback('De opgeslagen vergelijking kon nog niet worden geladen. Gebruik de resultaattool opnieuw; een nieuwe aankoop is niet nodig.','error')}
+  }catch{showFeedback('The saved comparison could not be loaded yet. Use the result tool again; no new purchase is needed.','error')}
   finally{companyCollecting=false}
 }
 `;

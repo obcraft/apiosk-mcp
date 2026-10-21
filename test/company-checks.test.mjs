@@ -83,11 +83,27 @@ test('company report rendering handles empty, partial and hostile evidence witho
  vm.createContext(context);vm.runInContext(script.slice(start,end),context);
  context.data={view:'company_check',status:'partial',company_count:3,new_signal_count:1,source_count:1,companies:args.companies,new_signals:[{kvk_number:'01234567',company_name:'<script>bad()</script>',message:'<img onerror=bad()>',evidence:[{value:'<iframe/>'}]}],coverage:[{status:'unknown',kvk_number:'01234567',message:'Geen nieuwsdekking'}],sources:[],limitations:[]};
  vm.runInContext('renderCompanyCheck(data)',context);
- assert.equal(ids.get('status-pill').textContent,'Onvolledige dekking');assert.ok(nodes.some(n=>n.textContent==='<img onerror=bad()>'));
+ assert.equal(ids.get('status-pill').textContent,'Incomplete coverage');assert.ok(nodes.some(n=>n.textContent==='<img onerror=bad()>'));
  assert.ok(!nodes.some(n=>'innerHTML' in n));
  context.data={...context.data,new_signal_count:0,new_signals:[]};vm.runInContext('renderCompanyCheck(data)',context);
- assert.ok(nodes.some(n=>String(n.textContent).includes('Geen nieuwe relevante signalen')));
+ assert.ok(nodes.some(n=>String(n.textContent).includes('No new relevant signals')));
  assert.doesNotMatch(script.slice(start),/callTool\('apiosk_company_check_acknowledge'/);
+});
+
+test('the plan card bundles the same operation from one source into one row with its subjects',()=>{
+ const script=[...companyCheckCardHtml(env.APIOSK_GATEWAY_V2_URL).matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m=>m[1]).join('\n');
+ const start=script.indexOf('function renderPlan('),end=script.indexOf('function ',start+20);
+ const nodes=[];const node=(tag,className,value)=>{const n={tag,className,textContent:value,children:[],append(...items){this.children.push(...items)},classList:{add(){}}};nodes.push(n);return n};
+ const context={el:node,section:(title,...rest)=>{const s=node('section','',title);s.append(...rest);return s},money:value=>`€${value}`,text:String,pretty:String,sourceLine:source=>node('div','step-source',source.name),planSurface:null};
+ vm.createContext(context);vm.runInContext(script.slice(start,end),context);
+ const sanctions=(subject,status)=>({title:'Screen for sanctions matches',subject,status,source:{slug:'opensanctions',name:'OpenSanctions'}});
+ context.data={proposal:{max_total_atomic:'402175',currency:'USD',steps:['a','b','c','d'],step_details:[{title:'Retrieve the company profile',subject:'A',source:{slug:'kvk',name:'KVK'}},sanctions('A'),sanctions('B','completed'),sanctions('C')]}};
+ vm.runInContext('renderPlan(data)',context);
+ assert.equal(nodes.filter(n=>n.className==='step').length,2);
+ assert.ok(nodes.some(n=>n.textContent==='Screen for sanctions matches · 3×'));
+ assert.ok(nodes.some(n=>n.textContent==='A · B · C'));
+ assert.ok(nodes.some(n=>n.className==='state running'));
+ assert.ok(nodes.some(n=>n.textContent==='€402175'));
 });
 
 test('email handoff and confirmation use saved identity and never execute a mail tool',async()=>{
