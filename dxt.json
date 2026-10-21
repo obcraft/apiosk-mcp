@@ -48,26 +48,6 @@
     {
       "name": "apiosk_approve",
       "description": "App-only: called by the interactive card when the person clicks Approve, within the connection's spending limits. Never invoked by the model."
-    },
-    {
-      "name": "apiosk_company_check",
-      "description": "Monitor Dutch companies using KVK, OpenSanctions and news with stable company identities."
-    },
-    {
-      "name": "apiosk_company_check_result",
-      "description": "Save and compare completed source evidence without buying again."
-    },
-    {
-      "name": "apiosk_company_check_read",
-      "description": "Read saved company monitoring evidence and history without purchases."
-    },
-    {
-      "name": "apiosk_company_check_email",
-      "description": "Prepare a durable email handoff containing only new source-backed company signals. Does not send."
-    },
-    {
-      "name": "apiosk_company_check_acknowledge",
-      "description": "Record a successful host email connector receipt; displaying a report is not delivery."
     }
   ]
 }

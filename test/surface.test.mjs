@@ -24,11 +24,6 @@ const EXPECTED = [
   "apiosk_status",
   // App-only: the card calls it after the person clicks Approve.
   "apiosk_approve",
-  "apiosk_company_check",
-  "apiosk_company_check_result",
-  "apiosk_company_check_read",
-  "apiosk_company_check_email",
-  "apiosk_company_check_acknowledge",
 ];
 
 test("the tool surface is exactly the Gateway v2 tools, for every transport", async () => {

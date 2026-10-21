@@ -12,7 +12,6 @@
 // staging gateway); unset, it is the production gateway.
 
 import { createV2Runtime } from "./gateway-v2.mjs";
-import { withCompanyChecks } from "./company-checks.mjs";
 
 export const DEFAULT_GATEWAY_V2_URL = "https://gateway.apiosk.com";
 
@@ -32,6 +31,5 @@ export function resolveGatewayV2Url(env = process.env) {
 export function createApioskMcpRuntime(options = {}) {
   const env = options.env || process.env;
   // A copy, never a mutation: the caller's env (often process.env) is not ours.
-  const resolved = { ...options, env: { ...env, APIOSK_GATEWAY_V2_URL: resolveGatewayV2Url(env) } };
-  return withCompanyChecks(createV2Runtime(resolved), resolved);
+  return createV2Runtime({ ...options, env: { ...env, APIOSK_GATEWAY_V2_URL: resolveGatewayV2Url(env) } });
 }

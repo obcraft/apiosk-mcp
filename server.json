@@ -118,12 +118,7 @@
         "apiosk_prepare",
         "apiosk_execute",
         "apiosk_status",
-        "apiosk_approve",
-        "apiosk_company_check",
-        "apiosk_company_check_result",
-        "apiosk_company_check_read",
-        "apiosk_company_check_email",
-        "apiosk_company_check_acknowledge"
+        "apiosk_approve"
       ]
     }
   }

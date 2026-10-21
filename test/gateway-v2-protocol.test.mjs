@@ -22,20 +22,19 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
  const [a,b]=InMemoryTransport.createLinkedPair();
  try {
   await server.connect(b);await client.connect(a);
-  assert.ok(client.getInstructions().startsWith(V2_INSTRUCTIONS));
-  assert.ok(client.getInstructions().includes('only for requests to follow companies over time and email new signals'));
+  assert.equal(client.getInstructions(),V2_INSTRUCTIONS);
   assert.deepEqual(client.getServerVersion(),resolveServerPresentation(env).info);
   assert.equal(client.getServerCapabilities().extensions,undefined);
-  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_search','apiosk_prepare','apiosk_execute','apiosk_status','apiosk_approve','apiosk_company_check','apiosk_company_check_result','apiosk_company_check_read','apiosk_company_check_email','apiosk_company_check_acknowledge']);
+  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_discover','apiosk_search','apiosk_prepare','apiosk_execute','apiosk_status','apiosk_approve']);
   for(const tool of tools){assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);assert.equal(tool.outputSchema.type,'object')}
-  for(const tool of tools.filter(tool=>tool.name!=='apiosk_approve'&&!tool.name.startsWith('apiosk_company_check'))){
+  for(const tool of tools.filter(tool=>tool.name!=='apiosk_approve')){
    assert.equal(tool._meta.ui.resourceUri,APIO_V2_CARD_URI);
    assert.equal(tool._meta['openai/outputTemplate'],APIO_V2_CHATGPT_CARD_URI);
    assert.notEqual(tool._meta.ui.resourceUri,tool._meta['openai/outputTemplate']);
   }
   assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta.ui.resourceUri,undefined);
   assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta['openai/outputTemplate'],undefined);
-  const {resources}=await client.listResources();assert.equal(resources.length,6+APIO_V2_CARD_LEGACY_URIS.length);
+  const {resources}=await client.listResources();assert.equal(resources.length,3+APIO_V2_CARD_LEGACY_URIS.length);
   const contract=resources.find(r=>r.uri==='apiosk://v2/host-contract');
   const card=resources.find(r=>r.uri===APIO_V2_CARD_URI);
   assert.ok(contract);assert.ok(card);assert.equal(card.mimeType,expectedMime);
