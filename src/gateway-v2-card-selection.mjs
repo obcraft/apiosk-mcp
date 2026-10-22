@@ -5,9 +5,35 @@ let sourceSelectionSession=null,sourceSearchSnapshot=null,sourceSelectionQuestio
 const selectedSources=new Map(),sourceChoices=new Map(),sourceDrafts=new Map();let sourceReviewButton=null,sourceSelectionCount=null;
 function sourceQuestion(data){return data.question||output?.context_view?.conversation?.at(-1)?.question||input.question||''}
 function sourceChoiceKey(candidate,match){return JSON.stringify([candidate.endpoint_id||candidate.endpoint?.endpoint_id,candidate.capability||candidate.endpoint?.capability,candidate.subject_id||match?.subject_id||null])}
+function offeredSourceOption(candidate,match,data=sourceSearchSnapshot){return (data?.source_options||[]).find(option=>sourceChoiceKey(option.source||{},option)===sourceChoiceKey(candidate,match))}
+function sourceOptionCandidate(option,existing={}){
+ const candidate={...existing,...option.source,subject_id:option.subject_id},endpoint=option.endpoint||existing.endpoint||option.source?.endpoint;
+ if(endpoint)candidate.endpoint={...endpoint,input_values:{...endpoint.input_values,...option.input_values},missing_inputs:option.missing_inputs||endpoint.missing_inputs};
+ return candidate;
+}
+function sourceSearchGroups(data){
+ const seen=new Set(),key=(candidate,match)=>(candidate.endpoint_id||candidate.endpoint?.endpoint_id)?sourceChoiceKey(candidate,match):JSON.stringify([candidate.origin,candidate.url||candidate.source_slug||candidate.name,candidate.capability,candidate.subject_id||match.subject_id]);
+ const groups=(data.matches||[]).map(match=>{
+  const group={...match};
+  for(const origin of ['apiosk','coinbase'])group[origin]=(match[origin]||[]).flatMap(candidate=>{
+   const option=offeredSourceOption(candidate,match,data);if(option)candidate=sourceOptionCandidate(option,candidate);
+   const identity=key(candidate,match);if(seen.has(identity))return [];seen.add(identity);return [candidate];
+  });
+  group.duplicates_only=(match.apiosk?.length||0)+(match.coinbase?.length||0)>0&&!group.apiosk.length&&!group.coinbase.length;
+  return group;
+ });
+ const related=[];
+ for(const option of data.source_options||[]){
+  if(!(data.parsed_request?.subjects||[]).some(subject=>subject.id===option.subject_id))continue;
+  const candidate=sourceOptionCandidate(option),identity=key(candidate,option);if(seen.has(identity))continue;seen.add(identity);
+  related.push({...candidate,selection_reason:option.reason});
+ }
+ if(related.length)groups.push({slug:'related_sources',related:true,apiosk:related,coinbase:[],coinbase_status:'complete'});
+ return groups;
+}
 function sourceSearchNeedsRefresh(data){
  if(!data?.search_id||!Array.isArray(data.source_options)||!Array.isArray(data.matches))return true;
- return data.matches.some(match=>[...(match.apiosk||[]),...(match.coinbase||[])].some(candidate=>candidate.availability==='supported'&&!Array.isArray(candidate.endpoint?.inputs)&&data.source_options.some(option=>(candidate.endpoint_id||candidate.endpoint?.endpoint_id)===(option.source?.endpoint_id||option.source?.endpoint?.endpoint_id)&&(candidate.capability||candidate.endpoint?.capability)===(option.source?.capability||option.source?.endpoint?.capability)&&(!(candidate.subject_id||match.subject_id)||(candidate.subject_id||match.subject_id)===option.subject_id))));
+ return sourceSearchGroups(data).some(match=>[...match.apiosk,...match.coinbase].some(candidate=>candidate.availability==='supported'&&offeredSourceOption(candidate,match,data)&&!Array.isArray(candidate.endpoint?.inputs)));
 }
 function sourceSubjectIdentity(subject){const label=String(subject?.label||'').trim().toLowerCase(),identifiers=Object.entries(subject?.identifiers||{}).sort(([a],[b])=>a.localeCompare(b));return label||identifiers.length?JSON.stringify([subject?.type||null,label,identifiers]):null}
 function restoreSourceSelections(selections,original,refreshed){
@@ -18,14 +44,14 @@ function restoreSourceSelections(selections,original,refreshed){
   const matches=after.filter(subject=>sourceSubjectIdentity(subject)===identity);
   if(matches.length!==1)return [];
   const selection={...saved,subject_id:matches[0].id};
-  const candidate=refreshed.matches.flatMap(match=>[...(match.apiosk||[]),...(match.coinbase||[])].map(candidate=>({candidate,match}))).find(({candidate,match})=>sourceChoiceKey(candidate,match)===sourceChoiceKey(selection,selection))?.candidate;
+  const candidate=sourceSearchGroups(refreshed).flatMap(match=>[...match.apiosk,...match.coinbase].map(candidate=>({candidate,match}))).find(({candidate,match})=>sourceChoiceKey(candidate,match)===sourceChoiceKey(selection,selection))?.candidate;
   if(!Array.isArray(candidate?.endpoint?.inputs))return [];
   const fields=new Set(candidate.endpoint.inputs.map(definition=>definition.field));
   selection.input=Object.fromEntries(Object.entries({...candidate.endpoint.input_values,...saved.input}).filter(([field])=>fields.has(field)));
   return [selection];
  });
 }
-function selectableSource(candidate,match){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)&&Array.isArray(sourceSearchSnapshot?.source_options)&&sourceSearchSnapshot.source_options.some(option=>sourceChoiceKey(option.source||{},option)===sourceChoiceKey(candidate,match))}
+function selectableSource(candidate,match){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)&&!!offeredSourceOption(candidate,match)}
 function beginSourceSelection(data,matches){
  const question=sourceQuestion(data),session=JSON.stringify([question,data.catalog_version||'',data.parsed_request?.meta?.text_sha256||'']);
  const changed=session!==sourceSelectionSession;
@@ -115,7 +141,7 @@ function renderSourceReview(){
  if(!sourceSearchSnapshot?.search_id||!Array.isArray(sourceSearchSnapshot?.source_options)||!sourceChoices.size&&sourceSearchNeedsRefresh(sourceSearchSnapshot)){const s=section('Choose sources');s.append(el('p','meta','Refresh this source list to choose one or more sources. Nothing is bought.'));appendSourceRefresh(s);return}
  if(!sourceChoices.size)return;
  const s=section('Selected sources');sourceSelectionCount=el('p','meta');s.append(sourceSelectionCount,el('p','meta','Selecting sources is free. Review one total price, then approve once.'));
- const actions=el('div','actions');sourceReviewButton=el('button','primary review-sources','Review selected sources');sourceReviewButton.type='button';sourceReviewButton.onclick=reviewSelectedSources;actions.append(sourceReviewButton);s.append(actions);syncSourceSelection();
+ const actions=el('div','actions');sourceReviewButton=el('button','primary review-sources','Review selected sources');sourceReviewButton.type='button';sourceReviewButton.onclick=reviewSelectedSources;actions.append(sourceReviewButton);s.append(actions);if(sourceSearchNeedsRefresh(sourceSearchSnapshot)){s.append(el('p','meta','Refresh to load the inputs for the remaining offered sources.'));appendSourceRefresh(s)}syncSourceSelection();
 }
 async function refreshSourceSearch(button,question,selections,original){
  if(busy)return;busy=true;button.disabled=true;showFeedback('Refreshing available sources…');

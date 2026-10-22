@@ -68,6 +68,28 @@ function nativeSavedQuote() {
   return quote;
 }
 
+// Relevant shape from the recorded FCCA free search: only the Crunchbase
+// profile matched, while KVK and Overheid were signed related choices.
+function fccaRelatedSearch() {
+  const name = 'Financial Crime Compliance Associates', subject_id = 's1';
+  const requirement = { slug: 'company.profile', name: 'Company profile', subject_id, outputs: ['business_details', 'directors', 'ownership_structure'] };
+  const native = (name, endpoint_id, capability, fields, input_values) => ({
+    source: { origin: 'apiosk', name, endpoint_id, capability, availability: 'supported', description: name === 'Crunchbase' ? 'Retrieve one identified organization profile.' : 'Search a company register and return matching source records.' },
+    subject_id, requirement, input_values,
+    endpoint: { endpoint_id, capability, inputs: fields.map(field => ({ field, required: true, schema: { type: 'string' } })), input_values, price: { currency: 'USD', buyer_atomic: name === 'Crunchbase' ? '54347' : name === 'Overheid.io Public Data' ? '57500' : '21739' } },
+  });
+  const profile = native('Crunchbase', '9651025a-3f42-4d86-aa83-b0a9c05e28c4', 'company.crunchbase-profile', ['company.crunchbase_entity_id'], {});
+  const kvk = native('KVK Business Register', '46e9d53a-1942-442a-a310-5e1a6b7f8297', 'company_registry.search', ['company.name', 'company_registry.kvknummer'], { 'company.name': name, 'company_registry.kvknummer': '91251982' });
+  const overheid = native('Overheid.io Public Data', '7e58d830-1e94-41ff-9809-66552e9bc431', 'company_registry.search', ['company.name'], { 'company.name': name });
+  return {
+    protocol_version: '2', view: 'source_search', question: 'Verzamel de bedrijfsgegevens, bestuurders en eigendomsstructuur van Financial Crime Compliance Associates; KVK-nummer: 91251982.',
+    search_id: 'signed-fcca-search', catalog_version: 'fcca-catalog',
+    parsed_request: { subjects: [{ id: subject_id, label: name, type: 'company', identifiers: { kvk_number: '91251982' } }], capabilities: [requirement] },
+    matches: [{ slug: requirement.slug, subject_id, apiosk: [{ ...profile.source, endpoint: profile.endpoint }], coinbase: [{ origin: 'coinbase', name: 'External context only', url: 'https://example.test/source', availability: 'discovery_only' }], coinbase_status: 'complete' }],
+    source_options: [profile, kvk, overheid],
+  };
+}
+
 async function host(kind, data = search()) {
   const directCalls = [], saved = [];
   const h = cardHarness(APIO_V2_CARD_HTML, kind === 'skybridge' ? {
@@ -312,12 +334,12 @@ for (const kind of ['skybridge', 'mcp-apps']) {
     assert.deepEqual({ name: client.calls()[0].name, args: client.calls()[0].args }, { name: 'apiosk_ask', args: { question } });
     const fresh = search(); fresh.search_id = 'fresh-signed-proof'; fresh.catalog_version = 'catalog-2';
     for (const option of fresh.source_options) delete option.source.endpoint;
-    fresh.source_options.push({ source: { ...registry, endpoint_id: 'related-hidden-source', endpoint: undefined }, subject_id: 'acme' });
+    fresh.source_options.push({ source: { ...registry, endpoint_id: 'related-hidden-source', endpoint: undefined }, subject_id: 'acme', endpoint: { ...registry.endpoint, endpoint_id: 'related-hidden-source' } });
     await client.respond(0, fresh); await pending;
-    assert.deepEqual(choices(h).map(choice => choice.checked), [true, true]);
+    assert.deepEqual(choices(h).map(choice => choice.checked), [true, true, false]);
     assert.equal(review(h).disabled, false);
     assert.equal(approve(h), undefined);
-    assert.deepEqual(h.nodes.get('sections').querySelectorAll('.source-input').map(control => control.value), ['00876543', 'ACME saved spelling']);
+    assert.deepEqual(h.nodes.get('sections').querySelectorAll('.source-input').map(control => control.value), ['00876543', 'ACME saved spelling', '00123456']);
     await h.tick(0); await h.tick(350); await h.tick(2000);
     assert.equal(client.calls().length, 1, 'refreshing a saved quote neither prepares nor purchases');
     const reviewing = review(h).onclick(); await flush();
@@ -372,4 +394,92 @@ test('refreshing a saved quote drops removed schema fields while retaining decla
   const reviewing = review(h).onclick(); await flush();
   assert.deepEqual(client.calls()[1].args.input.apiosk_source_selection_v1.selections[0].input, { 'company.kvk': '00876543' });
   await client.respond(1, ready()); await reviewing;
+});
+
+for (const kind of ['skybridge', 'mcp-apps']) {
+  test(`${kind}: FCCA can freely choose ready KVK and Overheid when only a missing-input Crunchbase profile matched`, async () => {
+    const data = fccaRelatedSearch(), original = structuredClone(data);
+    data.source_options.push(structuredClone(data.source_options[1]));
+    const client = await host(kind, data), { h } = client;
+    assert.equal(choices(h).length, 3, 'duplicate option is rendered once');
+    const text = flatten(h.nodes.get('sections')).join(' ');
+    assert.match(text, /Related sources/); assert.match(text, /only part of the requested information/);
+    assert.match(text, /External context only/); assert.match(text, /KVK Business Register/); assert.match(text, /Overheid.io Public Data/);
+    await h.change(choices(h)[0], true); await review(h).onclick();
+    assert.equal(client.calls().length, 0, 'missing Crunchbase entity is never guessed');
+    await h.change(choices(h)[0], false); await h.change(choices(h)[1], true); await h.change(choices(h)[2], true);
+    await h.tick(0); await h.tick(350); await h.tick(2000);
+    assert.equal(client.calls().length, 0, 'choosing any offered sources is free');
+    const pending = review(h).onclick(); await flush();
+    assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections, original.source_options.slice(1).map(option => ({ endpoint_id: option.source.endpoint_id, capability: option.source.capability, subject_id: option.subject_id, input: option.input_values })));
+    assert.deepEqual(Object.keys(client.calls()[0].args).sort(), ['input', 'question', 'request_id']);
+    assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.parsed_request, original.parsed_request);
+    assert.deepEqual(data.matches, original.matches, 'presentation cannot rewrite original matches');
+    await client.respond(0, ready()); await pending;
+    await changeSources(h).onclick();
+    assert.equal(client.calls().length, 1, 'complete in-memory descriptors need no refresh or purchase');
+    assert.deepEqual(choices(h).map(choice => choice.checked), [false, true, true]);
+  });
+}
+
+test('option-only source choices are visible and same endpoint and capability remain distinct for two subjects', async () => {
+  const data = fccaRelatedSearch(); data.matches = [];
+  data.source_options = [data.source_options[2]];
+  data.parsed_request.subjects.push({ id: 's2', label: 'Another company', type: 'company', identifiers: {} });
+  const second = structuredClone(data.source_options[0]); second.subject_id = 's2'; second.requirement.subject_id = 's2'; second.input_values = { 'company.name': 'Another company' };
+  data.source_options.push(second);
+  const client = await host('skybridge', data), { h } = client;
+  assert.equal(choices(h).length, 2);
+  assert.equal(h.nodes.get('title').textContent, '2 sources to review');
+  await h.change(choices(h)[0], true); await h.change(choices(h)[1], true);
+  const pending = review(h).onclick(); await flush();
+  const selections = client.calls()[0].args.input.apiosk_source_selection_v1.selections;
+  assert.deepEqual(selections.map(selection => [selection.subject_id, selection.input['company.name']]), [['s1', 'Financial Crime Compliance Associates'], ['s2', 'Another company']]);
+  await client.respond(0, ready()); await pending;
+});
+
+test('a saved related choice refreshes freely and restores its schema-bound source inputs', async () => {
+  const fresh = fccaRelatedSearch(), original = structuredClone(fresh), quote = ready();
+  delete original.matches[0].apiosk[0].endpoint;
+  for (const option of original.source_options) delete option.endpoint;
+  quote.context_view.source_selection = { can_choose: true, question: fresh.question, parsed_request: original.parsed_request, search_id: original.search_id, options: original.source_options, original_intake: original };
+  quote.context_view.selected_sources = [{ endpoint_id: fresh.source_options[2].source.endpoint_id, capability: fresh.source_options[2].source.capability, subject_id: 's1', input: { 'company.name': 'FCCA saved spelling' } }];
+  const client = await host('skybridge', quote), { h } = client;
+  const pending = changeSources(h).onclick(); await flush();
+  assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [{ name: 'apiosk_ask', args: { question: fresh.question } }]);
+  await client.respond(0, fresh); await pending;
+  assert.deepEqual(choices(h).map(choice => choice.checked), [false, false, true]);
+  const reviewing = review(h).onclick(); await flush();
+  assert.deepEqual(client.calls()[1].args.input.apiosk_source_selection_v1.selections, quote.context_view.selected_sources);
+  await client.respond(1, ready()); await reviewing;
+});
+
+test('old related options without descriptors offer one explicit refresh and cannot loop or prepare hidden inputs', async () => {
+  const data = fccaRelatedSearch(); for (const option of data.source_options.slice(1)) delete option.endpoint;
+  const client = await host('skybridge', data), { h } = client;
+  assert.equal(choices(h).length, 1, 'unknown related schemas are not invented');
+  const refresh = h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent === 'Refresh sources');
+  assert.ok(refresh); assert.equal(client.calls().length, 0);
+  const pending = refresh.onclick(); await flush(); await refresh.onclick();
+  await client.respond(0, data); await pending;
+  await h.tick(0); await h.tick(350); await h.tick(2000);
+  assert.equal(client.calls().length, 1, 'an old response never triggers an automatic refresh loop');
+  assert.equal(refresh.disabled, false);
+  assert.equal(choices(h).length, 1);
+  assert.match(h.nodes.get('feedback-text').textContent, /could not be refreshed/);
+});
+
+test('a lost free related-source refresh leaves its button available for a single manual retry', async () => {
+  const data = fccaRelatedSearch(); delete data.source_options[1].endpoint;
+  const client = await host('skybridge', data), { h } = client;
+  const refresh = h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent === 'Refresh sources');
+  const pending = refresh.onclick(); await flush();
+  client.calls()[0].reject(new Error('Connection interrupted')); await pending;
+  await h.tick(0); await h.tick(350); await h.tick(2000);
+  assert.equal(client.calls().length, 1); assert.equal(refresh.disabled, false);
+  const retry = refresh.onclick(); await flush();
+  assert.deepEqual(client.calls()[1].args, { question: data.question });
+  await client.respond(1, fccaRelatedSearch()); await retry;
+  assert.equal(choices(h).length, 3);
+  assert.ok(choices(h).every(choice => !choice.checked));
 });

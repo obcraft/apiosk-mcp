@@ -15,27 +15,29 @@ function searchRow(candidate,match){
  const name=candidate.name||source.name||candidate.source_slug||'Source',supported=candidate.availability==='supported';
  copy.append(el('p','search-name',name));
  const about=candidate.description||candidate.endpoint?.description;if(about)copy.append(el('p','search-about',about));
+ if(match?.related){const subject=sourceSearchSnapshot?.parsed_request?.subjects?.find(subject=>subject.id===candidate.subject_id);if(subject)copy.append(el('p','meta','For '+subject.label));if(candidate.selection_reason)copy.append(el('p','meta',candidate.selection_reason))}
  const inputs=supported?(candidate.endpoint?.inputs||[]).filter(input=>input?.required):[];
  if(inputs.length)copy.append(el('p','search-inputs','Needs '+inputs.map(searchInputLabel).filter(Boolean).join(', ')));
  const atomic=searchPriceAtomic(candidate),price=atomic&&money(atomic,'USD');
- const offered=supported&&selectableSource(candidate,match),state=supported?(offered?'Available':Array.isArray(sourceSearchSnapshot?.source_options)?'Not selectable':'Refresh to select'):({discovery_only:'Discovery only',unverified:'Unverified'})[candidate.availability]||pretty(candidate.availability||'Unverified');
+ const offered=supported&&selectableSource(candidate,match),state=supported?(offered?'Available':offeredSourceOption(candidate,match)||!Array.isArray(sourceSearchSnapshot?.source_options)?'Refresh to select':'Not selectable'):({discovery_only:'Discovery only',unverified:'Unverified'})[candidate.availability]||pretty(candidate.availability||'Unverified');
  side.append(el('span','search-price',price||'—'),el('span','search-state'+(offered?' supported':''),state));
  row.append(sourceLogo({name,logo_url:candidate.logo_url||source.logo_url}),copy,side);attachSourceChoice(row,copy,side,candidate,match);return row}
 function renderSourceSearch(data){
- const matches=Array.isArray(data.matches)?data.matches:[],capabilities=data.parsed_request?.capabilities||[],seen=new Set();let total=0;
+ const matches=sourceSearchGroups({...data,matches:Array.isArray(data.matches)?data.matches:[]}),capabilities=data.parsed_request?.capabilities||[];let total=0;
  beginSourceSelection(data,matches);
- for(const match of matches)for(const candidate of [...(match.apiosk||[]),...(match.coinbase||[])]){const key=candidate.endpoint_id||candidate.url||(candidate.source_slug||candidate.name)+':'+(candidate.capability||'');if(!seen.has(key)){seen.add(key);total++}}
+ for(const match of matches)total+=(match.apiosk?.length||0)+(match.coinbase?.length||0);
  if(!total){const incomplete=matches.some(match=>['pending','unavailable'].includes(match.coinbase_status));byId('title').textContent=incomplete?'Search incomplete':'No results';byId('subtitle').textContent='';section('Sources').append(el('p','notice',data.message||(incomplete?'Some sources could not be searched. Try again shortly.':${JSON.stringify(NO_RESULTS)})));return}
- byId('title').textContent=total===1?'1 matching source':total+' matching sources';
+ const related=matches.some(match=>match.related);byId('title').textContent=total+(related?(total===1?' source to review':' sources to review'):(total===1?' matching source':' matching sources'));
  byId('subtitle').textContent=Number.isInteger(data.apiosk_sources_searched)?'Searched '+data.apiosk_sources_searched+' Apiosk sources. Nothing is bought from this list.':'Nothing is bought from this list.';
  for(const match of matches){
   const capability=capabilities.find(c=>c?.slug===match.slug&&(match.subject_id===undefined||c.subject_id===match.subject_id)),candidates=[...(match.apiosk||[]),...(match.coinbase||[])];
-  const s=section(capability?.name||pretty(match.slug||'Requested data'),candidates.length===1?'1 source':candidates.length+' sources');s.classList.add('search-section');
+  const s=section(match.related?'Related sources':capability?.name||pretty(match.slug||'Requested data'),candidates.length===1?'1 source':candidates.length+' sources');s.classList.add('search-section');
+  if(match.related)s.append(el('p','meta','These sources are also offered for this question. Review their scope and inputs; they may cover only part of the requested information.'));
   const subject=(data.parsed_request?.subjects||[]).find(subject=>subject.id===match.subject_id);if(subject)s.append(el('p','meta','For '+subject.label));
   if(capability?.description)s.append(el('p','meta search-capability',capability.description));
   const list=el('div','search-list');list.setAttribute('role','list');
   for(const candidate of candidates){const row=searchRow(candidate,match);row.setAttribute('role','listitem');list.append(row)}
-  if(candidates.length)s.append(list);else s.append(el('p','meta','No matching source was found for this part of the question.'));
+  if(candidates.length)s.append(list);else s.append(el('p','meta',match.duplicates_only?'These sources are listed above.':'No matching source was found for this part of the question.'));
   if(match.coinbase_status==='unavailable')s.append(el('p','meta','Coinbase Bazaar search is unavailable right now.'));
  }
  renderSourceReview();if(data.notice)section('About these results').append(el('p','meta',data.notice));

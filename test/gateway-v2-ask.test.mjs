@@ -153,10 +153,11 @@ test('free search preserves its signed selection proof and original question for
 
 test('free search preserves exact signed source options in the advertised schema and both output channels',async()=>{
   const candidate={origin:'apiosk',name:'World time',source_slug:'worldtime',availability:'supported',endpoint_id:endpoint.endpoint_id,capability:endpoint.capability,endpoint};
+  const signedCandidate={...candidate};delete signedCandidate.endpoint;
   const unoffered={...candidate,endpoint_id:'00000000-0000-4000-8000-000000000789',name:'Discovery match not signed for selection'};
   const options=[
-    {source:candidate,subject_id:'s1',requirement:parsed.capabilities[0],input_values:{'location.city':'Amsterdam',include_history:false,limit:0},missing_inputs:['location.country'],reason:'Matches your question'},
-    {source:candidate,subject_id:'s2',requirement:{...parsed.capabilities[0],subject_id:'s2'},input_values:{'location.city':'Paris'},reason:'Related records for this subject'},
+    {source:signedCandidate,endpoint,subject_id:'s1',requirement:parsed.capabilities[0],input_values:{'location.city':'Amsterdam',include_history:false,limit:0},missing_inputs:['location.country'],reason:'Matches your question'},
+    {source:signedCandidate,endpoint:{...endpoint,input_values:{'location.city':'Paris'}},subject_id:'s2',requirement:{...parsed.capabilities[0],subject_id:'s2'},input_values:{'location.city':'Paris'},reason:'Related records for this subject'},
   ];
   const payload=answer({matches:[{slug:parsed.capabilities[0].slug,subject_id:'s1',apiosk:[candidate,unoffered],coinbase:[],coinbase_status:'complete'}]},{search_id:'signed-search-proof',source_options:options});
   const calls=[];
@@ -169,10 +170,20 @@ test('free search preserves exact signed source options in the advertised schema
   const envelope=reply.content.find(block=>block.type==='text'&&block.text.startsWith('{'));
   assert.deepEqual(JSON.parse(envelope.text).source_options,options,'text-only hosts retain the exact signed choices');
   const tool=(await runtime.listTools()).find(tool=>tool.name==='apiosk_ask');
+  assert.equal(tool.outputSchema.anyOf[0].properties.source_options.items.properties.endpoint.type,'object');
   const validated=new AjvJsonSchemaValidator().getValidator(tool.outputSchema)(reply.structuredContent);
   assert.equal(validated.valid,true,JSON.stringify(validated));
   assert.match(reply.structuredContent.notice,/supported discovery match alone is not an offered selection/);
   assert.deepEqual(calls,[{path:'/v2/ask',body:{question}}],'forwarding eligibility performs no preparation or purchase');
+});
+
+test('authoritative related choices without primary matches are not reported as no results',async()=>{
+  const option={source:{origin:'apiosk',availability:'supported',endpoint_id:endpoint.endpoint_id,capability:endpoint.capability},endpoint,subject_id:'s1',requirement:parsed.capabilities[0],input_values:endpoint.input_values};
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(answer({matches:[]},{search_id:'signed-related-search',source_options:[option]}))});
+  const view=(await runtime.callTool('apiosk_ask',{question})).structuredContent;
+  assert.deepEqual(view.source_options,[option]);
+  assert.equal(view.message,undefined);
+  assert.deepEqual(view.parsed_request,parsed);
 });
 
 test('source option absence and an explicitly empty signed list never infer eligibility from supported matches',async()=>{
