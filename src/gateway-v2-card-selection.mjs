@@ -86,7 +86,7 @@ async function reviewSelectedSources(){
  if(sourcePrepareIdentity?.fingerprint!==fingerprint)sourcePrepareIdentity={fingerprint,request_id:sourceRequestId()};
  const request_id=sourcePrepareIdentity.request_id;
  busy=true;syncSourceSelection();showFeedback('Preparing one total price for your selected sources…');
- try{const next=await window.apiosk.callTool('apiosk_ask',{question,parsed_request,search_id,selections,request_id});if(next?.state?.state_ref)sourcePreparedTask=next.state.state_ref;acceptResponse(next);if(['source_refresh_required','search_refresh_required'].includes(next?.error_code)||(next?.errors||[]).some(error=>['source_refresh_required','search_refresh_required'].includes(error.code)))showSourceRefresh()}
+ try{const next=await window.apiosk.callTool('apiosk_ask',{question,request_id,input:{apiosk_source_selection_v1:{parsed_request,search_id,selections}}});if(next?.state?.state_ref)sourcePreparedTask=next.state.state_ref;acceptResponse(next);if(['source_refresh_required','search_refresh_required'].includes(next?.error_code)||(next?.errors||[]).some(error=>['source_refresh_required','search_refresh_required'].includes(error.code)))showSourceRefresh()}
  catch(error){showFeedback(error?.message||'The quote could not be confirmed. Your selections are kept; try again.','error')}
  finally{busy=false;syncSourceSelection()}
 }

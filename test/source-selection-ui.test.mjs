@@ -94,10 +94,12 @@ for (const kind of ['skybridge', 'mcp-apps']) {
     const prepared = client.calls()[0];
     assert.equal(prepared.name, 'apiosk_ask');
     assert.equal(prepared.args.question, question);
-    assert.equal(prepared.args.search_id, 'signed-search-proof');
-    assert.deepEqual(prepared.args.parsed_request, search().parsed_request);
+    assert.equal(prepared.args.input.apiosk_source_selection_v1.search_id, 'signed-search-proof');
+    assert.deepEqual(Object.keys(prepared.args).sort(),['input','question','request_id'],'cached host schemas preserve every transport field');
+    assert.equal(prepared.args.endpoint_id,undefined,'manual selection cannot take the legacy autoapproval path');
+    assert.deepEqual(prepared.args.input.apiosk_source_selection_v1.parsed_request, search().parsed_request);
     assert.match(prepared.args.request_id, /^[a-f0-9-]{36}$/i);
-    assert.deepEqual(prepared.args.selections, [
+    assert.deepEqual(prepared.args.input.apiosk_source_selection_v1.selections, [
       { endpoint_id: 'registry', capability: registry.capability, subject_id: 'acme', input: { 'company.kvk': '00123456' } },
       { endpoint_id: 'mentions', capability: mentions.capability, subject_id: 'acme', input: { 'company.name': 'ACME' } },
     ]);
@@ -146,7 +148,7 @@ test('deselecting sources changes only the combined selection and preserves decl
   assert.equal(review(h).textContent, 'Review 1 selected source');
   assert.equal(client.calls().length, 0);
   const pending = review(h).onclick(); await flush();
-  assert.deepEqual(client.calls()[0].args.selections, [{ endpoint_id: 'registry', capability: registry.capability, subject_id: 'acme', input: { 'company.kvk': '00123456', 'company.active': false, 'company.limit': 0 } }]);
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections, [{ endpoint_id: 'registry', capability: registry.capability, subject_id: 'acme', input: { 'company.kvk': '00123456', 'company.active': false, 'company.limit': 0 } }]);
   await client.respond(0, ready()); await pending;
 });
 
@@ -160,7 +162,7 @@ test('missing schema-declared inputs block review until entered and do not inven
   assert.ok(control);
   await h.change(control, '00123456');
   const pending = review(h).onclick(); await flush();
-  assert.deepEqual(client.calls()[0].args.selections[0].input, { 'company.kvk': '00123456' });
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections[0].input, { 'company.kvk': '00123456' });
   await client.respond(0, ready()); await pending;
 });
 
@@ -174,7 +176,7 @@ test('declared lists and objects preserve typed values and invalid JSON cannot p
   await h.change(domains,'[invalid');await review(h).onclick();assert.equal(client.calls().length,0);
   await h.change(domains,'["kvk.nl","example.com"]');
   const pending=review(h).onclick();await flush();
-  assert.deepEqual(client.calls()[0].args.selections[0].input,{'company.name':'ACME','web.domains':['kvk.nl','example.com'],'web.filter':{active:true,limit:0}});
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections[0].input,{'company.name':'ACME','web.domains':['kvk.nl','example.com'],'web.filter':{active:true,limit:0}});
   await client.respond(0,ready());await pending;
 });
 
@@ -186,7 +188,7 @@ test('same endpoint contracts and separate subjects retain distinct source choic
   const client = await host('skybridge', data), { h } = client;
   await h.change(choices(h)[0], true); await h.change(choices(h)[2], true);
   const pending = review(h).onclick(); await flush();
-  assert.deepEqual(client.calls()[0].args.selections.map(({ endpoint_id, capability, subject_id, input }) => ({ endpoint_id, capability, subject_id, input })), [
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections.map(({ endpoint_id, capability, subject_id, input }) => ({ endpoint_id, capability, subject_id, input })), [
     { endpoint_id: 'registry', capability: registry.capability, subject_id: 'acme', input: { 'company.kvk': '00123456' } },
     { endpoint_id: 'registry', capability: 'company.officers.fetch', subject_id: 'beta', input: { 'company.kvk': '00876543' } },
   ]);
@@ -224,7 +226,7 @@ test('expired source proof preserves the choice and offers a free search refresh
   await client.respond(1,{...search(),search_id:'fresh-signed-proof'});await refreshing;
   assert.equal(choices(h)[0].checked,true);
   const next=review(h).onclick();await flush();
-  assert.equal(client.calls()[2].args.search_id,'fresh-signed-proof');
+  assert.equal(client.calls()[2].args.input.apiosk_source_selection_v1.search_id,'fresh-signed-proof');
   await client.respond(2,ready());await next;
 });
 
@@ -239,7 +241,7 @@ test('a failed free preparation reuses its request identity and edited inputs ge
   const control=h.nodes.get('sections').querySelector('.source-input');await h.change(control,'00876543');
   const edited=review(h).onclick();await flush();
   assert.notEqual(client.calls()[2].args.request_id,client.calls()[0].args.request_id);
-  assert.equal(client.calls()[2].args.selections[0].input['company.kvk'],'00876543');
+  assert.equal(client.calls()[2].args.input.apiosk_source_selection_v1.selections[0].input['company.kvk'],'00876543');
   await client.respond(2,ready());await edited;
 });
 
@@ -254,6 +256,6 @@ test('a recovered selected quote can change sources without losing its saved val
   assert.deepEqual(choices(h).map(choice=>choice.checked),[true,false]);
   assert.equal(h.nodes.get('sections').querySelector('.source-input').value,'00876543');
   const pending=review(h).onclick();await flush();
-  assert.deepEqual(client.calls()[0].args.selections,quote.context_view.selected_sources);
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections,quote.context_view.selected_sources);
   await client.respond(0,ready());await pending;
 });

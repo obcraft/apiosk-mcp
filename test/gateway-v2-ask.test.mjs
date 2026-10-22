@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createApioskMcpRuntime } from '../src/runtime.mjs';
 import schemas from '../src/gateway-v2-contracts.json' with { type: 'json' };
 import { NO_RESULTS } from '../src/gateway-v2-ask.mjs';
+import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv-provider.js';
 
 const env = { APIOSK_GATEWAY_V2_URL: 'http://127.0.0.1:8082', APIOSK_CONNECT_TOKEN: 'fixture' };
 const question = 'What time is it in Amsterdam? Check via Apiosk.';
@@ -95,6 +96,51 @@ test('multiple explicit sources use one manual-only prepare with the exact signe
     {...args,selections:[{...args.selections[0],approved:true}]},
   ])assert.equal((await runtime.callTool('apiosk_ask',invalid)).isError,true);
   assert.equal(requests.length,1,'invalid selections never reach the gateway');
+});
+
+test('cached host input schemas preserve a signed selection envelope and route it only to manual preparation', async () => {
+  // The validation shape shipped in 0540e08. Cached hosts know input but strip
+  // the newer top-level parsed_request/search_id/selections properties.
+  const oldAsk = {type:'object',additionalProperties:false,required:['question'],properties:{
+    question:{type:'string',minLength:1,maxLength:4000},endpoint_id:{type:'string',format:'uuid'},
+    capability:{type:'string',minLength:1,maxLength:200},input:{type:'object',maxProperties:64},
+    request_id:{type:'string',format:'uuid'},
+  }};
+  const selection={parsed_request:parsed,search_id:'signed-search',selections:[
+    {endpoint_id:endpoint.endpoint_id,capability:endpoint.capability,subject_id:'s1',input:{'location.city':'Amsterdam'}},
+    {endpoint_id:'00000000-0000-4000-8000-000000000456',capability:'location.weather.current',subject_id:'s1',input:{'location.city':'Amsterdam','include_history':false,'limit':0}},
+  ]};
+  const args={question,request_id:'00000000-0000-4000-8000-000000000123',input:{apiosk_source_selection_v1:selection}};
+  const oldValidate=new AjvJsonSchemaValidator().getValidator(oldAsk);
+  assert.equal(oldValidate(args).valid,true,'the already-installed schema accepts the complete envelope');
+  const cachedArgs=Object.fromEntries(Object.entries(args).filter(([key])=>Object.hasOwn(oldAsk.properties,key)));
+  assert.deepEqual(cachedArgs,args,'no selection field is lost by old top-level filtering');
+  const requests=[];
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{
+    requests.push({path:new URL(url).pathname,body:JSON.parse(options.body)});
+    return Response.json({protocol_version:'2',status:'ready',next_actions:[],errors:[],billing:{authorization_active:false}});
+  }});
+  const result=await runtime.callTool('apiosk_ask',cachedArgs);
+  assert.equal(result.isError,undefined);
+  assert.deepEqual(requests,[{path:'/v2/ask/prepare',body:{question,request_id:args.request_id,...selection}}]);
+  assert.equal(result.structuredContent.billing.authorization_active,false);
+  assert.deepEqual(args.input.apiosk_source_selection_v1,selection);
+  assert.equal(requests[0].body.input,undefined,'the transport envelope never reaches source inputs');
+  for(const invalid of [
+    {...args,endpoint_id:endpoint.endpoint_id},
+    {...args,capability:endpoint.capability},
+    {...args,...selection},
+    {...args,input:{apiosk_source_selection_v1:selection,extra:'not-a-source-input'}},
+    {...args,input:{apiosk_source_selection_v1:{...selection,max_total_atomic:'1'}}},
+    {...args,input:{apiosk_source_selection_v1:{...selection,approved:true}}},
+    {...args,input:{apiosk_source_selection_v1:{...selection,search_id:''}}},
+    {...args,input:{apiosk_source_selection_v1:{search_id:'signed-search',selections:selection.selections}}},
+    {...args,input:{apiosk_source_selection_v1:{...selection,selections:[]}}},
+    {...args,input:{apiosk_source_selection_v1:{...selection,selections:[{...selection.selections[0],price:'1'}]}}},
+    {...args,input:{apiosk_source_selection_v1:null}},
+    {...args,input:{}},
+  ])assert.equal((await runtime.callTool('apiosk_ask',invalid)).isError,true,JSON.stringify(invalid));
+  assert.equal(requests.length,1,'malformed or mixed envelopes never fall back to free search or legacy automatic preparation');
 });
 
 test('free search preserves its signed selection proof and original question for a restored card',async()=>{
