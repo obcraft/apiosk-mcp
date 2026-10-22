@@ -51,6 +51,22 @@ const ready = () => ({
 const choices = h => h.nodes.get('sections').querySelectorAll('.source-choice');
 const review = h => h.nodes.get('sections').querySelector('.review-sources');
 const approve = h => h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent.startsWith('Approve up to'));
+const changeSources = h => h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent === 'Change sources');
+function nativeSavedQuote() {
+  const original = search(), quote = ready();
+  const options = original.source_options.map(option => { const source = { ...option.source }; delete source.endpoint; return { ...option, source }; });
+  for (const match of original.matches) {
+    delete match.subject_id;
+    for (const source of match.apiosk) { delete source.endpoint; delete source.subject_id; }
+  }
+  delete original.source_options; delete original.search_id; delete original.view; delete original.question;
+  quote.context_view.source_selection = { can_choose: true, question, search_id: 'saved-signed-proof', parsed_request: original.parsed_request, options, original_intake: original };
+  quote.context_view.selected_sources = [
+    { endpoint_id: 'registry', capability: registry.capability, subject_id: 'acme', input: { 'company.kvk': '00876543' } },
+    { endpoint_id: 'mentions', capability: mentions.capability, subject_id: 'acme', input: { 'company.name': 'ACME saved spelling' } },
+  ];
+  return quote;
+}
 
 async function host(kind, data = search()) {
   const directCalls = [], saved = [];
@@ -285,4 +301,75 @@ test('a recovered selected quote can change sources without losing its saved val
   const pending=review(h).onclick();await flush();
   assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections,quote.context_view.selected_sources);
   await client.respond(0,ready());await pending;
+});
+
+for (const kind of ['skybridge', 'mcp-apps']) {
+  test(`${kind}: a native saved quote refreshes missing descriptors for free and restores both saved source inputs`, async () => {
+    const quote = nativeSavedQuote(), client = await host(kind, quote), { h } = client;
+    assert.ok(approve(h));
+    const change = changeSources(h), pending = change.onclick(); await flush(); await change.onclick();
+    assert.equal(client.calls().length, 1, 'double click refreshes once');
+    assert.deepEqual({ name: client.calls()[0].name, args: client.calls()[0].args }, { name: 'apiosk_ask', args: { question } });
+    const fresh = search(); fresh.search_id = 'fresh-signed-proof'; fresh.catalog_version = 'catalog-2';
+    for (const option of fresh.source_options) delete option.source.endpoint;
+    fresh.source_options.push({ source: { ...registry, endpoint_id: 'related-hidden-source', endpoint: undefined }, subject_id: 'acme' });
+    await client.respond(0, fresh); await pending;
+    assert.deepEqual(choices(h).map(choice => choice.checked), [true, true]);
+    assert.equal(review(h).disabled, false);
+    assert.equal(approve(h), undefined);
+    assert.deepEqual(h.nodes.get('sections').querySelectorAll('.source-input').map(control => control.value), ['00876543', 'ACME saved spelling']);
+    await h.tick(0); await h.tick(350); await h.tick(2000);
+    assert.equal(client.calls().length, 1, 'refreshing a saved quote neither prepares nor purchases');
+    const reviewing = review(h).onclick(); await flush();
+    assert.deepEqual(client.calls()[1].args.input.apiosk_source_selection_v1.selections, quote.context_view.selected_sources);
+    assert.equal(client.calls()[1].args.input.apiosk_source_selection_v1.search_id, 'fresh-signed-proof');
+    await client.respond(1, ready()); await reviewing;
+  });
+
+  test(`${kind}: an unknown free refresh reply preserves the saved quote and lets Change sources retry`, async () => {
+    const client = await host(kind, nativeSavedQuote()), { h } = client;
+    const pending = changeSources(h).onclick(); await flush();
+    await client.respond(0, { status: 'failed', errors: [{ message: 'Temporary problem' }] }); await pending;
+    assert.ok(approve(h), 'the existing quote remains visible');
+    assert.equal(changeSources(h).disabled, false);
+    assert.match(h.nodes.get('feedback-text').textContent, /could not be refreshed/);
+    const retry = changeSources(h).onclick(); await flush();
+    assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [0, 1].map(() => ({ name: 'apiosk_ask', args: { question } })));
+    await client.respond(1, search()); await retry;
+    assert.deepEqual(choices(h).map(choice => choice.checked), [true, true]);
+  });
+}
+
+test('restoring sources follows the same subject identity after refreshed subject IDs change', async () => {
+  const client = await host('skybridge', nativeSavedQuote()), { h } = client;
+  const pending = changeSources(h).onclick(); await flush();
+  const fresh = search(); fresh.parsed_request.subjects[0].id = 'reparsed-acme';
+  for (const match of fresh.matches) match.subject_id = 'reparsed-acme';
+  for (const option of fresh.source_options) option.subject_id = 'reparsed-acme';
+  await client.respond(0, fresh); await pending;
+  assert.deepEqual(choices(h).map(choice => choice.checked), [true, true]);
+  const reviewing = review(h).onclick(); await flush();
+  assert.ok(client.calls()[1].args.input.apiosk_source_selection_v1.selections.every(selection => selection.subject_id === 'reparsed-acme'));
+  await client.respond(1, ready()); await reviewing;
+});
+
+test('a reused subject ID for a different company cannot inherit saved choices or input values', async () => {
+  const client = await host('skybridge', nativeSavedQuote()), { h } = client;
+  const pending = changeSources(h).onclick(); await flush();
+  const fresh = search(); fresh.parsed_request.subjects[0] = { id: 'acme', label: 'Different company', identifiers: { kvk: '00999999' } };
+  await client.respond(0, fresh); await pending;
+  assert.ok(choices(h).every(choice => !choice.checked));
+  assert.equal(review(h).disabled, true);
+  assert.deepEqual(h.nodes.get('sections').querySelectorAll('.source-input').map(control => control.value), ['00123456', 'ACME']);
+  assert.equal(client.calls().length, 1);
+});
+
+test('refreshing a saved quote drops removed schema fields while retaining declared saved inputs', async () => {
+  const quote = nativeSavedQuote(); quote.context_view.selected_sources[0].input['company.obsolete'] = 'old hidden value';
+  const client = await host('skybridge', quote), { h } = client;
+  const pending = changeSources(h).onclick(); await flush();
+  await client.respond(0, search()); await pending;
+  const reviewing = review(h).onclick(); await flush();
+  assert.deepEqual(client.calls()[1].args.input.apiosk_source_selection_v1.selections[0].input, { 'company.kvk': '00876543' });
+  await client.respond(1, ready()); await reviewing;
 });

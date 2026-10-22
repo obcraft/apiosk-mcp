@@ -5,6 +5,26 @@ let sourceSelectionSession=null,sourceSearchSnapshot=null,sourceSelectionQuestio
 const selectedSources=new Map(),sourceChoices=new Map(),sourceDrafts=new Map();let sourceReviewButton=null,sourceSelectionCount=null;
 function sourceQuestion(data){return data.question||output?.context_view?.conversation?.at(-1)?.question||input.question||''}
 function sourceChoiceKey(candidate,match){return JSON.stringify([candidate.endpoint_id||candidate.endpoint?.endpoint_id,candidate.capability||candidate.endpoint?.capability,candidate.subject_id||match?.subject_id||null])}
+function sourceSearchNeedsRefresh(data){
+ if(!data?.search_id||!Array.isArray(data.source_options)||!Array.isArray(data.matches))return true;
+ return data.matches.some(match=>[...(match.apiosk||[]),...(match.coinbase||[])].some(candidate=>candidate.availability==='supported'&&!Array.isArray(candidate.endpoint?.inputs)&&data.source_options.some(option=>(candidate.endpoint_id||candidate.endpoint?.endpoint_id)===(option.source?.endpoint_id||option.source?.endpoint?.endpoint_id)&&(candidate.capability||candidate.endpoint?.capability)===(option.source?.capability||option.source?.endpoint?.capability)&&(!(candidate.subject_id||match.subject_id)||(candidate.subject_id||match.subject_id)===option.subject_id))));
+}
+function sourceSubjectIdentity(subject){const label=String(subject?.label||'').trim().toLowerCase(),identifiers=Object.entries(subject?.identifiers||{}).sort(([a],[b])=>a.localeCompare(b));return label||identifiers.length?JSON.stringify([subject?.type||null,label,identifiers]):null}
+function restoreSourceSelections(selections,original,refreshed){
+ const before=original?.subjects||[],after=refreshed?.parsed_request?.subjects||[];
+ return selections.flatMap(saved=>{
+  const subject=before.find(subject=>subject.id===saved.subject_id),identity=sourceSubjectIdentity(subject);
+  if(!identity||before.filter(subject=>sourceSubjectIdentity(subject)===identity).length!==1)return [];
+  const matches=after.filter(subject=>sourceSubjectIdentity(subject)===identity);
+  if(matches.length!==1)return [];
+  const selection={...saved,subject_id:matches[0].id};
+  const candidate=refreshed.matches.flatMap(match=>[...(match.apiosk||[]),...(match.coinbase||[])].map(candidate=>({candidate,match}))).find(({candidate,match})=>sourceChoiceKey(candidate,match)===sourceChoiceKey(selection,selection))?.candidate;
+  if(!Array.isArray(candidate?.endpoint?.inputs))return [];
+  const fields=new Set(candidate.endpoint.inputs.map(definition=>definition.field));
+  selection.input=Object.fromEntries(Object.entries({...candidate.endpoint.input_values,...saved.input}).filter(([field])=>fields.has(field)));
+  return [selection];
+ });
+}
 function selectableSource(candidate,match){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)&&Array.isArray(sourceSearchSnapshot?.source_options)&&sourceSearchSnapshot.source_options.some(option=>sourceChoiceKey(option.source||{},option)===sourceChoiceKey(candidate,match))}
 function beginSourceSelection(data,matches){
  const question=sourceQuestion(data),session=JSON.stringify([question,data.catalog_version||'',data.parsed_request?.meta?.text_sha256||'']);
@@ -92,12 +112,24 @@ async function reviewSelectedSources(){
 }
 function renderSourceReview(){
  if(!sourceSelectionQuestion)return;
- if(!sourceSearchSnapshot?.search_id||!Array.isArray(sourceSearchSnapshot?.source_options)){const s=section('Choose sources');s.append(el('p','meta','Refresh this source list to choose one or more sources. Nothing is bought.'));appendSourceRefresh(s);return}
+ if(!sourceSearchSnapshot?.search_id||!Array.isArray(sourceSearchSnapshot?.source_options)||!sourceChoices.size&&sourceSearchNeedsRefresh(sourceSearchSnapshot)){const s=section('Choose sources');s.append(el('p','meta','Refresh this source list to choose one or more sources. Nothing is bought.'));appendSourceRefresh(s);return}
  if(!sourceChoices.size)return;
  const s=section('Selected sources');sourceSelectionCount=el('p','meta');s.append(sourceSelectionCount,el('p','meta','Selecting sources is free. Review one total price, then approve once.'));
  const actions=el('div','actions');sourceReviewButton=el('button','primary review-sources','Review selected sources');sourceReviewButton.type='button';sourceReviewButton.onclick=reviewSelectedSources;actions.append(sourceReviewButton);s.append(actions);syncSourceSelection();
 }
-function appendSourceRefresh(target){const button=el('button','quiet','Refresh sources');button.type='button';button.onclick=async()=>{if(busy)return;busy=true;button.disabled=true;showFeedback('Refreshing available sources…');try{const next=await window.apiosk.callTool('apiosk_ask',{question:sourceSelectionQuestion});if(next?.view==='source_search'){render(next);void window.apiosk.context(next).catch(()=>{})}else showFeedback(next?.message||'Sources could not be refreshed. Try again.','error')}catch(error){showFeedback(error?.message||'Sources could not be refreshed. Try again.','error')}finally{busy=false;button.disabled=false;syncSourceSelection()}};target.append(button)}
+async function refreshSourceSearch(button,question,selections,original){
+ if(busy)return;busy=true;button.disabled=true;showFeedback('Refreshing available sources…');
+ try{
+  const next=await window.apiosk.callTool('apiosk_ask',{question});
+  if(next?.view!=='source_search'||sourceSearchNeedsRefresh(next)){showFeedback(next?.message||'Sources could not be refreshed. Try again.','error');return}
+  const restored=Array.isArray(selections)?restoreSourceSelections(selections,original,next):null;
+  const refreshed={...next,question,...(restored?{selected_sources:restored}:{})};
+  if(Array.isArray(selections))sourceSelectionSession=null;
+  render(refreshed);void window.apiosk.context(refreshed).catch(()=>{});
+ }catch(error){showFeedback(error?.message||'Sources could not be refreshed. Try again.','error')}
+ finally{busy=false;button.disabled=false;syncSourceSelection()}
+}
+function appendSourceRefresh(target){const button=el('button','quiet','Refresh sources');button.type='button';button.onclick=()=>refreshSourceSearch(button,sourceSelectionQuestion);target.append(button)}
 function showSourceRefresh(){appendSourceRefresh(byId('feedback-actions'));window.apiosk.resize()}
 function renderSourceSelectionChange(data){
  if(!planSurface||data.context_view?.source_selection?.can_choose===false||data.billing?.authorization_active||data.context_view?.worker_active||['running','succeeded','partial','cancelled'].includes(data.status))return;
@@ -105,6 +137,6 @@ function renderSourceSelectionChange(data){
  const same=sourcePreparedTask===data.state?.state_ref||(question&&question===sourceSearchSnapshot?.question);
  const snapshot=same&&sourceSearchSnapshot?sourceSearchSnapshot:intake?.matches&&question?{...intake,question,view:'source_search',search_id:configured?.search_id,source_options:configured?.options||intake.source_options,parsed_request:configured?.parsed_request||intake.parsed_request,selected_sources:data.context_view?.selected_sources||configured?.selections}:null;
  if(!snapshot?.question)return;
- const actions=el('div','actions source-change'),button=el('button','quiet','Change sources');button.type='button';button.onclick=()=>{if(busy)return;render(snapshot)};actions.append(button);planSurface.append(actions);
+ const actions=el('div','actions source-change'),button=el('button','quiet','Change sources');button.type='button';button.onclick=async()=>{if(busy)return;if(sourceSearchNeedsRefresh(snapshot)){await refreshSourceSearch(button,snapshot.question,snapshot.selected_sources||data.context_view?.selected_sources||configured?.selections,snapshot.parsed_request);return}render(snapshot)};actions.append(button);planSurface.append(actions);
 }
 `;
