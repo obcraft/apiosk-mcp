@@ -62,6 +62,7 @@ export function presentSearch(answer) {
     && (left.subject_id === right.subject_id || ((parsed?.subjects?.length || 0) <= 1
       && (left.subject_id == null || right.subject_id == null)));
   const matches = [...result.matches, ...missing].map(match => {
+    if (match.answer_only) return { ...match, coinbase: [], coinbase_status: "ready" };
     const completed = external?.matches?.find(row => sameRequirement(match, row));
     if (completed) return { ...match, coinbase: completed.coinbase || [], coinbase_status: completed.coinbase_status };
     if (externalFailed || Array.isArray(external?.matches)) return { ...match, coinbase: [], coinbase_status: "unavailable" };

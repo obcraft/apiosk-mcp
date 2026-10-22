@@ -153,6 +153,15 @@ test('available external candidates survive an Apiosk origin outage with an hone
   assert.match(view.message, /could not be searched/);
 });
 
+test('answer instructions do not become failed external searches', async () => {
+  const gatewayAnswer = answer({ matches: [{ slug: parsed.capabilities[0].slug, answer_only: true, apiosk: [], coinbase: [], coinbase_status: 'ready' }] });
+  gatewayAnswer.searches.coinbase = { matches: [] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(gatewayAnswer) });
+  const view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.equal(view.matches[0].coinbase_status, 'ready');
+  assert.equal(view.message, NO_RESULTS);
+});
+
 test('preparing preserves the gateway clarification and does not imply approval without a plan', async () => {
   const task = { protocol_version: '2', status: 'needs_input', context_view: { conversation: [{ question: 'Time in a city', reply: 'Which city?' }] }, proposal: null, result: null, state: { state_ref: 'saved-task' }, next_actions: [{ kind: 'supply_input', label: 'City' }], errors: [] };
   const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(task) });
