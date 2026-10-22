@@ -5,7 +5,7 @@ let sourceSelectionSession=null,sourceSearchSnapshot=null,sourceSelectionQuestio
 const selectedSources=new Map(),sourceChoices=new Map(),sourceDrafts=new Map();let sourceReviewButton=null,sourceSelectionCount=null;
 function sourceQuestion(data){return data.question||output?.context_view?.conversation?.at(-1)?.question||input.question||''}
 function sourceChoiceKey(candidate,match){return JSON.stringify([candidate.endpoint_id||candidate.endpoint?.endpoint_id,candidate.capability||candidate.endpoint?.capability,candidate.subject_id||match?.subject_id||null])}
-function selectableSource(candidate){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)}
+function selectableSource(candidate,match){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)&&Array.isArray(sourceSearchSnapshot?.source_options)&&sourceSearchSnapshot.source_options.some(option=>sourceChoiceKey(option.source||{},option)===sourceChoiceKey(candidate,match))}
 function beginSourceSelection(data,matches){
  const question=sourceQuestion(data),session=JSON.stringify([question,data.catalog_version||'',data.parsed_request?.meta?.text_sha256||'']);
  const changed=session!==sourceSelectionSession;
@@ -13,11 +13,11 @@ function beginSourceSelection(data,matches){
  sourceChoices.clear();sourceReviewButton=null;sourceSelectionCount=null;sourceSelectionQuestion=question;
  if(!question)return false;
  sourceSearchSnapshot={...data,question,view:'source_search'};
- const available=new Set();for(const match of matches)for(const candidate of [...(match.apiosk||[]),...(match.coinbase||[])])if(selectableSource(candidate))available.add(sourceChoiceKey(candidate,match));
+ const available=new Set();for(const match of matches)for(const candidate of [...(match.apiosk||[]),...(match.coinbase||[])])if(selectableSource(candidate,match))available.add(sourceChoiceKey(candidate,match));
  for(const key of selectedSources.keys())if(!available.has(key))selectedSources.delete(key);
  if(changed)for(const saved of data.selected_sources||[])for(const match of matches)for(const candidate of match.apiosk||[]){
   const key=sourceChoiceKey(candidate,match);
-  if(selectableSource(candidate)&&candidate.endpoint_id===saved.endpoint_id&&(candidate.capability||candidate.endpoint?.capability)===saved.capability&&(candidate.subject_id||match.subject_id||null)===(saved.subject_id||null)){
+  if(selectableSource(candidate,match)&&candidate.endpoint_id===saved.endpoint_id&&(candidate.capability||candidate.endpoint?.capability)===saved.capability&&(candidate.subject_id||match.subject_id||null)===(saved.subject_id||null)){
    const draft={candidate,match,input:{...(saved.input||{})},controls:new Map()};selectedSources.set(key,draft);sourceDrafts.set(key,draft);
   }
  }
@@ -55,7 +55,7 @@ function sourceInputEditor(candidate,draft){
  return editor;
 }
 function attachSourceChoice(row,copy,side,candidate,match){
- if(!sourceSelectionQuestion||!sourceSearchSnapshot?.search_id||!selectableSource(candidate))return;
+ if(!sourceSelectionQuestion||!sourceSearchSnapshot?.search_id||!selectableSource(candidate,match))return;
  const key=sourceChoiceKey(candidate,match),existing=selectedSources.get(key),draft=sourceDrafts.get(key)||{candidate,match,input:{...(candidate.endpoint.input_values||{})},controls:new Map()};sourceDrafts.set(key,draft);
  draft.candidate=candidate;draft.match=match;
  const editor=sourceInputEditor(candidate,draft),label=el('label','source-choice-label'),checkbox=el('input','source-choice');checkbox.type='checkbox';checkbox.checked=!!existing;
@@ -92,7 +92,7 @@ async function reviewSelectedSources(){
 }
 function renderSourceReview(){
  if(!sourceSelectionQuestion)return;
- if(!sourceSearchSnapshot?.search_id){const s=section('Choose sources');s.append(el('p','meta','Refresh this source list to choose one or more sources. Nothing is bought.'));appendSourceRefresh(s);return}
+ if(!sourceSearchSnapshot?.search_id||!Array.isArray(sourceSearchSnapshot?.source_options)){const s=section('Choose sources');s.append(el('p','meta','Refresh this source list to choose one or more sources. Nothing is bought.'));appendSourceRefresh(s);return}
  if(!sourceChoices.size)return;
  const s=section('Selected sources');sourceSelectionCount=el('p','meta');s.append(sourceSelectionCount,el('p','meta','Selecting sources is free. Review one total price, then approve once.'));
  const actions=el('div','actions');sourceReviewButton=el('button','primary review-sources','Review selected sources');sourceReviewButton.type='button';sourceReviewButton.onclick=reviewSelectedSources;actions.append(sourceReviewButton);s.append(actions);syncSourceSelection();
@@ -103,7 +103,7 @@ function renderSourceSelectionChange(data){
  if(!planSurface||data.context_view?.source_selection?.can_choose===false||data.billing?.authorization_active||data.context_view?.worker_active||['running','succeeded','partial','cancelled'].includes(data.status))return;
  const configured=data.context_view?.source_selection,question=configured?.question||sourceQuestion(data),intake=configured?.original_intake||data.context_view?.capability_intake;
  const same=sourcePreparedTask===data.state?.state_ref||(question&&question===sourceSearchSnapshot?.question);
- const snapshot=same&&sourceSearchSnapshot?sourceSearchSnapshot:intake?.matches&&question?{...intake,question,view:'source_search',search_id:configured?.search_id,parsed_request:configured?.parsed_request||intake.parsed_request,selected_sources:data.context_view?.selected_sources||configured?.selections}:null;
+ const snapshot=same&&sourceSearchSnapshot?sourceSearchSnapshot:intake?.matches&&question?{...intake,question,view:'source_search',search_id:configured?.search_id,source_options:configured?.options||intake.source_options,parsed_request:configured?.parsed_request||intake.parsed_request,selected_sources:data.context_view?.selected_sources||configured?.selections}:null;
  if(!snapshot?.question)return;
  const actions=el('div','actions source-change'),button=el('button','quiet','Change sources');button.type='button';button.onclick=()=>{if(busy)return;render(snapshot)};actions.append(button);planSurface.append(actions);
 }

@@ -790,7 +790,7 @@ test('a source search lists candidates per requested capability and offers nothi
  assert.deepEqual(sections.querySelectorAll('h3').map(n=>n.textContent),['Company profile','Current time','Current weather','About these results']);
  assert.deepEqual(sections.querySelectorAll('.search-name').map(n=>n.textContent),['KVK Basisprofiel','OpenCorporates','Clock API']);
  assert.deepEqual(sections.querySelectorAll('.search-price').map(n=>n.textContent),['< 0.01 USD','—','< 0.01 USD']);
- assert.deepEqual(sections.querySelectorAll('.search-state').map(n=>n.textContent),['Available','Discovery only','Unverified']);
+ assert.deepEqual(sections.querySelectorAll('.search-state').map(n=>n.textContent),['Refresh to select','Discovery only','Unverified']);
  assert.deepEqual(sections.querySelectorAll('.search-inputs').map(n=>n.textContent),['Needs KVK number'],'only required inputs of supported rows');
  for(const line of ['Registered company details','No matching source was found for this part of the question.','Coinbase Bazaar search is unavailable right now.','Prices are per call.'])assert.ok(texts.includes(line),line);
  assert.equal(sections.querySelectorAll('button').length,0);

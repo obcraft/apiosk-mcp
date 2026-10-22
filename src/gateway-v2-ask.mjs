@@ -10,7 +10,7 @@ import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 export const ASK_TOOLS = Object.freeze(["apiosk_ask"]);
 export const NO_RESULTS = "We couldn’t find any results for you. Try a different question.";
 
-const SEARCH_NOTICE = "Searching and selecting sources are free. Choose one or more available sources in the card, review one combined price, then approve once. Each candidate covers its listed capability, not necessarily the complete request. Only candidates marked supported can run. Keep missing checks explicit. To prepare a chosen set through the tool, copy the returned question and send input.apiosk_source_selection_v1 containing the returned parsed_request, search_id and selections; each selection has the candidate's endpoint_id, capability, subject_id and input_values as input. Omit top-level endpoint_id and capability. Top-level parsed_request, search_id and selections are also supported by current hosts. Fill missing inputs only from the person's words or earlier evidence. Preparation of selections never approves or buys. For automatic planning across sources, use apiosk_discover with the complete question.";
+const SEARCH_NOTICE = "Searching and selecting sources are free. Choose one or more available sources in the card, review one combined price, then approve once. Each candidate covers its listed capability, not necessarily the complete request. Only candidates marked supported can run. Select only the exact endpoint, capability and subject combinations in source_options; a supported discovery match alone is not an offered selection. Keep missing checks explicit. To prepare a chosen set through the tool, copy the returned question and send input.apiosk_source_selection_v1 containing the returned parsed_request, search_id and selections; each selection has the option's source.endpoint_id, source.capability, subject_id and input_values as input. Omit top-level endpoint_id and capability. Top-level parsed_request, search_id and selections are also supported by current hosts. Fill missing inputs only from the person's words or earlier evidence. Preparation of selections never approves or buys. For automatic planning across sources, use apiosk_discover with the complete question.";
 
 export function askDefinitions(errorFields, taskOutput) {
   const searchOutput = {
@@ -19,13 +19,21 @@ export function askDefinitions(errorFields, taskOutput) {
       protocol_version: { type: "string", const: "2" }, view: { type: "string", const: "source_search" },
       question: { type: "string" }, search_id: { type: "string" },
       parsed_request: { type: "object" }, matches: { type: "array", items: { type: "object", additionalProperties: true } },
+      source_options: { type: "array", items: {
+        type: "object", additionalProperties: true, required: ["source", "subject_id", "requirement"],
+        properties: {
+          source: { type: "object", additionalProperties: true }, subject_id: { type: "string" },
+          requirement: { type: "object", additionalProperties: true }, input_values: { type: "object", additionalProperties: true },
+          missing_inputs: { type: "array", items: { type: "string" } }, reason: { type: "string" },
+        },
+      } },
       apiosk_sources_searched: { type: "integer", minimum: 0 }, catalog_version: { type: "string" }, notice: { type: "string" }, ...errorFields,
     },
     anyOf: [{ required: ["protocol_version", "view", "parsed_request", "matches", "notice"] }, { required: ["error_code", "message"] }],
   };
   return [
     { name: "apiosk_ask", title: "Find and choose sources",
-      description: "Ask Apiosk a question in the person's own words to find matching sources. Searching without selections or endpoint_id is free: it creates no task and buys nothing. Available candidates carry endpoint.inputs, endpoint.input_values, endpoint.missing_inputs, a price, and their exact capability and subject_id. The card lets the person freely select one or multiple sources and complete missing fields. To prepare that exact set, call again with the unchanged question, returned parsed_request and search_id, and selections (1 to 10 items with endpoint_id, capability, subject_id when present, and input). For hosts with cached schemas, send those three fields inside input.apiosk_source_selection_v1 instead, without top-level endpoint_id or capability. Both formats use the same signed selection route. This prepares one combined price and never auto-approves, even with an automatic-approval rule. The person approves once in the card. Preserve missing coverage; a selected source does not necessarily answer the whole question. Legacy single endpoint_id preparation can still apply the connection's standing automatic-approval rule; prefer selections for explicit source choice. For a question whose sources Apiosk should plan automatically, use apiosk_discover.",
+      description: "Ask Apiosk a question in the person's own words to find matching sources. Searching without selections or endpoint_id is free: it creates no task and buys nothing. Available candidates carry endpoint.inputs, endpoint.input_values, endpoint.missing_inputs, a price, and their exact capability and subject_id. Only the exact source.endpoint_id, source.capability and subject_id combinations in source_options are eligible for selection; supported matches alone are not selectable. The card lets the person freely select one or multiple sources and complete missing fields. To prepare that exact set, call again with the unchanged question, returned parsed_request and search_id, and selections (1 to 10 items with endpoint_id, capability, subject_id when present, and input). For hosts with cached schemas, send those three fields inside input.apiosk_source_selection_v1 instead, without top-level endpoint_id or capability. Both formats use the same signed selection route. This prepares one combined price and never auto-approves, even with an automatic-approval rule. The person approves once in the card. Preserve missing coverage; a selected source does not necessarily answer the whole question. Legacy single endpoint_id preparation can still apply the connection's standing automatic-approval rule; prefer selections for explicit source choice. For a question whose sources Apiosk should plan automatically, use apiosk_discover.",
       inputSchema: schemas.ask, outputSchema: { type: "object", anyOf: [searchOutput, taskOutput] },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ];
@@ -76,6 +84,7 @@ export function presentSearch(answer, question) {
   const incomplete = apioskFailed || externalFailed || matches.some(match => ['pending', 'unavailable'].includes(match.coinbase_status));
   return { protocol_version: "2", view: "source_search", ...(typeof question === 'string' && { question }),
     ...(typeof answer.search_id === 'string' && { search_id: answer.search_id }), parsed_request: parsed || {}, matches,
+    ...(Array.isArray(answer.source_options) && { source_options: answer.source_options }),
     ...(incomplete ? { message: "Some sources could not be searched. Try again shortly." } : !hasSources ? { message: NO_RESULTS } : {}),
     ...(Number.isInteger(result.apiosk_sources_searched) && { apiosk_sources_searched: result.apiosk_sources_searched }),
     ...(typeof result.catalog_version === "string" && { catalog_version: result.catalog_version }), notice: SEARCH_NOTICE };

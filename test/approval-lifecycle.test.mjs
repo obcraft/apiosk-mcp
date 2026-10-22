@@ -145,10 +145,13 @@ test('unsupported legacy price refresh reports the Gateway refusal without repla
   assert.equal(x.h.window.apiosk.data.proposal.quote_ref, quoteRef);
 });
 
+const sourceCandidate = { origin: 'apiosk', source_slug: 'fixture-registry', endpoint_id: uuid(10), capability: 'company.profile', availability: 'supported', name: 'Fixture registry', endpoint: { endpoint_id: uuid(10), capability: 'company.profile', inputs: [], input_values: {} } };
+const sourceRequirement = { slug: 'company.profile', name: 'Company profile', subject_id: 'company' };
 const search = {
   protocol_version: '2', view: 'source_search', question: 'Company profile for Financial Crime Compliance Associates', search_id: 'signed-source-snapshot', catalog_version: 'fixture-catalog',
-  parsed_request: { subjects: [{ id: 'company', label: 'Financial Crime Compliance Associates', type: 'company', identifiers: {} }], capabilities: [{ slug: 'company.profile', name: 'Company profile', subject_id: 'company' }], meta: { text_sha256: 'question-hash', parsed_at: '2026-10-22T14:00:00Z' } },
-  matches: [{ slug: 'company.profile', subject_id: 'company', apiosk: [{ endpoint_id: uuid(10), capability: 'company.profile', availability: 'supported', name: 'Fixture registry', endpoint: { endpoint_id: uuid(10), capability: 'company.profile', inputs: [], input_values: {} } }], coinbase: [] }],
+  parsed_request: { subjects: [{ id: 'company', label: 'Financial Crime Compliance Associates', type: 'company', identifiers: {} }], capabilities: [sourceRequirement], meta: { text_sha256: 'question-hash', parsed_at: '2026-10-22T14:00:00Z' } },
+  matches: [{ slug: 'company.profile', subject_id: 'company', apiosk: [sourceCandidate], coinbase: [] }],
+  source_options: [{ source: sourceCandidate, subject_id: 'company', requirement: sourceRequirement, input_values: {}, reason: 'Matches your question' }],
 };
 
 for (const host of ['chatgpt', 'claude']) test(`${host}: replaying the original source list cannot erase its prepared quote or approval`, async () => {

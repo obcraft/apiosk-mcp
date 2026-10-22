@@ -20,6 +20,7 @@ const mentions = candidate('mentions', 'company.mentions.search', 'company.name'
 const search = () => ({
   protocol_version: '2', view: 'source_search', question, search_id: 'signed-search-proof',
   catalog_version: 'catalog-1', apiosk_sources_searched: 112,
+  source_options: [registry, mentions].map(source => ({ source: structuredClone(source), subject_id: 'acme' })),
   parsed_request: {
     meta: { text_sha256: 'original-question-hash' },
     subjects: [{ id: 'acme', label: 'ACME', identifiers: { kvk: '00123456' } }],
@@ -185,6 +186,7 @@ test('same endpoint contracts and separate subjects retain distinct source choic
   const other = candidate('registry', 'company.officers.fetch', 'company.kvk', '00876543');
   data.parsed_request.capabilities.push({ slug: other.capability, name: 'Officers', subject_id: 'beta', outputs: ['officers'] });
   data.matches.push({ slug: other.capability, subject_id: 'beta', apiosk: [other], coinbase: [] });
+  data.source_options.push({source:other,subject_id:'beta'});
   const client = await host('skybridge', data), { h } = client;
   await h.change(choices(h)[0], true); await h.change(choices(h)[2], true);
   const pending = review(h).onclick(); await flush();
@@ -210,6 +212,31 @@ test('legacy unsigned source results cannot prepare an executable selection', as
   for (const choice of choices(h)) await h.change(choice, true);
   if (review(h)) assert.equal(review(h).disabled, true);
   assert.equal(client.calls().length, 0);
+});
+
+test('supported display matches are selectable only when the exact endpoint, capability and subject are offered',async()=>{
+  const data=search();
+  data.matches[0].apiosk.push({...structuredClone(registry),endpoint_id:'unoffered',name:'Unoffered lookup'});
+  data.source_options[1].subject_id='different-company';
+  const client=await host('skybridge',data),{h}=client;
+  assert.equal(choices(h).length,1);
+  await h.change(choices(h)[0],true);
+  const pending=review(h).onclick();await flush();
+  assert.equal(client.calls()[0].args.input.apiosk_source_selection_v1.selections.length,1);
+  assert.equal(client.calls()[0].args.input.apiosk_source_selection_v1.selections[0].endpoint_id,'registry');
+  await client.respond(0,ready());await pending;
+});
+
+test('cached search results without authoritative source options offer a free refresh',async()=>{
+  const data=search();delete data.source_options;
+  const client=await host('skybridge',data),{h}=client;
+  assert.equal(choices(h).length,0);
+  const refresh=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Refresh sources');
+  assert.ok(refresh);
+  const pending=refresh.onclick();await flush();
+  assert.deepEqual(client.calls()[0].args,{question});
+  await client.respond(0,search());await pending;
+  assert.equal(choices(h).length,2);
 });
 
 test('expired source proof preserves the choice and offers a free search refresh',async()=>{

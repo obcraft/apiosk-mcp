@@ -151,6 +151,43 @@ test('free search preserves its signed selection proof and original question for
   assert.deepEqual(result.structuredContent.parsed_request,parsed);
 });
 
+test('free search preserves exact signed source options in the advertised schema and both output channels',async()=>{
+  const candidate={origin:'apiosk',name:'World time',source_slug:'worldtime',availability:'supported',endpoint_id:endpoint.endpoint_id,capability:endpoint.capability,endpoint};
+  const unoffered={...candidate,endpoint_id:'00000000-0000-4000-8000-000000000789',name:'Discovery match not signed for selection'};
+  const options=[
+    {source:candidate,subject_id:'s1',requirement:parsed.capabilities[0],input_values:{'location.city':'Amsterdam',include_history:false,limit:0},missing_inputs:['location.country'],reason:'Matches your question'},
+    {source:candidate,subject_id:'s2',requirement:{...parsed.capabilities[0],subject_id:'s2'},input_values:{'location.city':'Paris'},reason:'Related records for this subject'},
+  ];
+  const payload=answer({matches:[{slug:parsed.capabilities[0].slug,subject_id:'s1',apiosk:[candidate,unoffered],coinbase:[],coinbase_status:'complete'}]},{search_id:'signed-search-proof',source_options:options});
+  const calls=[];
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,request)=>{calls.push({path:new URL(url).pathname,body:JSON.parse(request.body)});return Response.json(payload)}});
+  const reply=await runtime.callTool('apiosk_ask',{question});
+  assert.equal(reply.isError,undefined);
+  assert.deepEqual(reply.structuredContent.source_options,options);
+  assert.equal(reply.structuredContent.matches[0].apiosk.length,2,'discovery results stay distinct from selection eligibility');
+  assert.equal(reply.structuredContent.source_options.some(option=>option.source.endpoint_id===unoffered.endpoint_id),false);
+  const envelope=reply.content.find(block=>block.type==='text'&&block.text.startsWith('{'));
+  assert.deepEqual(JSON.parse(envelope.text).source_options,options,'text-only hosts retain the exact signed choices');
+  const tool=(await runtime.listTools()).find(tool=>tool.name==='apiosk_ask');
+  const validated=new AjvJsonSchemaValidator().getValidator(tool.outputSchema)(reply.structuredContent);
+  assert.equal(validated.valid,true,JSON.stringify(validated));
+  assert.match(reply.structuredContent.notice,/supported discovery match alone is not an offered selection/);
+  assert.deepEqual(calls,[{path:'/v2/ask',body:{question}}],'forwarding eligibility performs no preparation or purchase');
+});
+
+test('source option absence and an explicitly empty signed list never infer eligibility from supported matches',async()=>{
+  for(const sourceOptions of [undefined,[]]){
+    const candidate={availability:'supported',endpoint_id:endpoint.endpoint_id,capability:endpoint.capability,endpoint};
+    const payload=answer({matches:[{slug:parsed.capabilities[0].slug,apiosk:[candidate],coinbase:[],coinbase_status:'complete'}]},
+      {search_id:'signed-search-proof',...(sourceOptions!==undefined&&{source_options:sourceOptions})});
+    const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(payload)});
+    const reply=await runtime.callTool('apiosk_ask',{question});
+    assert.deepEqual(reply.structuredContent.source_options,sourceOptions);
+    assert.equal(Object.hasOwn(reply.structuredContent,'source_options'),sourceOptions!==undefined);
+    assert.equal(reply.structuredContent.matches[0].apiosk.length,1);
+  }
+});
+
 test('an unusable Ask reply is reported, never shown as an empty result', async () => {
   const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json({ unexpected: true }) });
   const result = await runtime.callTool('apiosk_ask', { question });

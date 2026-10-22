@@ -18,7 +18,8 @@ function searchRow(candidate,match){
  const inputs=supported?(candidate.endpoint?.inputs||[]).filter(input=>input?.required):[];
  if(inputs.length)copy.append(el('p','search-inputs','Needs '+inputs.map(searchInputLabel).filter(Boolean).join(', ')));
  const atomic=searchPriceAtomic(candidate),price=atomic&&money(atomic,'USD');
- side.append(el('span','search-price',price||'—'),el('span','search-state'+(supported?' supported':''),({supported:'Available',discovery_only:'Discovery only',unverified:'Unverified'})[candidate.availability]||pretty(candidate.availability||'Unverified')));
+ const offered=supported&&selectableSource(candidate,match),state=supported?(offered?'Available':Array.isArray(sourceSearchSnapshot?.source_options)?'Not selectable':'Refresh to select'):({discovery_only:'Discovery only',unverified:'Unverified'})[candidate.availability]||pretty(candidate.availability||'Unverified');
+ side.append(el('span','search-price',price||'—'),el('span','search-state'+(offered?' supported':''),state));
  row.append(sourceLogo({name,logo_url:candidate.logo_url||source.logo_url}),copy,side);attachSourceChoice(row,copy,side,candidate,match);return row}
 function renderSourceSearch(data){
  const matches=Array.isArray(data.matches)?data.matches:[],capabilities=data.parsed_request?.capabilities||[],seen=new Set();let total=0;
