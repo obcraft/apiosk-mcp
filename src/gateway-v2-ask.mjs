@@ -1,7 +1,7 @@
 // The Ask page for a connected chatbot, as one tool. With only a question,
 // Apiosk reads it and ranks its sources (POST /v2/ask: the App's parser and
-// source search, no task). With a chosen candidate's endpoint_id and input,
-// the same tool prepares that one source (POST /v2/ask-v2/prepare). The
+// source search, no task). A signed set of choices prepares one manual-only
+// combined quote (POST /v2/ask/prepare); endpoint_id retains the legacy path. The
 // gateway parses, ranks, prices and quotes; this module only shapes the calls
 // and adds no planner, pricing or balance logic of its own.
 import { randomUUID } from "node:crypto";
@@ -10,21 +10,22 @@ import schemas from "./gateway-v2-contracts.json" with { type: "json" };
 export const ASK_TOOLS = Object.freeze(["apiosk_ask"]);
 export const NO_RESULTS = "We couldn’t find any results for you. Try a different question.";
 
-const SEARCH_NOTICE = "Asking is free and buys nothing. Each candidate covers its listed capability, not necessarily the complete request. Only candidates with availability \"supported\" can run: call apiosk_ask again with the same question, that candidate's endpoint_id and capability, and input starting from its endpoint.input_values; fill a field listed in endpoint.missing_inputs only from the person's words or earlier results, and ask for anything missing. For a request combining several checks, call apiosk_discover once with the complete question to get one plan and total price ceiling; do not prepare and approve separate purchases as if they were one dossier.";
+const SEARCH_NOTICE = "Searching and selecting sources are free. Choose one or more available sources in the card, review one combined price, then approve once. Each candidate covers its listed capability, not necessarily the complete request. Only candidates marked supported can run. Keep missing checks explicit. To prepare a chosen set through the tool, copy the returned question, parsed_request and search_id with selections containing each candidate's endpoint_id, capability, subject_id and input_values. Fill missing inputs only from the person's words or earlier evidence. Preparation of selections never approves or buys. For automatic planning across sources, use apiosk_discover with the complete question.";
 
 export function askDefinitions(errorFields, taskOutput) {
   const searchOutput = {
     type: "object", additionalProperties: false,
     properties: {
       protocol_version: { type: "string", const: "2" }, view: { type: "string", const: "source_search" },
+      question: { type: "string" }, search_id: { type: "string" },
       parsed_request: { type: "object" }, matches: { type: "array", items: { type: "object", additionalProperties: true } },
       apiosk_sources_searched: { type: "integer", minimum: 0 }, catalog_version: { type: "string" }, notice: { type: "string" }, ...errorFields,
     },
     anyOf: [{ required: ["protocol_version", "view", "parsed_request", "matches", "notice"] }, { required: ["error_code", "message"] }],
   };
   return [
-    { name: "apiosk_ask", title: "Ask one source",
-      description: "Ask Apiosk a question that one source answers, in the person's own words: Apiosk reads the question the way its Ask page does and returns, per piece of data it found, up to three ranked sources. Each runnable candidate (availability \"supported\") carries endpoint.inputs, the values Apiosk already read from the question (endpoint.input_values), the required fields still missing (endpoint.missing_inputs) and its price. Asking without endpoint_id is free: creates no task and buys nothing. To run one candidate, call again with the same question plus its endpoint_id, capability and input (its input_values, completed only from the person's words or earlier results, never placeholders): that returns the same task and price ceiling as apiosk_discover. Preparation can start paid execution when the connection's standing automatic-approval rule covers the plan; otherwise the person must approve in the card. Say it was automatically approved only when context_view.auto_approval.applied and billing.authorization_active are both true. For several sources, a combined dossier or an analysis, use apiosk_discover instead.",
+    { name: "apiosk_ask", title: "Find and choose sources",
+      description: "Ask Apiosk a question in the person's own words to find matching sources. Searching without selections or endpoint_id is free: it creates no task and buys nothing. Available candidates carry endpoint.inputs, endpoint.input_values, endpoint.missing_inputs, a price, and their exact capability and subject_id. The card lets the person freely select one or multiple sources and complete missing fields. To prepare that exact set, call again with the unchanged question, returned parsed_request and search_id, and selections (1 to 10 items with endpoint_id, capability, subject_id when present, and input). This prepares one combined price and never auto-approves, even with an automatic-approval rule. The person approves once in the card. Preserve missing coverage; a selected source does not necessarily answer the whole question. Legacy single endpoint_id preparation can still apply the connection's standing automatic-approval rule; prefer selections for explicit source choice. For a question whose sources Apiosk should plan automatically, use apiosk_discover.",
       inputSchema: schemas.ask, outputSchema: { type: "object", anyOf: [searchOutput, taskOutput] },
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ];
@@ -32,13 +33,15 @@ export function askDefinitions(errorFields, taskOutput) {
 
 /** The gateway request for apiosk_ask: its exact wire body, nothing extra. */
 export function askRequest(name, args) {
+  if (args.selections) return { path: "/v2/ask/prepare", body: { request_id: args.request_id || randomUUID(),
+    question: args.question, parsed_request: args.parsed_request, search_id: args.search_id, selections: args.selections } };
   if (!args.endpoint_id) return { path: "/v2/ask", body: { question: args.question } };
   return { path: "/v2/ask-v2/prepare", body: { request_id: args.request_id || randomUUID(), endpoint_id: args.endpoint_id,
     ...(args.capability && { capability: args.capability }), input: args.input || {}, question: args.question } };
 }
 
 /** The card's source search view (`view: "source_search"`) from a /v2/ask answer. */
-export function presentSearch(answer) {
+export function presentSearch(answer, question) {
   // Preserve successful origin results while making an outage explicit.
   let result = answer?.searches?.apiosk;
   const parsed = answer?.parsed_request;
@@ -70,7 +73,8 @@ export function presentSearch(answer) {
   });
   const hasSources = matches.some(match => (match.apiosk?.length || 0) + (match.coinbase?.length || 0) > 0);
   const incomplete = apioskFailed || externalFailed || matches.some(match => ['pending', 'unavailable'].includes(match.coinbase_status));
-  return { protocol_version: "2", view: "source_search", parsed_request: parsed || {}, matches,
+  return { protocol_version: "2", view: "source_search", ...(typeof question === 'string' && { question }),
+    ...(typeof answer.search_id === 'string' && { search_id: answer.search_id }), parsed_request: parsed || {}, matches,
     ...(incomplete ? { message: "Some sources could not be searched. Try again shortly." } : !hasSources ? { message: NO_RESULTS } : {}),
     ...(Number.isInteger(result.apiosk_sources_searched) && { apiosk_sources_searched: result.apiosk_sources_searched }),
     ...(typeof result.catalog_version === "string" && { catalog_version: result.catalog_version }), notice: SEARCH_NOTICE };

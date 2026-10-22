@@ -33,13 +33,14 @@
  */
 export const APIOSK_UI_BRIDGE = `
 (()=>{
-const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,pending=new Map(),rpcId=0,mcp=false,host={};
+const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,taskSearchIdentity=null,pending=new Map(),rpcId=0,mcp=false,host={};
 function applyTheme(theme){if(theme!=='light'&&theme!=='dark')return;document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}
 applyTheme(window.openai?.theme);
+function sourceSearchIdentity(value){if(value?.view!=='source_search')return null;return JSON.stringify([value.question||null,value.search_id||null,value.catalog_version||null,value.parsed_request?.meta?.text_sha256||value.parsed_request||null,value.parsed_request?.meta?.parsed_at||null])}
 // Hosts may resend the original tool snapshot when widget state or layout
 // changes. Replaying it would overwrite a newer in-card tool response and
 // cancel the execution timer immediately after approval.
-function emit(v){if(v==null)return;v=restoredView(v);if(localState?.state_ref===v?.state?.state_ref&&Number(v?.state?.revision)<=Number(localState?.revision))return;if(data?.state?.state_ref&&data.state.state_ref===v?.state?.state_ref&&Number(v.state.revision)<Number(data.state.revision))return;let key;try{key=JSON.stringify(v)}catch(e){}if(key!==undefined&&key===dataKey)return;dataKey=key;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
+function emit(v){if(v==null)return;const searchIdentity=sourceSearchIdentity(v);if(searchIdentity&&searchIdentity===taskSearchIdentity&&data?.state?.state_ref)return;v=restoredView(v);if(localState?.state_ref===v?.state?.state_ref&&Number(v?.state?.revision)<=Number(localState?.revision))return;if(data?.state?.state_ref&&data.state.state_ref===v?.state?.state_ref&&Number(v.state.revision)<Number(data.state.revision))return;let key;try{key=JSON.stringify(v)}catch(e){}if(key!==undefined&&key===dataKey)return;if(sourceSearchIdentity(v)){localState=null;taskSearchIdentity=null}dataKey=key;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
 function emitInput(v){if(v==null)return;input=v;for(const fn of inputListeners){try{fn(v)}catch(e){}}}
 function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;
  if(Array.isArray(r.content))for(const block of r.content){if(block?.type==='text'&&typeof block.text==='string'){try{const value=JSON.parse(block.text);if(value&&typeof value==='object')return value}catch(e){}}}}
@@ -62,11 +63,11 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  // controls; only a Gateway response may set status=cancelled.
  if(msg.method==='ui/notifications/tool-cancelled'){return}});
 // ---- OpenAI Apps SDK: globals plus an event ---------------------------------
-function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result;
+function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result,savedSearch=o?.widgetState?.privateContent?.apioskSourceSearchIdentity;
  // Keep the last server-returned view for this card across remounts. This is
  // a display cache only: the card still recovers server state and never starts
  // a paid step from mounting or from persisted widget state.
- if(saved?.state?.state_ref&&saved.state.state_ref===raw?.state?.state_ref&&Number(saved.state.revision)>=Number(raw.state.revision))return saved;
+ if(saved?.state?.state_ref&&((saved.state.state_ref===raw?.state?.state_ref&&Number(saved.state.revision)>=Number(raw.state.revision))||(savedSearch&&sourceSearchIdentity(raw)===savedSearch))){taskSearchIdentity=savedSearch||null;return saved}
  return raw}
 function openaiData(){const o=window.openai;return o?(o.toolOutput??o.structuredContent??null):null}
 window.addEventListener('openai:set_globals',e=>{const g=e.detail?.globals??e.detail;
@@ -97,8 +98,9 @@ const api={
   // In-card tool responses are newer than the original host snapshot, even
   // when saving consent did not change the task revision. Explicit server
   // refreshes still render directly; this guard only rejects host replays.
-  if(value?.state){data=value;localState=value.state;try{dataKey=JSON.stringify(value)}catch(e){}}
-  let stored=false;if(window.openai?.setWidgetState){try{window.openai.setWidgetState({...window.openai.widgetState,modelContent:{status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing},privateContent:{...window.openai.widgetState?.privateContent,apioskResult:value}});stored=true}catch(e){}}
+  if(value?.state){taskSearchIdentity=sourceSearchIdentity(data)||taskSearchIdentity;data=value;localState=value.state;try{dataKey=JSON.stringify(value)}catch(e){}}
+  else if(sourceSearchIdentity(value)){data=value;localState=null;taskSearchIdentity=null;try{dataKey=JSON.stringify(value)}catch(e){}}
+  let stored=false;if(window.openai?.setWidgetState){try{window.openai.setWidgetState({...window.openai.widgetState,modelContent:{status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing},privateContent:{...window.openai.widgetState?.privateContent,apioskResult:value,apioskSourceSearchIdentity:taskSearchIdentity}});stored=true}catch(e){}}
   if(mcp&&host.updateModelContext){const summary={status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,result:value?.result,errors:value?.errors};let contextText=JSON.stringify(summary);if(contextText.length>24000)contextText=JSON.stringify({status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,note:'Read the saved task to retrieve its result.'});await rpc('ui/update-model-context',{content:[{type:'text',text:contextText}],structuredContent:value});return true}
   return stored},
  // Cards grow when a list renders. A host sizing an iframe once shows the first

@@ -391,7 +391,8 @@ test('an uncertain approval never claims that nothing was purchased',async()=>{
  assert.equal(h.nodes.get('feedback-text').textContent,message);
  assert.doesNotMatch(h.nodes.get('feedback-text').textContent,/Nothing was purchased/);
  assert.equal(h.nodes.get('feedback-actions').querySelectorAll('button').length,0);
- await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve']);
+ await h.tick(350);await h.tick(2000);assert.deepEqual(calls,['apiosk_approve','apiosk_status']);
+ assert.equal(h.nodes.get('sections').querySelectorAll('button').find(b=>b.textContent==='Check status before approving again').disabled,true);
 });
 test('Set higher limits opens existing connection settings without reconnecting or purchasing',async()=>{
  const calls=[],links=[];const data={...v2Ready,context_view:{approval_mode:'chatbot'}};

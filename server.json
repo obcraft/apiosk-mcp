@@ -117,7 +117,8 @@
         "apiosk_discover",
         "apiosk_execute",
         "apiosk_status",
-        "apiosk_approve"
+        "apiosk_approve",
+        "apiosk_requote"
       ]
     }
   }

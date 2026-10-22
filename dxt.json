@@ -44,6 +44,10 @@
     {
       "name": "apiosk_approve",
       "description": "App-only: called by the interactive card when the person clicks Approve, within the connection's spending limits. Never invoked by the model."
+    },
+    {
+      "name": "apiosk_requote",
+      "description": "App-only: called by the interactive card to refresh an expired saved quote for the exact selected sources. Never approves spending, calls paid sources or starts execution."
     }
   ]
 }

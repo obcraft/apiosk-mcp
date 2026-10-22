@@ -76,18 +76,22 @@ export function createV2Runtime(options = {}) {
       type: "object", additionalProperties: false, required: ["state", "quote_ref", "max_total_atomic"],
       properties: { state: schemas.state, quote_ref: { type: "string", format: "uuid" }, max_total_atomic: { type: "string", pattern: "^[0-9]+$" }, request_id: { type: "string", format: "uuid" } },
     }, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
+    { name: "apiosk_requote", title: "Refresh the displayed Apiosk price", description: "Called by the interactive card after the person requests a new price for an expired quote. Reprices the saved task and its exact source selection without approving spending, calling paid sources or starting execution. The refreshed plan still requires approval.", inputSchema: {
+      type: "object", additionalProperties: false, required: ["state", "quote_ref"],
+      properties: { state: schemas.state, quote_ref: { type: "string", format: "uuid" }, request_id: { type: "string", format: "uuid" } },
+    }, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ].map(d => ({ ...d,
     description: d.name === 'apiosk_sources' ? `${d.description} ${V2_SOURCES_PRESENTATION}` : ['apiosk_discover', 'apiosk_ask', 'apiosk_execute', 'apiosk_status'].includes(d.name) ? `${d.description} ${V2_RESULT_TOOL_DESCRIPTION}` : d.description,
     securitySchemes: schemes, _meta: {
     securitySchemes: schemes,
-    ui: d.name === "apiosk_approve" ? { visibility: ["app"] } : { resourceUri: APIO_V2_CARD_URI, visibility: ["model", "app"] },
+    ui: ["apiosk_approve", "apiosk_requote"].includes(d.name) ? { visibility: ["app"] } : { resourceUri: APIO_V2_CARD_URI, visibility: ["model", "app"] },
     "openai/widgetAccessible": true,
     // App-only calls update the calling card. A private tool must not claim
     // the shared output template: ChatGPT marks that template unusable.
     // Modern MCP Apps and legacy Skybridge have distinct cache identities.
     // Never vary the new standard resource's MIME based on the host user agent.
-    ...(d.name === "apiosk_approve" ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
-    "openai/visibility": d.name === "apiosk_approve" ? "private" : "public",
+    ...(["apiosk_approve", "apiosk_requote"].includes(d.name) ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
+    "openai/visibility": ["apiosk_approve", "apiosk_requote"].includes(d.name) ? "private" : "public",
     "openai/toolInvocation/invoking": d.name === "apiosk_sources" ? "Exploring sources…" : d.name === "apiosk_ask" ? "Asking Apiosk…" : d.name === "apiosk_discover" ? "Preparing your data plan…" : "Updating your Apiosk request…",
     "openai/toolInvocation/invoked": d.name === "apiosk_sources" ? "Sources ready" : d.name === "apiosk_discover" ? "Request reviewed" : "Request updated",
   } }));
@@ -109,7 +113,7 @@ export function createV2Runtime(options = {}) {
       const body = ask ? ask.body : { ...cleanArgs, request_id: cleanArgs.request_id || randomUUID() };
       if (name === "apiosk_execute" && !recover) body.idempotency_key ||= args.action_id;
       const browsing = name === "apiosk_sources";
-      const path = ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : "/v2/execute";
+      const path = ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : name === "apiosk_requote" ? "/v2/ask/requote" : "/v2/execute";
       try {
         const url = new URL(path, base);
         if (browsing) for (const [key, value] of Object.entries(cleanArgs)) url.searchParams.set(key, String(value));
@@ -139,7 +143,7 @@ export function createV2Runtime(options = {}) {
         const {response} = received;
         let {result} = received;
         if (!response.ok) return failure(gatewayFailure(result, recover || args.state?.state_ref));
-        if (searching) result = presentSearch(result);
+        if (searching) result = presentSearch(result, cleanArgs.question);
         else if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
         if (browsing) result = presentSources(result);
         if (!browsing) {

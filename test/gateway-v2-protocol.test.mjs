@@ -28,15 +28,20 @@ for (const host of ['chatgpt','claude']) test(`${host}: v2 initialize, tools and
   assert.equal(client.getInstructions(),V2_INSTRUCTIONS);
   assert.deepEqual(client.getServerVersion(),resolveServerPresentation(env).info);
   assert.equal(client.getServerCapabilities().extensions,undefined);
-  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_ask','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve']);
+  const {tools}=await client.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_ask','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve','apiosk_requote']);
   for(const tool of tools){assert.deepEqual(tool._meta.securitySchemes,[{type:'oauth2',scopes:['mcp:tools']}]);assert.equal(tool.outputSchema.type,'object')}
-  for(const tool of tools.filter(tool=>tool.name!=='apiosk_approve')){
+  for(const tool of tools.filter(tool=>!['apiosk_approve','apiosk_requote'].includes(tool.name))){
    assert.equal(tool._meta.ui.resourceUri,APIO_V2_CARD_URI);
    assert.equal(tool._meta['openai/outputTemplate'],APIO_V2_CHATGPT_CARD_URI);
    assert.notEqual(tool._meta.ui.resourceUri,tool._meta['openai/outputTemplate']);
   }
-  assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta.ui.resourceUri,undefined);
-  assert.equal(tools.find(tool=>tool.name==='apiosk_approve')._meta['openai/outputTemplate'],undefined);
+  for(const name of ['apiosk_approve','apiosk_requote']){
+    const tool=tools.find(tool=>tool.name===name);
+    assert.equal(tool._meta.ui.resourceUri,undefined);
+    assert.equal(tool._meta['openai/outputTemplate'],undefined);
+    assert.deepEqual(tool._meta.ui.visibility,['app']);
+    assert.equal(tool._meta['openai/visibility'],'private');
+  }
   const {resources}=await client.listResources();assert.equal(resources.length,3+APIO_V2_CARD_LEGACY_URIS.length);
   const contract=resources.find(r=>r.uri==='apiosk://v2/host-contract');
   const card=resources.find(r=>r.uri===APIO_V2_CARD_URI);

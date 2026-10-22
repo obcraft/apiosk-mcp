@@ -47,15 +47,17 @@ test('an approval click after expiry gives feedback even when browser timers wer
   assert.equal(h.calls.length, 0);
 });
 
-test('refresh recovers current state and re-quotes the original question without approving it', async () => {
+test('refresh recovers current state and re-quotes the saved source selection without approving it', async () => {
   const old = plan(), fresh = { ...old, state: { state_ref: 'task', revision: 3, state_token: 'fresh' } };
   const renewed = { ...fresh, proposal: { ...old.proposal, quote_ref: 'new', max_total_atomic: '250000', expires_at: '2026-09-12T16:10:00Z' } };
   const h = harness(async name => name === 'apiosk_status' ? fresh : renewed);
   h.advance(2000); h.show(old);
   await h.buttons().find(b => b.textContent === 'Get new price').onclick();
-  assert.deepEqual(h.calls.map(c => c.name), ['apiosk_status', 'apiosk_discover']);
+  assert.deepEqual(h.calls.map(c => c.name), ['apiosk_status', 'apiosk_requote']);
   assert.equal(h.calls[1].args.state.state_token, 'fresh');
-  assert.equal(h.calls[1].args.question, old.context_view.conversation[0].question);
+  assert.equal(h.calls[1].args.quote_ref, old.proposal.quote_ref);
+  assert.equal(h.calls[1].args.question, undefined, 'refresh cannot replan the original question');
+  assert.deepEqual(Object.keys(h.calls[1].args).sort(), ['quote_ref', 'state']);
   assert.equal(h.context.current().proposal.quote_ref, 'new');
   assert.match(h.feedback.at(-1), /Review the plan and click Approve/);
 });

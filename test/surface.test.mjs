@@ -1,8 +1,8 @@
 // The tool surface, asserted by name.
 //
 // This test is the thing that stops the drawer refilling. Since 2.0 the only
-// runtime is Gateway v2: five model-visible tools and one app-only approval
-// tool the interactive card calls. Every other time this fails, something grew
+// runtime is Gateway v2: five model-visible tools and app-only approval and
+// price refresh tools the interactive card calls. Every other time this fails, something grew
 // back.
 
 import test from "node:test";
@@ -24,6 +24,8 @@ const EXPECTED = [
   "apiosk_status",
   // App-only: the card calls it after the person clicks Approve.
   "apiosk_approve",
+  // App-only: refresh the saved quote without discovery or a purchase.
+  "apiosk_requote",
 ];
 
 test("the tool surface is exactly the Gateway v2 tools, for every transport", async () => {

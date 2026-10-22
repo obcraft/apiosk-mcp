@@ -18,16 +18,16 @@ const endpoint = { endpoint_id: '7b0f4c0e-7a55-4a55-9d6e-0f3e7f0a1b2c', capabili
 const answer = (apiosk, extra = {}) => ({ status: 'choices', question, parsed_request: parsed, model: 'fixture', attempts: 1, timing: { parse_ms: 4 }, apis: [],
   searches: { apiosk: { apiosk_sources_searched: 112, catalog_version: 'v1', timing: { search_ms: 3 }, ...apiosk } }, errors: [], execution: { method: 'POST', path: '/v2/execute' }, ...extra });
 
-test('apiosk_ask takes the question, never a chatbot-filled capability object', async () => {
+test('apiosk_ask searches from a question and prepares only a signed explicit selection', async () => {
   const tools = await createApioskMcpRuntime({ env }).listTools();
   const ask = tools.find(t => t.name === 'apiosk_ask');
   assert.deepEqual(ask.inputSchema, schemas.ask);
   assert.deepEqual(ask.inputSchema.required, ['question']);
-  assert.equal(ask.inputSchema.properties.parsed_request, undefined);
-  assert.equal(ask.title, 'Ask one source');
-  assert.match(ask.description, /Asking without endpoint_id is free/);
-  assert.match(ask.description, /Preparation can start paid execution when the connection's standing automatic-approval rule covers the plan/);
-  assert.match(ask.description, /context_view\.auto_approval\.applied and billing\.authorization_active are both true/);
+  assert.equal(ask.inputSchema.properties.parsed_request.type, 'object');
+  assert.equal(ask.title, 'Find and choose sources');
+  assert.match(ask.description, /Searching without selections or endpoint_id is free/);
+  assert.match(ask.description, /one combined price and never auto-approves/);
+  assert.match(ask.description, /Legacy single endpoint_id preparation can still apply/);
   assert.equal(tools.some(t => ['apiosk_search', 'apiosk_prepare'].includes(t.name)), false);
 });
 
@@ -52,7 +52,8 @@ test('asking sends only the question to the public Ask route and returns each en
   assert.deepEqual(view.matches[0].apiosk[0].endpoint.input_values, { 'location.city': 'Amsterdam' });
   assert.equal(view.apiosk_sources_searched, 112);
   assert.equal(view.timing, undefined);
-  assert.match(view.notice, /call apiosk_ask again with the same question/);
+  assert.equal(view.question, question);
+  assert.match(view.notice, /Preparation of selections never approves or buys/);
 });
 
 test('asking with a chosen candidate prepares only that endpoint and returns the discover task shape', async () => {
@@ -69,6 +70,39 @@ test('asking with a chosen candidate prepares only that endpoint and returns the
   assert.deepEqual(request.body.input, { 'location.city': 'Amsterdam' });
   assert.equal(request.body.question, question);
   assert.equal(result.structuredContent.status, 'requires_approval');
+});
+
+test('multiple explicit sources use one manual-only prepare with the exact signed search and supplied values', async () => {
+  const requests=[];
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async(url,options)=>{
+    requests.push({path:new URL(url).pathname,body:JSON.parse(options.body)});
+    return Response.json({protocol_version:'2',status:'ready',next_actions:[],errors:[],billing:{authorization_active:false}});
+  }});
+  const args={question,parsed_request:parsed,search_id:'signed-search',request_id:'00000000-0000-4000-8000-000000000123',selections:[
+    {endpoint_id:endpoint.endpoint_id,capability:endpoint.capability,subject_id:'s1',input:{'location.city':'Amsterdam'}},
+    {endpoint_id:'00000000-0000-4000-8000-000000000456',capability:'location.weather.current',subject_id:'s1',input:{'location.city':'Amsterdam','include_history':false,'limit':0}},
+  ]};
+  const result=await runtime.callTool('apiosk_ask',args);
+  assert.equal(result.isError,undefined);
+  assert.deepEqual(requests,[{path:'/v2/ask/prepare',body:args}]);
+  assert.equal(result.structuredContent.billing.authorization_active,false);
+  for(const invalid of [
+    {question,parsed_request:parsed},
+    {question,selections:args.selections},
+    {...args,selections:[]},
+    {...args,selections:Array(11).fill(args.selections[0])},
+    {...args,endpoint_id:endpoint.endpoint_id},
+    {...args,selections:[{...args.selections[0],approved:true}]},
+  ])assert.equal((await runtime.callTool('apiosk_ask',invalid)).isError,true);
+  assert.equal(requests.length,1,'invalid selections never reach the gateway');
+});
+
+test('free search preserves its signed selection proof and original question for a restored card',async()=>{
+  const runtime=createApioskMcpRuntime({env,fetchImpl:async()=>Response.json(answer({matches:[]},{search_id:'signed-search-proof'}))});
+  const result=await runtime.callTool('apiosk_ask',{question});
+  assert.equal(result.structuredContent.search_id,'signed-search-proof');
+  assert.equal(result.structuredContent.question,question);
+  assert.deepEqual(result.structuredContent.parsed_request,parsed);
 });
 
 test('an unusable Ask reply is reported, never shown as an empty result', async () => {
@@ -192,7 +226,7 @@ test('a missing check remains visible when another part of the professional requ
   const result = await runtime.callTool('apiosk_ask', { question });
   assert.equal(result.isError, undefined);
   assert.deepEqual(result.structuredContent.matches[1], { slug: 'company.credit.score', query: 'Credit score', subject_id: 's1', apiosk: [], coinbase: [], coinbase_status: 'complete' });
-  assert.match(result.structuredContent.notice, /apiosk_discover once with the complete question/);
+  assert.match(result.structuredContent.notice, /apiosk_discover with the complete question/);
   assert.match(result.structuredContent.notice, /not necessarily the complete request/);
 });
 
