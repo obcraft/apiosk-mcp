@@ -25,6 +25,9 @@ test('apiosk_ask takes the question, never a chatbot-filled capability object', 
   assert.deepEqual(ask.inputSchema.required, ['question']);
   assert.equal(ask.inputSchema.properties.parsed_request, undefined);
   assert.equal(ask.title, 'Ask one source');
+  assert.match(ask.description, /Asking without endpoint_id is free/);
+  assert.match(ask.description, /Preparation can start paid execution when the connection's standing automatic-approval rule covers the plan/);
+  assert.match(ask.description, /context_view\.auto_approval\.applied and billing\.authorization_active are both true/);
   assert.equal(tools.some(t => ['apiosk_search', 'apiosk_prepare'].includes(t.name)), false);
 });
 

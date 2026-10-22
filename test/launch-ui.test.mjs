@@ -222,6 +222,29 @@ test('conversation messages use content blocks and honor host rejection',async()
 });
 
 const v2Ready={status:'ready',state:{state_ref:'task',revision:1},proposal:{quote_ref:'quote',expires_at:'2099-01-01',currency:'USDC',max_total_atomic:'21739',approval_url:'https://app.apiosk.com/gateway-v2?task=task',steps:['company.search']},context_view:{execution_enabled:true},billing:{authorization_active:false,quote_ref:'quote'},next_actions:[{action_id:'run',kind:'execute_quoted_step'}]};
+test('connected coverage is visible outside collapsed details before approval and on saved results',async()=>{
+  const notice='Not retrieved or verified: directors and ownership structure. Do not treat this as a complete investigation.';
+  const inert='<img src=x onerror="alert(1)">';
+  const result={source:{name:'Fixture register'},data:{name:'Financial Crime Compliance Associates',kvk_number:'91251982'}};
+  const context={...v2Ready.context_view,coverage_notices:[notice,inert],connected_coverage:{gaps:[{subject:'Financial Crime Compliance Associates',output:'directors'},{subject:'Financial Crime Compliance Associates',output:'ownership_structure'}]}};
+  const calls=[],h=harness(APIO_V2_CARD_HTML,{toolOutput:{...v2Ready,context_view:context},callTool:async(...args)=>{calls.push(args);throw new Error('rendering must not buy')}});
+  for(const status of ['ready','running','partial','succeeded']){
+    const completed=['partial','succeeded'].includes(status);
+    await h.globals({toolOutput:{...v2Ready,status,proposal:completed?null:v2Ready.proposal,result:completed?result:null,context_view:context,next_actions:completed?[]:v2Ready.next_actions}});
+    const sections=h.nodes.get('sections'),scope=sections.querySelector('.plan-coverage');
+    assert.ok(scope,`missing visible coverage in ${status}`);
+    assert.equal(flatten(sections).filter(text=>text===notice).length,1);
+    assert.ok(flatten(scope).includes(inert));
+    for(let node=scope;node;node=node.parentElement)assert.notEqual(node.tagName,'DETAILS',`coverage collapsed in ${status}`);
+    assert.equal(sections.querySelectorAll('img').length,0);
+    if(status==='ready'){
+      const texts=flatten(sections.children[0]);
+      assert.ok(texts.indexOf(notice)<texts.findIndex(text=>text.startsWith('Approve up to ')),'coverage must precede purchase approval');
+    }
+  }
+  assert.equal(calls.length,0);
+  assert.equal(h.sent.filter(message=>message.method==='tools/call').length,0);
+});
 test('source access terms are visible before approval and on saved result recovery',async()=>{
  const notice={text:'ECB reference rates are available free of charge from the original source.',url:'https://www.ecb.europa.eu/',label:'Free ECB data'};
  const source={name:'Frankfurter',provider:'frankfurter',usage_notice:notice};

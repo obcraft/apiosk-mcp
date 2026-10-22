@@ -1,5 +1,7 @@
 // The execution graph stays private; only consent, choices and results are visible.
 export const V2_CARD_COMPACT = `
+function coverageNotices(data){return [...new Set((Array.isArray(data.context_view?.coverage_notices)?data.context_view.coverage_notices:[]).filter(notice=>typeof notice==='string'&&notice.trim()))]}
+function appendCoverageNotices(target,notices){if(!notices.length)return;const coverage=el('div','plan-coverage');coverage.append(el('p','key','Scope of this check'));for(const notice of notices)coverage.append(el('p','notice',notice));target.append(coverage)}
 renderPlan=function(data){
  const p=data.proposal;if(!p||['cancelled','succeeded','partial','failed','unsupported','needs_selection'].includes(data.status))return;
  const details=p.step_details||[],subjects=[...new Set(details.map(d=>d.subject).filter(Boolean))];
@@ -8,12 +10,13 @@ renderPlan=function(data){
  if(data.billing?.authorization_active||data.status==='running'){
   s.append(el('p','compact-status','Getting your data…'));
   // An automatic approval is the connection's standing rule, never shown as a click.
-  s.append(el('p','meta',(data.billing?.approved_via==='connection_auto'?'Approved automatically up to ':'Approved up to ')+money(p.max_total_atomic,p.currency,true)+(data.billing?.approved_via==='connection_auto'?' · within this connection’s limits':'')));return;
+  s.append(el('p','meta',(data.billing?.approved_via==='connection_auto'?'Approved automatically up to ':'Approved up to ')+money(p.max_total_atomic,p.currency,true)+(data.billing?.approved_via==='connection_auto'?' · within this connection’s limits':'')));appendCoverageNotices(s,coverageNotices(data));return;
  }
  if(sources.length)s.append(el('p','meta',sources.length+(sources.length===1?' source':' sources')));
  const price=el('div','request-price');price.append(el('span','price-label','Maximum total'),el('strong','',money(p.max_total_atomic,p.currency,true)));s.append(price);
  s.append(el('p','meta','Approve once. The entire request stays within this amount.'));
  appendSourceUsageNotices(s,details.map(d=>d.source));
+ appendCoverageNotices(s,coverageNotices(data));
  // A live rule that did not cover this plan says why, so the click is not a surprise.
  const auto=data.context_view?.auto_approval;if(auto?.active&&!auto.applied&&auto.message)s.append(el('p','meta',auto.message));
  const disclosure=el('details','compact-details'),list=el('div','compact-sources');disclosure.append(el('summary','','Details'));
@@ -22,6 +25,9 @@ renderPlan=function(data){
 const renderExpandedCard=render;
 render=function(data){
  renderExpandedCard(data);if(!data||typeof data!=='object')return;
+ // Saved results may have no proposal. Keep the original scope warning open
+ // after recovery as well as before purchase, outside source disclosures.
+ const notices=coverageNotices(data);if(!planSurface&&notices.length)appendCoverageNotices(section('Request coverage'),notices);
  for(const section of sections.querySelectorAll(':scope > .section')){
   const heading=section.querySelector('h3');
   if(heading?.textContent==='Payment summary'){

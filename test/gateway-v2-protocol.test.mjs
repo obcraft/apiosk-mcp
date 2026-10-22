@@ -7,8 +7,11 @@ import { V2_INSTRUCTIONS } from '../src/gateway-v2.mjs';
 import { APIO_V2_CHATGPT_CARD_URI, APIO_V2_CARD_URI, APIO_V2_CARD_LEGACY_URIS, APIO_V2_MODERN_CARD_URIS } from '../src/gateway-v2-card.mjs';
 
 test('source notice cards invalidate both host caches while keeping the preceding resources compatible',()=>{
- assert.notEqual(APIO_V2_CARD_URI,'ui://apiosk/gateway-v2-card-v57.html');
- assert.notEqual(APIO_V2_CHATGPT_CARD_URI,'ui://apiosk/gateway-v2-card-v21-chatgpt.html');
+ assert.notEqual(APIO_V2_CARD_URI,'ui://apiosk/gateway-v2-card-v59.html');
+ assert.notEqual(APIO_V2_CHATGPT_CARD_URI,'ui://apiosk/gateway-v2-card-v23-chatgpt.html');
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v59.html'));
+ assert.ok(APIO_V2_MODERN_CARD_URIS.includes('ui://apiosk/gateway-v2-card-v59.html'));
+ assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v23-chatgpt.html'));
  assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v57.html'));
  assert.ok(APIO_V2_MODERN_CARD_URIS.includes('ui://apiosk/gateway-v2-card-v57.html'));
  assert.ok(APIO_V2_CARD_LEGACY_URIS.includes('ui://apiosk/gateway-v2-card-v21-chatgpt.html'));
@@ -102,5 +105,36 @@ test('Claude sends the complete Dutch client investigation once and receives one
     assert.equal(result.structuredContent.billing.total_charged,'0');
     assert.equal(result.content.filter(item=>item.type==='text'&&item.text.startsWith('Maximum total price:')).length,1);
     assert.match(result.content[0].text,/Maximum total price: 0\.60 USD/);
+  }finally{await client.close();await server.close();}
+});
+
+test('connected original requirements and gaps survive planning and free saved-result reads in both output channels',async()=>{
+  const requestId='00000000-0000-4000-8000-000000000011',taskRef='00000000-0000-4000-8000-000000000012';
+  const question='Verzamel bedrijfsgegevens, bestuurders en eigendomsstructuur van Financial Crime Compliance Associates; KVK 91251982. Vermeld ontbrekende informatie.';
+  const originalIntake={parsed_request:{subjects:[{id:'s1',label:'Financial Crime Compliance Associates',type:'company',identifiers:{kvk_number:'91251982'}}],capabilities:[{slug:'company.profile',subject_id:'s1',outputs:['company_details','directors','ownership_structure','sources','missing_information']}]},matches:[],selected_capabilities:['company.profile']};
+  const connectedCoverage={original_intake:originalIntake,gaps:[{subject:'Financial Crime Compliance Associates',output:'directors'},{subject:'Financial Crime Compliance Associates',output:'ownership_structure'}],limitations:[]};
+  const notices=['This price covers only the listed source calls. Not retrieved or verified: directors and ownership structure. These items remain missing.'];
+  const state={schema_version:'2',state_ref:taskRef,revision:1,expires_at:'2099-01-01T00:00:00Z',focus:{entity_refs:[],goal_refs:[]},state_token:'fixture'};
+  const saved={source:{name:'Fixture register',url:'https://registry.example.test'},data:{name:'Financial Crime Compliance Associates',kvk_number:'91251982'}};
+  const base={protocol_version:'2',request_id:requestId,intent_ref:taskRef,context_view:{connected_coverage:connectedCoverage,coverage_notices:notices},proposal:null,result:null,billing:{authorization_active:false,total_charged:'0',currency:'USD'},next_actions:[],state,errors:[]};
+  const quoted={...base,status:'requires_approval',proposal:{label:'Company details only',quote_ref:requestId,price_status:'quoted',currency:'USD',max_total_atomic:'100000',expires_at:'2099-01-01T00:00:00Z',approval_url:`https://app.apiosk.test/approve/${taskRef}`,steps:['company.profile'],step_details:[{source:saved.source}]}};
+  const payloads=[quoted,{...base,status:'partial',result:saved,context_view:{...base.context_view,results:[saved]}},{...base,status:'succeeded',result:saved,context_view:{...base.context_view,results:[saved]}}];
+  const requests=[];
+  const server=createApioskMcpServer({env:{APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'},fetchImpl:async(url,options)=>{
+    requests.push({path:url.pathname,method:options.method,body:options.body});return Response.json(payloads.shift());
+  }});
+  const client=new Client({name:'claude',version:'test'}),[a,b]=InMemoryTransport.createLinkedPair();
+  try{
+    await server.connect(b);await client.connect(a);await client.listTools();
+    for(const [name,args] of [['apiosk_discover',{question,request_id:requestId}],['apiosk_status',{task_ref:taskRef}],['apiosk_status',{task_ref:taskRef}]]){
+      const reply=await client.callTool({name,arguments:args});
+      assert.equal(reply.isError,undefined);
+      assert.deepEqual(reply.structuredContent.context_view.connected_coverage,connectedCoverage);
+      assert.deepEqual(reply.structuredContent.context_view.coverage_notices,notices);
+      const textEnvelope=reply.content.find(item=>item.type==='text'&&item.text.startsWith('{'));
+      assert.deepEqual(JSON.parse(textEnvelope.text),reply.structuredContent,'text-only hosts receive the same coverage evidence');
+      if(name==='apiosk_status')assert.deepEqual(reply.structuredContent.result,saved);
+    }
+    assert.deepEqual(requests,[{path:'/v2/discover',method:'POST',body:JSON.stringify({question,request_id:requestId})},...Array.from({length:2},()=>({path:`/v2/tasks/${taskRef}`,method:'GET',body:undefined}))]);
   }finally{await client.close();await server.close();}
 });
