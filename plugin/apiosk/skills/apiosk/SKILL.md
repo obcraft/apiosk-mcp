@@ -10,7 +10,8 @@ Use the production Apiosk MCP tools to obtain evidence for the user's question. 
 ## Choose the workflow
 
 - Use `apiosk_sources` to browse available sources and capabilities. This is free. Preserve filters when paging with the returned next offset. Catalog presence does not prove a question is executable.
-- Use `apiosk_discover` for a new data question. Preserve the exact entity, source, country and period. It returns a plan, a total price ceiling, clarification, or a supported limitation without purchasing data.
+- Use `apiosk_ask` to find sources and let the user choose one or multiple supported sources in the card. Search is free. Prepare the exact choices with the unchanged question, returned `parsed_request` and `search_id`, and `selections` containing each offered endpoint, capability, subject and declared input values. This prepares one combined price and always requires explicit approval; selecting sources never purchases data. Keep missing coverage explicit.
+- Use `apiosk_discover` when Apiosk should plan a new data question automatically. Preserve the exact entity, source, country and period. It returns a plan, clarification, or a supported limitation. A standing automatic-approval rule may authorize execution within its limits; report the actual returned authorization and charges.
 - Continue the same question through `apiosk_execute`, using only a returned `next_actions` entry and the newest complete state. Do not rediscover each step.
 - Read saved results, billing or progress with `apiosk_status`, passing only `task_ref` copied from the prior `state.state_ref`. This is free and never repurchases data.
 
@@ -19,6 +20,8 @@ Ask for missing required inputs or selection among ambiguous returned entities. 
 ## Price and approval
 
 Show the returned plan and exact total ceiling before paid work. When chatbot approval is available, direct the user to the interactive approval card. Otherwise use the returned approval URL. The `apiosk_approve` tool is app-only: never invoke it yourself, press Approve for the user, or treat a text reply or host tool permission as saved payment authorization.
+
+Expired-price refresh belongs to the card's app-only `apiosk_requote` tool. It refreshes the saved request without approving or buying; the user then reviews and approves the new price. Do not replace this action with discovery.
 
 Proceed with a paid action only when the current returned billing state confirms active authorization for the current quote. Keep state, quote reference, action ID and payment idempotency identity unchanged on an identical retry. Recover status after an interrupted request; do not start another purchase to check the first one. A pending reconciliation is an unknown payment outcome, not permission to repay. Stop future work with an offered cancel action only when asked; already dispatched charges may remain.
 
