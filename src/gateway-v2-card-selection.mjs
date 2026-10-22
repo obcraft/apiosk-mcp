@@ -53,7 +53,8 @@ function restoreSourceSelections(selections,original,refreshed){
 }
 function selectableSource(candidate,match){return candidate.availability==='supported'&&typeof(candidate.endpoint_id||candidate.endpoint?.endpoint_id)==='string'&&typeof(candidate.capability||candidate.endpoint?.capability)==='string'&&Array.isArray(candidate.endpoint?.inputs)&&!!offeredSourceOption(candidate,match)}
 function beginSourceSelection(data,matches){
- const question=sourceQuestion(data),session=JSON.stringify([question,data.catalog_version||'',data.parsed_request?.meta?.text_sha256||'']);
+ const subjects=(data.parsed_request?.subjects||[]).map(subject=>[subject.id,sourceSubjectIdentity(subject)]).sort(([a],[b])=>String(a).localeCompare(String(b)));
+ const question=sourceQuestion(data),session=JSON.stringify([question,data.catalog_version||'',data.parsed_request?.meta?.text_sha256||'',subjects]);
  const changed=session!==sourceSelectionSession;
  if(changed){selectedSources.clear();sourceDrafts.clear();sourcePrepareIdentity=null;sourcePreparedTask=null;sourceSelectionSession=session}
  sourceChoices.clear();sourceReviewButton=null;sourceSelectionCount=null;sourceSelectionQuestion=question;

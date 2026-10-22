@@ -483,3 +483,24 @@ test('a lost free related-source refresh leaves its button available for a singl
   assert.equal(choices(h).length, 3);
   assert.ok(choices(h).every(choice => !choice.checked));
 });
+
+test('ordinary free refresh clears drafts when the same subject ID now identifies a different company', async () => {
+  const data = fccaRelatedSearch(); delete data.source_options[1].endpoint;
+  const client = await host('skybridge', data), { h } = client;
+  await h.change(choices(h)[1], true);
+  const company = h.nodes.get('sections').querySelectorAll('.source-input').find(control => control.dataset.field === 'company.name');
+  await h.change(company, 'Original company private draft');
+  const refresh = h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent === 'Refresh sources');
+  const pending = refresh.onclick(); await flush();
+  const fresh = fccaRelatedSearch();
+  fresh.parsed_request.subjects[0] = { id: 's1', label: 'Different company', type: 'company', identifiers: { kvk_number: '00999999' } };
+  for (const option of fresh.source_options.slice(1)) {
+    option.input_values['company.name'] = 'Different company';
+    if ('company_registry.kvknummer' in option.input_values) option.input_values['company_registry.kvknummer'] = '00999999';
+  }
+  await client.respond(0, fresh); await pending;
+  assert.ok(choices(h).every(choice => !choice.checked));
+  assert.equal(review(h).disabled, true);
+  assert.ok(h.nodes.get('sections').querySelectorAll('.source-input').filter(control => control.dataset.field === 'company.name').every(control => control.value === 'Different company'));
+  assert.equal(client.calls().length, 1, 'the identity change never prepares or purchases');
+});
