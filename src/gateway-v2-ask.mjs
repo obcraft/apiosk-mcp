@@ -39,11 +39,13 @@ export function askRequest(name, args) {
 
 /** The card's source search view (`view: "source_search"`) from a /v2/ask answer. */
 export function presentSearch(answer) {
-  // An origin outage must never read as "no results": no Apiosk search, no view.
-  const result = answer?.searches?.apiosk, parsed = answer?.parsed_request;
+  // Preserve successful origin results while making an outage explicit.
+  let result = answer?.searches?.apiosk;
+  const parsed = answer?.parsed_request;
+  const apioskFailed = answer?.errors?.some?.(error => error?.origin === "apiosk");
   if (!Array.isArray(result?.matches)) {
-    if (!answer?.errors?.some?.(error => error?.origin === "apiosk")) throw new Error("Unexpected protocol");
-    return { protocol_version: "2", view: "source_search", parsed_request: parsed || {}, matches: [], message: "Some sources could not be searched. Try again shortly.", notice: SEARCH_NOTICE };
+    if (!apioskFailed) throw new Error("Unexpected protocol");
+    result = { matches: [] };
   }
   // A missing match is still a requested requirement. Keep it visible so a
   // source returned for one check cannot make the whole dossier look covered.
@@ -51,11 +53,24 @@ export function presentSearch(answer) {
     ? match.subject_id === capability.subject_id : (parsed?.subjects?.length || 0) <= 1 || !capability.subject_id);
   const missing = (parsed?.capabilities || []).filter(capability => !result.matches.some(match => matchesCapability(match, capability)))
     .map(capability => ({ slug: capability.slug, query: capability.name, ...(capability.subject_id ? { subject_id: capability.subject_id } : {}), apiosk: [], coinbase: [], coinbase_status: "complete" }));
-  const matches = [...result.matches, ...missing];
+  // /v2/ask waits for both independent origins. Its Apiosk rows still carry
+  // the pre-search Bazaar placeholder; merge the completed external rows by
+  // capability AND subject instead of dropping their candidates and status.
+  const external = answer?.searches?.coinbase;
+  const externalFailed = answer?.errors?.some?.(error => error?.origin === "coinbase");
+  const sameRequirement = (left, right) => left.slug === right.slug
+    && (left.subject_id === right.subject_id || ((parsed?.subjects?.length || 0) <= 1
+      && (left.subject_id == null || right.subject_id == null)));
+  const matches = [...result.matches, ...missing].map(match => {
+    const completed = external?.matches?.find(row => sameRequirement(match, row));
+    if (completed) return { ...match, coinbase: completed.coinbase || [], coinbase_status: completed.coinbase_status };
+    if (externalFailed || Array.isArray(external?.matches)) return { ...match, coinbase: [], coinbase_status: "unavailable" };
+    return match;
+  });
   const hasSources = matches.some(match => (match.apiosk?.length || 0) + (match.coinbase?.length || 0) > 0);
-  const incomplete = matches.some(match => ['pending', 'unavailable'].includes(match.coinbase_status));
-  return { protocol_version: "2", view: "source_search", parsed_request: parsed, matches,
-    ...(!hasSources && { message: incomplete ? "Some sources could not be searched. Try again shortly." : NO_RESULTS }),
+  const incomplete = apioskFailed || externalFailed || matches.some(match => ['pending', 'unavailable'].includes(match.coinbase_status));
+  return { protocol_version: "2", view: "source_search", parsed_request: parsed || {}, matches,
+    ...(incomplete ? { message: "Some sources could not be searched. Try again shortly." } : !hasSources ? { message: NO_RESULTS } : {}),
     ...(Number.isInteger(result.apiosk_sources_searched) && { apiosk_sources_searched: result.apiosk_sources_searched }),
     ...(typeof result.catalog_version === "string" && { catalog_version: result.catalog_version }), notice: SEARCH_NOTICE };
 }

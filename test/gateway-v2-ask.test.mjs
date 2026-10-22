@@ -105,6 +105,54 @@ test('an incomplete external search is not presented as a confirmed empty result
   assert.equal(result.structuredContent.message, 'Some sources could not be searched. Try again shortly.');
 });
 
+test('completed Coinbase search replaces the placeholder and preserves its executable candidate', async () => {
+  const candidate = { origin: 'coinbase', name: 'World time', availability: 'supported', endpoint };
+  const gatewayAnswer = answer({ matches: [{ slug: parsed.capabilities[0].slug, subject_id: 's1', apiosk: [], coinbase: [], coinbase_status: 'pending' }] });
+  gatewayAnswer.searches.coinbase = { matches: [{ slug: parsed.capabilities[0].slug, subject_id: 's1', coinbase: [candidate], coinbase_status: 'ready' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(gatewayAnswer) });
+  const view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.deepEqual(view.matches[0].coinbase, [candidate]);
+  assert.equal(view.matches[0].coinbase_status, 'ready');
+  assert.equal(view.message, undefined);
+});
+
+test('a completed empty external search does not tell the host to retry a pending search', async () => {
+  const gatewayAnswer = answer({ matches: [{ slug: parsed.capabilities[0].slug, apiosk: [], coinbase: [], coinbase_status: 'pending' }] });
+  gatewayAnswer.searches.coinbase = { matches: [{ slug: parsed.capabilities[0].slug, coinbase: [], coinbase_status: 'ready' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(gatewayAnswer) });
+  const view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.equal(view.matches[0].coinbase_status, 'ready');
+  assert.equal(view.message, NO_RESULTS);
+});
+
+test('external results cannot cross subjects or conceal an origin failure', async () => {
+  const request = { ...parsed, subjects: [...parsed.subjects, { ...parsed.subjects[0], id: 's2', label: 'Paris' }],
+    capabilities: [parsed.capabilities[0], { ...parsed.capabilities[0], subject_id: 's2' }] };
+  const gatewayAnswer = answer({ matches: request.capabilities.map(cap => ({ slug: cap.slug, subject_id: cap.subject_id, apiosk: [], coinbase: [], coinbase_status: 'pending' })) }, { parsed_request: request });
+  gatewayAnswer.searches.coinbase = { matches: [{ slug: parsed.capabilities[0].slug, subject_id: 's2', coinbase: [{ name: 'Paris time' }], coinbase_status: 'ready' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(gatewayAnswer) });
+  let view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.deepEqual(view.matches[0].coinbase, []);
+  assert.equal(view.matches[0].coinbase_status, 'unavailable');
+  assert.equal(view.matches[1].coinbase[0].name, 'Paris time');
+  delete gatewayAnswer.searches.coinbase;
+  gatewayAnswer.errors = [{ origin: 'coinbase', code: 'search_unavailable' }];
+  view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.ok(view.matches.every(match => match.coinbase_status === 'unavailable'));
+  assert.match(view.message, /could not be searched/);
+});
+
+test('available external candidates survive an Apiosk origin outage with an honest partial-search message', async () => {
+  const gatewayAnswer = answer({}, { status: 'partial', errors: [{ origin: 'apiosk', code: 'search_unavailable' }] });
+  delete gatewayAnswer.searches.apiosk;
+  gatewayAnswer.searches.coinbase = { matches: [{ slug: parsed.capabilities[0].slug, subject_id: 's1', coinbase: [{ name: 'World time' }], coinbase_status: 'ready' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(gatewayAnswer) });
+  const view = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.equal(view.matches[0].coinbase[0].name, 'World time');
+  assert.equal(view.matches[0].coinbase_status, 'ready');
+  assert.match(view.message, /could not be searched/);
+});
+
 test('preparing preserves the gateway clarification and does not imply approval without a plan', async () => {
   const task = { protocol_version: '2', status: 'needs_input', context_view: { conversation: [{ question: 'Time in a city', reply: 'Which city?' }] }, proposal: null, result: null, state: { state_ref: 'saved-task' }, next_actions: [{ kind: 'supply_input', label: 'City' }], errors: [] };
   const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(task) });
