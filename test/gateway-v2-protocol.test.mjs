@@ -67,3 +67,40 @@ test('gateway v2 contract routes supplier onboarding through one qualified Apios
     'one- or two-sentence summary',
   ]) assert.ok(V2_INSTRUCTIONS.includes(phrase),`missing supplier due-diligence contract: ${phrase}`);
 });
+
+test('Claude sends the complete Dutch client investigation once and receives one combined Gateway quote',async()=>{
+  const question='Via Apiosk: Verzamel de bedrijfsgegevens, bestuurders en eigendomsstructuur van Financial Crime Compliance Associates; KVK-nummer: 91251982 voor een cliëntonderzoek. Vermeld de bronnen en geef aan welke informatie ontbreekt of nog gecontroleerd moet worden.';
+  const requestId='00000000-0000-4000-8000-000000000001';
+  const taskRef='00000000-0000-4000-8000-000000000002';
+  const quoteRef='00000000-0000-4000-8000-000000000003';
+  const state={schema_version:'2',state_ref:taskRef,revision:1,expires_at:'2099-01-01T00:00:00Z',focus:{entity_refs:[],goal_refs:[]},state_token:'fixture-signed-state'};
+  // Fixture prices and sources exercise the transport contract, not live availability.
+  const steps=['Company details','Directors','Ownership structure'];
+  const stepDetails=steps.map((label,index)=>({label,source:{name:`Fixture source ${index+1}`,url:`https://source-${index+1}.example.test/`},max_cost_atomic:String((index+1)*100000)}));
+  const coverage=['Ultimate beneficial ownership still requires independent verification.'];
+  const plan={protocol_version:'2',request_id:requestId,status:'requires_approval',intent_ref:taskRef,
+    context_view:{approval_mode:'chatbot',coverage_notices:coverage},
+    proposal:{label:'Client investigation',quote_ref:quoteRef,price_status:'quoted',currency:'USD',max_total_atomic:'600000',expires_at:'2099-01-01T00:00:00Z',approval_url:`https://app.apiosk.test/approve/${taskRef}`,steps,step_details:stepDetails},
+    result:null,billing:{authorization_active:false,total_charged:'0',currency:'USD'},next_actions:[],state,errors:[]};
+  const requests=[];
+  const server=createApioskMcpServer({env:{APIOSK_GATEWAY_V2_URL:'http://127.0.0.1:8082',APIOSK_CONNECT_TOKEN:'fixture'},fetchImpl:async(url,options)=>{
+    requests.push({path:url.pathname,method:options.method,body:JSON.parse(options.body)});
+    return Response.json(plan);
+  }});
+  const client=new Client({name:'claude',version:'test'});
+  const [a,b]=InMemoryTransport.createLinkedPair();
+  try{
+    await server.connect(b);await client.connect(a);await client.listTools();
+    const result=await client.callTool({name:'apiosk_discover',arguments:{question,request_id:requestId}});
+    assert.equal(result.isError,undefined);
+    assert.deepEqual(requests,[{path:'/v2/discover',method:'POST',body:{question,request_id:requestId}}]);
+    assert.equal(result.structuredContent.status,'requires_approval');
+    assert.deepEqual(result.structuredContent.proposal,{...plan.proposal,label:'Data request'});
+    assert.deepEqual(result.structuredContent.context_view.coverage_notices,coverage);
+    assert.deepEqual(result.structuredContent.state,state);
+    assert.equal(result.structuredContent.billing.authorization_active,false);
+    assert.equal(result.structuredContent.billing.total_charged,'0');
+    assert.equal(result.content.filter(item=>item.type==='text'&&item.text.startsWith('Maximum total price:')).length,1);
+    assert.match(result.content[0].text,/Maximum total price: 0\.60 USD/);
+  }finally{await client.close();await server.close();}
+});
