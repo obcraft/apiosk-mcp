@@ -1,5 +1,6 @@
+import { resolveGatewayV2Url } from './config.mjs';
+
 /** Transport for the existing Gateway contract; it never retries a request. */
-const DEFAULT_URL = 'http://127.0.0.1:8082';
 const DEFAULT_TIMEOUT_MS = 80_000;
 const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,7 +83,7 @@ export class GatewayClient {
   #timeout;
   #maxBytes;
 
-  constructor({ baseUrl = process.env.APIOSK_GATEWAY_URL || DEFAULT_URL,
+  constructor({ baseUrl = resolveGatewayV2Url(),
     token = process.env.APIOSK_TOKEN || process.env.APIOSK_CONNECT_TOKEN || null,
     workspace, workspaceId = workspace !== undefined ? workspace : process.env.APIOSK_WORKSPACE_ID || null,
     fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -102,7 +103,7 @@ export class GatewayClient {
   get baseUrl() { return this.#base.origin; }
   get credentialKind() {
     if (!this.#token) return 'none';
-    if (/^apk_(org_live|access|live)_/.test(this.#token)) return 'connection';
+    if (/^apk_(org_live|access|live)_/.test(this.#token) || /^aw_(live|test)_/i.test(this.#token)) return 'connection';
     return 'session';
   }
 

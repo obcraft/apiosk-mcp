@@ -2,13 +2,15 @@
 
 `@apiosk/mcp` 3.0.0 brings the Apiosk **Ask** workflow to Claude, Codex and other MCP hosts: ask a question, compare matching sources, review inputs and one total, approve that request, and inspect saved results. It uses the existing Gateway for discovery, planning, prices, execution and evidence.
 
+MCP1 card URLs, connection identity, token formats and cached Ask tool signatures remain compatible. Compatibility operations stay private to cards; new model connections continue to see Ask first. Both old and new approval calls share the same durable approval record.
+
 The default is question-scoped source discovery. There is no global “browse the catalog” flow. For example, “What does ASML do?” should first call `apiosk_ask` with that question and display its matching sources; a model's general knowledge is not an Apiosk result.
 
 This repository is the canonical `obcraft/apiosk-mcp` implementation. Versioned source and manifests do not establish that this version has been deployed, published or installed in a host.
 
 ## Ask interactions and embedded components
 
-The server exposes **36 public tools and two private component operations**, saved-request resources and an Ask prompt. The original MCP1 embedded Ask components, styles and renderers are vendored in `src/ask-ui/`. The adapter connects those components to the new service; the local tester loads the same MCP resources and components. Source groups, prices, input forms, quote review, approval, status, saved results and Details use those components.
+The server exposes **36 public tools and six private component operations**, saved-request resources and an Ask prompt. The original MCP1 embedded Ask components, styles and renderers are vendored in `src/ask-ui/`. The adapter connects those components to the new service; the local tester loads the same MCP resources and components. Source groups, prices, input forms, quote review, approval, status, saved results and Details use those components.
 
 MCP Apps and ChatGPT-compatible metadata identify the embedded resources. Model-visible results carry compact source identifiers, status, input needs and the exact approval. Full component data travels separately in `_meta.apiosk_card_data`, so large source schemas and raw response trees do not flood the model context. Saved evidence remains available through the result and evidence tools.
 

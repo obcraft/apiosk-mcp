@@ -4,20 +4,19 @@ import { readConfig, CLI_HELP } from '../src/config.mjs';
 async function main() {
   const config = readConfig();
   if (config.help) { process.stdout.write(CLI_HELP); return; }
-  const [{ GatewayClient }, { StateStore, scopeKey }, { createAskService }, { startHttp, startStdio }, { withEmbeddedCards }] = await Promise.all([
-    import('../src/gateway.mjs'), import('../src/store.mjs'), import('../src/service.mjs'), import('../src/server.mjs'), import('../src/card-adapter.mjs'),
+  const [{ GatewayClient }, { StateStore, scopeKey }, { createAskService }, { startHttp, startStdio }, { withEmbeddedCards }, { withLegacyCompatibility }] = await Promise.all([
+    import('../src/gateway.mjs'), import('../src/store.mjs'), import('../src/service.mjs'), import('../src/server.mjs'), import('../src/card-adapter.mjs'), import('../src/legacy-compat.mjs'),
   ]);
   const createService = ({ token, workspace }) => {
-    const gateway = new GatewayClient({ baseUrl: config.gatewayUrl, token, workspace });
+    const gateway = new GatewayClient({ baseUrl: config.gatewayUrl, token: token || null, workspace });
     const store = new StateStore({ directory: config.stateDir, scope: scopeKey({ gatewayUrl: config.gatewayUrl, token, workspace }) });
-    return withEmbeddedCards(createAskService({ gateway, store }), { gateway, store });
+    return withLegacyCompatibility(withEmbeddedCards(createAskService({ gateway, store }), { gateway, store }), { gateway, store });
   };
   let running;
   if (config.transport === 'http') {
     running = await startHttp({ createService, host: config.host, port: config.port, allowedHosts: config.allowedHosts, allowedOrigins: config.allowedOrigins, maxBodyBytes: config.maxBodyBytes });
     process.stderr.write(`Apiosk MCP 2 listening at ${running.url}\n`);
   } else {
-    if (!config.token) throw new Error('Set APIOSK_TOKEN or APIOSK_CONNECT_TOKEN before starting the stdio server.');
     running = await startStdio({ service: await createService({ token: config.token, workspace: config.workspace }) });
   }
   let closing = false;

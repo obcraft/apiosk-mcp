@@ -49,7 +49,7 @@ test('the vendored components are byte-identical to the recorded MCP1 renderer',
 
 test('both host resources run the same complete original UI with a private result bridge', async () => {
   const { wrapped } = fixture(), resources = await wrapped.listResources();
-  assert.deepEqual(resources.map(resource => resource.uri), [CARD_URI, CHATGPT_CARD_URI]);
+  assert.deepEqual(resources.slice(0, 2).map(resource => resource.uri), [CARD_URI, CHATGPT_CARD_URI]);
   const first = (await wrapped.readResource(CARD_URI)).contents[0], second = (await wrapped.readResource(CHATGPT_CARD_URI)).contents[0];
   assert.equal(first.text, second.text);
   assert.equal(first.mimeType, 'text/html;profile=mcp-app');

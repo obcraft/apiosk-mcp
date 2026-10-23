@@ -7,7 +7,8 @@ export const CARD_URI = 'ui://apiosk/mcp-2-ask-v1.html';
 export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v1-chatgpt.html';
 export const CARD_READ_TOOL = 'apiosk_card';
 export const CARD_APPROVE_TOOL = 'apiosk_card_approve';
-export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model', 'app'] }, 'openai/outputTemplate': CHATGPT_CARD_URI };
+export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model', 'app'] }, 'openai/outputTemplate': CHATGPT_CARD_URI,
+  'openai/widgetAccessible': true, 'openai/visibility': 'public' };
 // These current catalog assets were absent from MCP1's historical image CSP.
 // Keep a fixed list; source payloads cannot grant arbitrary remote origins.
 const CURRENT_LOGO_ORIGINS = ['https://app.apiosk.com', 'https://www.bodemloket.nl', 'https://www.openwebninja.com', 'https://www.crunchbase.com'];
@@ -25,6 +26,17 @@ window.apiosk.callTool=async(name,args={})=>{
  if(next?.error&&!next?._mcp2)throw new Error(next.error.message||'The saved request could not be updated.');
  return mcp2Remember(next);
 };
+// Save live Gateway changes through the same scoped state journal before the
+// UI can act on their newer action IDs or quotes. Events themselves never buy.
+let mcp2LiveRead=null;
+async function mcp2AcceptLiveTask(next){
+ if(!next?.state?.state_ref||mcp2LiveRead)return;
+ const ref=next.state.state_ref;
+ mcp2LiveRead=window.apiosk.callTool('apiosk_status',{task_ref:ref});
+ try{const saved=await mcp2LiveRead;if(output?.state?.state_ref===ref)acceptResponse(saved)}
+ catch{showFeedback('Use Check status to refresh the saved request.')}
+ finally{mcp2LiveRead=null}
+}
 `;
 
 // Keep MCP 1's source-basket display, but use one backend-owned MCP 2 approval.
@@ -69,13 +81,31 @@ acceptResponse=function(next){
 };
 `;
 
-export function createCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
+// Cached MCP1 resources retain the MCP1 action signatures. The private-data
+// bridge also lets a current first Ask response render in those cached hosts.
+export function createLegacyCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
   return gatewayV2CardHtml(gatewayUrl)
     .replace("function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;", "function unwrap(r){if(r&&typeof r==='object'){if(r._meta?.apiosk_card_data)return r._meta.apiosk_card_data;if(r.structuredContent)return r.structuredContent;")
     .replace('o?(o.toolOutput??o.structuredContent??null):null', 'o?(o.toolResponseMetadata?.apiosk_card_data??o.toolOutput??o.structuredContent??null):null')
-    .replace('function safeLogo(url){try{const u=new URL(url);', `function safeLogo(url){try{const u=new URL(url);if(u.protocol==='https:'&&${JSON.stringify(CURRENT_LOGO_ORIGINS)}.includes(u.origin))return u.href;`)
+    .replace('function safeLogo(url){try{const u=new URL(url);', `function safeLogo(url){try{const u=new URL(url);if(u.protocol==='https:'&&${JSON.stringify(CURRENT_LOGO_ORIGINS)}.includes(u.origin))return u.href;`);
+}
+
+export function createCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
+  return createLegacyCardHtml(gatewayUrl)
+    .replace('   acceptResponse(next);\n  }catch{recover()}', '   void mcp2AcceptLiveTask(next);\n  }catch{recover()}')
     .replace('const byId=id=>', `${ADAPTER}\nconst byId=id=>`)
     .replace('const recoveredCards=new Set();', `${BASKET_ADAPTER}\nconst recoveredCards=new Set();`);
+}
+
+export function legacyCardResources(gatewayUrl, { legacyUiMime = false } = {}) {
+  const _meta = cardResources(gatewayUrl)[0]._meta;
+  const mime = skybridge => skybridge ? 'text/html+skybridge' : 'text/html;profile=mcp-app';
+  return [
+    ...Array.from({ length: 66 }, (_, index) => ({ uri: `ui://apiosk/gateway-v2-card-v${index + 1}.html`, name: 'Apiosk Ask',
+      mimeType: mime(index + 1 < 54 && legacyUiMime), _meta })),
+    ...Array.from({ length: 20 }, (_, index) => ({ uri: `ui://apiosk/gateway-v2-card-v${index + 11}-chatgpt.html`, name: 'Apiosk Ask for ChatGPT',
+      mimeType: mime(true), _meta })),
+  ];
 }
 
 export function cardResources(gatewayUrl) {

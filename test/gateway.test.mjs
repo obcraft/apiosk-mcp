@@ -4,7 +4,7 @@ import { GatewayClient, GatewayError } from '../src/gateway.mjs';
 
 const token = 'apk_access_test_credential';
 const workspaceId = '12345678-1234-1234-1234-123456789012';
-const client = (options = {}) => new GatewayClient({ token, workspaceId: null, ...options });
+const client = (options = {}) => new GatewayClient({ baseUrl: 'http://127.0.0.1:8082', token, workspaceId: null, ...options });
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 
 test('uses exact Gateway auth/workspace headers and preserves signed request payload', async () => {
@@ -20,6 +20,30 @@ test('uses exact Gateway auth/workspace headers and preserves signed request pay
   assert.deepEqual(JSON.parse(request.body), body);
   assert.equal(gateway.credentialKind, 'connection');
   assert.equal(JSON.stringify(gateway).includes(token), false);
+});
+
+test('legacy connect credentials retain connection routing and App JWTs retain session routing', () => {
+  for (const token of ['apk_access_fixture', 'apk_live_fixture', 'apk_org_live_fixture', 'aw_live_fixture', 'aw_test_fixture', 'AW_LIVE_fixture']) {
+    assert.equal(client({ token }).credentialKind, 'connection');
+  }
+  assert.equal(client({ token: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature' }).credentialKind, 'session');
+  assert.equal(client({ token: null }).credentialKind, 'none');
+});
+
+test('direct Gateway construction follows the canonical V2 URL and ignores the OAuth Gateway URL', () => {
+  const previous = { v2: process.env.APIOSK_GATEWAY_V2_URL, oauth: process.env.APIOSK_GATEWAY_URL };
+  try {
+    process.env.APIOSK_GATEWAY_URL = 'https://oauth.example/agent-gateway';
+    process.env.APIOSK_GATEWAY_V2_URL = 'https://data.example';
+    assert.equal(new GatewayClient({ token, workspaceId: null }).baseUrl, 'https://data.example');
+    delete process.env.APIOSK_GATEWAY_V2_URL;
+    assert.equal(new GatewayClient({ token, workspaceId: null }).baseUrl, 'https://gateway.apiosk.com');
+  } finally {
+    if (previous.v2 === undefined) delete process.env.APIOSK_GATEWAY_V2_URL;
+    else process.env.APIOSK_GATEWAY_V2_URL = previous.v2;
+    if (previous.oauth === undefined) delete process.env.APIOSK_GATEWAY_URL;
+    else process.env.APIOSK_GATEWAY_URL = previous.oauth;
+  }
 });
 
 test('never retries an ambiguous mutation, including authentication and server errors', async () => {

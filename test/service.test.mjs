@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StateStore } from '../src/store.mjs';
-import { GatewayError } from '../src/gateway.mjs';
+import { GatewayClient, GatewayError } from '../src/gateway.mjs';
 import { createAskService } from '../src/service.mjs';
 
 const TASK_ID = '11111111-1111-4111-8111-111111111111';
@@ -127,6 +127,32 @@ async function refused(operation) {
   try { const result = await operation(); assert.equal(result?.isError, true, `Expected refusal, received ${JSON.stringify(result)}`); return textOf(result); }
   catch (error) { if (error.code === 'ERR_ASSERTION') throw error; return String(error.message); }
 }
+
+test('MCP1 legacy connect tokens use the same public Ask wire contract and preserve returned options', async t => {
+  for (const token of ['apk_access_fixture', 'aw_live_fixture', 'aw_test_fixture']) {
+    const directory = await mkdtemp(join(tmpdir(), 'apiosk-legacy-connection-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const store = new StateStore({ directory, scope: 'legacy-connect' });
+    const calls = [], found = discovery();
+    const gateway = new GatewayClient({ baseUrl: 'https://gateway.example', token, workspaceId: null,
+      fetchImpl: async (url, options) => {
+        calls.push({ path: url.pathname, method: options.method, headers: options.headers, body: JSON.parse(options.body) });
+        return Response.json(found);
+      } });
+    const service = createAskService({ gateway, store });
+    const question = 'What does ASML do?';
+    const result = await service.tools.find(tool => tool.name === 'apiosk_ask').handler({ question });
+    assert.equal(result.isError, undefined);
+    assert.equal(calls.length, 1, 'Legacy discovery must not use App-only parse or search routes');
+    assert.equal(calls[0].path, '/v2/ask');
+    assert.equal(calls[0].method, 'POST');
+    assert.equal(calls[0].headers.get('authorization'), `Bearer ${token}`);
+    assert.deepEqual(calls[0].body, { question });
+    assert.deepEqual(stateOf(result).discovery, found);
+    assert.deepEqual(stateOf(result).sources.map(source => source.endpoint_id), found.apis.map(source => source.endpoint_id));
+    assert.deepEqual(stateOf(result).sources.map(source => source.input_values), found.apis.map(source => source.input_values));
+  }
+});
 
 test('session discovery sends App search bodies and retains related offered endpoints absent from matches', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'apiosk-session-discovery-'));

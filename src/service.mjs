@@ -458,6 +458,41 @@ export function createAskService({ gateway, store }) {
   tools.unshift(...tools.splice(askIndex, 1));
   return {
     tools, instructions: INSTRUCTIONS,
+    // Compatibility calls receive already-authorized Gateway responses. Adopt
+    // those snapshots so the current cards and saved-result tools can resume
+    // them without creating replacement purchases.
+    async adoptCompatibilityResult(value, { question = '', discovery = false, authorized = false } = {}) {
+      if (discovery) {
+        const state = await store.create({ type: 'ask', question, mode: 'sources', status: value.errors?.length ? 'partial_discovery' : 'sources_ready',
+          discovery: value, sources: sourceRows(value), tasks: [], active_task_ids: [], selected: [], messages: [{ role: 'user', text: question }] });
+        return state.id;
+      }
+      const taskId = value.purchase_id || value.state?.state_ref;
+      if (!taskId || !/^[a-zA-Z0-9_-]{1,80}$/.test(taskId)) throw new Error('Invalid saved Gateway task.');
+      const existing = (await store.list()).find(state => state.type === 'ask' && state.tasks?.some(task => task.id === taskId));
+      const key = existing?.id || `legacy_${taskId}`;
+      return store.withLock(key, async () => {
+        const state = await store.get(key) || { id: key, type: 'ask', created_at: new Date().toISOString(), question: question || value.context_view?.question || 'Saved Apiosk request',
+          mode: 'sources', sources: [], tasks: [], active_task_ids: [taskId], selected: [], messages: [] };
+        const previous = state.tasks.find(task => task.id === taskId);
+        if (previous && Number(value.state?.revision ?? 0) < Number(previous.view.state?.revision ?? 0)) return key;
+        const task = { ...previous, id: taskId, kind: value.purchase_id ? 'external' : 'endpoint', view: value };
+        const priorQuote = previous?.view.quote?.quote_ref || previous?.view.proposal?.quote_ref;
+        const nextQuote = value.quote?.quote_ref || value.proposal?.quote_ref;
+        if (!authorized && quote(task) && priorQuote && nextQuote !== priorQuote) {
+          if (task.approval_attempt) { task.approval_history = [...(task.approval_history || []), task.approval_attempt]; delete task.approval_attempt; }
+          state.approved_id = null; state.approved_quotes = null;
+        }
+        if (authorized || value.billing?.authorization_active || value.context_view?.auto_approval?.applied) {
+          task.approval_attempt ||= { status: 'confirmed', legacy: true };
+          state.approved_id ||= `legacy_${value.quote?.quote_ref || value.proposal?.quote_ref || taskId}`;
+        }
+        state.tasks = previous ? state.tasks.map(saved => saved.id === taskId ? task : saved) : [...state.tasks, task]; state.status = value.status;
+        if (!state.approved_id && ['ready', 'requires_approval'].includes(value.status)) setApproval(state);
+        else state.approval = null;
+        await store.save(state); return key;
+      });
+    },
     prompts: [{ name: 'ask', description: 'Source-backed Ask workflow with explicit price approval.', arguments: [{ name: 'question', required: true }], get: async ({ question }) => ({ messages: [{ role: 'user', content: { type: 'text', text: `Use Apiosk to answer: ${question}\nShow relevant sources, coverage and the total before requesting approval. Reuse saved data where available.` } }] }) }],
     async listResources() { return (await store.list()).filter(s => s.type === 'ask').map(s => ({ uri: `apiosk://requests/${s.id}`, name: s.question.slice(0, 100), mimeType: 'application/json', description: 'Saved Ask conversation, source evidence and receipts; no new source calls.' })); },
     async readResource(uri) {

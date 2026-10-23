@@ -40,7 +40,7 @@ async function inMemory(t, service = fixtureService()) {
 
 test('SDK initialize, tools/list and tools/call retain structured results and UI metadata', async t => {
   const client = await inMemory(t);
-  assert.equal(client.getServerVersion().name, 'apiosk-mcp-2');
+  assert.equal(client.getServerVersion().name, 'apiosk-mcp');
   assert.ok(client.getServerCapabilities().resources);
   assert.match(client.getInstructions(), /explicit approval/);
   const { tools } = await client.listTools();

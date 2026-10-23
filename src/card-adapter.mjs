@@ -1,6 +1,6 @@
 import { presentSearch } from './ask-ui/gateway-v2-ask.mjs';
 import { resultWithPages } from './saved-pages.mjs';
-import { CARD_URI, CHATGPT_CARD_URI, CARD_READ_TOOL, CARD_APPROVE_TOOL, cardToolMeta, cardResources, createCardHtml } from './card-ui.mjs';
+import { CARD_READ_TOOL, CARD_APPROVE_TOOL, cardToolMeta, cardResources, legacyCardResources, createCardHtml, createLegacyCardHtml } from './card-ui.mjs';
 
 const cardNames = new Set(['apiosk_ask', 'apiosk_sources', 'apiosk_prepare', 'apiosk_approve', 'apiosk_status', 'apiosk_requote', 'apiosk_continue', 'apiosk_result', 'apiosk_follow_up', 'apiosk_retry_search', 'apiosk_chats', 'apiosk_source_selection', 'apiosk_analysis_quote']);
 const readOperations = ['apiosk_ask', 'apiosk_sources', 'apiosk_external', 'apiosk_status', 'apiosk_execute', 'apiosk_requote', 'apiosk_discover', 'prepare_basket', 'status_basket', 'requote_basket', 'retry_preparation'];
@@ -87,32 +87,65 @@ export function sourceCard(state) {
   return view;
 }
 
-function taskCard(state, task) {
-  const raw = resultWithPages(task);
+export function decorateTaskView(view, gatewayUrl) {
+  const raw = structuredClone(view);
+  if (gatewayUrl) {
+    const eventsPath = raw.context_view?.events_path;
+    if (typeof eventsPath === 'string' && eventsPath.startsWith(`/v2/tasks/${raw.state?.state_ref}/events?`)) raw.context_view.events_url = new URL(eventsPath, gatewayUrl).href;
+    // Same saved-download decoration as the original runtime. The signed
+    // paths stay within Gateway; this is presentation, never a new fetch.
+    const documents = [raw.context_view, ...(raw.context_view?.conversation || []).map(turn => turn.output), raw.result,
+      ...(raw.context_view?.results || []), ...(raw.context_view?.conversation || []).flatMap(turn => [turn.output?.result, ...(turn.output?.results || [])])];
+    for (const document of documents) {
+      const report = document?.report;
+      if (typeof report?.download_path === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/(?:results|reports)\/[0-9a-f-]+\/report\.pdf\?/.test(report.download_path)) report.url = new URL(report.download_path, gatewayUrl).href;
+      if (typeof report?.evidence_download_path === 'string' && /^\/v2\/tasks\/[0-9a-f-]+\/reports\/[0-9a-f-]+\/evidence\.zip\?/.test(report.evidence_download_path)) report.evidence_url = new URL(report.evidence_download_path, gatewayUrl).href;
+    }
+  }
+  for (const key of ['proposal', 'billing']) if (raw[key]?.currency === 'USDC') raw[key].currency = 'USD';
+  if (raw.result?.currency === 'USDC') raw.result.currency = 'USD';
+  return raw;
+}
+
+function taskCard(state, task, gatewayUrl) {
+  const raw = decorateTaskView(resultWithPages(task), gatewayUrl);
   if (task.kind === 'external') return { ...raw, protocol_version: '2', view: 'external_purchase',
     result_present: raw.result_present ?? raw.result != null };
+  const selection = state.discovery?.search_id && state.selected?.length ? sourceCard(state) : null;
   // The exact Gateway task stays authoritative. Explicit card approval is
   // mapped to MCP 2, and execution continuations only resume prior consent.
   return { ...raw, protocol_version: '2', ...(raw.proposal && !state.approval && !task.approval_attempt
     ? { proposal: { ...raw.proposal, approval_url: null } } : {}),
-    context_view: { ...raw.context_view, approval_mode: 'chatbot', execution_mode: 'server' } };
+    context_view: { ...raw.context_view, ...(selection ? { source_selection: {
+      can_choose: !task.approval_attempt, question: state.question, search_id: selection.search_id, parsed_request: selection.parsed_request,
+      options: selection.source_options, original_intake: selection, selections: selection.selected_sources,
+    }, selected_sources: selection.selected_sources } : {}), approval_mode: 'chatbot', execution_mode: 'server' } };
 }
 
-export function presentCard(state, preferredTaskId) {
+export function presentCard(state, preferredTaskId, gatewayUrl) {
   const marker = { request_id: state.id, approval: state.approval || null };
   const selected = preferredTaskId ? state.tasks.find(task => task.id === preferredTaskId) : null;
   if (preferredTaskId && !selected) fail('The task is not part of this saved Ask request.');
-  if (!selected && state.follow_up_clarification) return { protocol_version: '2', view: 'conversation', kind: 'clarification',
-    question: state.follow_up_clarification.question, message: state.follow_up_clarification.message, _mcp2: marker };
+  if (!selected && state.follow_up_clarification) {
+    const task = state.tasks.find(task => task.kind === 'endpoint');
+    if (task) {
+      const current = taskCard(state, task, gatewayUrl), clarification = state.follow_up_clarification;
+      return { ...current, request_id: state.id, _mcp2: marker, status: 'needs_input', next_actions: [], proposal: null,
+        context_view: { ...current.context_view, clarification: { message: clarification.message },
+          conversation: [...(current.context_view?.conversation || []), { question: clarification.question, reply: clarification.message }] } };
+    }
+    return { protocol_version: '2', view: 'conversation', kind: 'clarification', question: state.follow_up_clarification.question,
+      message: state.follow_up_clarification.message, _mcp2: marker };
+  }
   const active = state.tasks.filter(task => state.active_task_ids.includes(task.id));
   const visible = selected ? [selected] : active;
   const incomplete = !selected && !!state.pending_prepare;
-  if (visible.length === 1 && !incomplete) return { ...taskCard(state, visible[0]), request_id: state.id, _mcp2: marker };
+  if (visible.length === 1 && !incomplete) return { ...taskCard(state, visible[0], gatewayUrl), request_id: state.id, _mcp2: marker };
   if (visible.length > 1 || incomplete) return { protocol_version: '2', view: 'source_basket', request_id: state.id,
     question: state.question, search: { ...sourceCard(state), _mcp2: marker }, _mcp2: marker,
     entries: [...visible.map(task => ({ kind: task.kind === 'external' ? 'external' : 'local',
       label: task.view?.source?.name || task.view?.context_view?.question || (task.kind === 'external' ? 'External source' : 'Selected sources'),
-      request_id: task.id, response: { ...taskCard(state, task), _mcp2: marker },
+      request_id: task.id, response: { ...taskCard(state, task, gatewayUrl), _mcp2: marker },
       approval_submitted: !!task.approval_attempt, uncertain: ['dispatching', 'outcome_unknown'].includes(task.approval_attempt?.status),
       error: task.approval_attempt?.error?.message })), ...(incomplete ? [{ kind: 'local', label: 'Remaining source prices',
       request_id: state.pending_prepare.request_id, error: state.error?.message || 'Price preparation is incomplete. Retry the saved selection.' }] : [])] };
@@ -120,7 +153,7 @@ export function presentCard(state, preferredTaskId) {
 }
 
 /** The original components run against the new service, never its old runtime. */
-export function withEmbeddedCards(service, { store, gateway }) {
+export function withEmbeddedCards(service, { store, gateway, legacyUiMime = false }) {
   const core = new Map(service.tools.map(tool => [tool.name, tool]));
   const load = async requestId => {
     const state = await store.get(requestId);
@@ -131,12 +164,14 @@ export function withEmbeddedCards(service, { store, gateway }) {
     const target = core.get(name);
     if (!target) fail('This operation is unavailable in MCP 2.');
     const result = await target.handler(args, context);
-    if (result?.isError) fail(result.structuredContent?.error?.message || 'The request could not be completed.');
+    if (result?.isError) throw Object.assign(new Error(result.structuredContent?.error?.message || 'The request could not be completed.'), {
+      gatewayError: result.structuredContent?.error, resultMeta: result._meta,
+    });
     return result;
   };
   const decorate = async (response, requestId, preferredTaskId) => {
     if (response?.isError || !requestId) return response;
-    const state = await load(requestId), card = presentCard(state, preferredTaskId);
+    const state = await load(requestId), card = presentCard(state, preferredTaskId, gateway.baseUrl);
     const summary = compact(state, card);
     return { ...response, structuredContent: summary, _meta: { ...response?._meta, apiosk_card_data: card },
       content: [{ type: 'text', text: state.approval
@@ -193,6 +228,10 @@ export function withEmbeddedCards(service, { store, gateway }) {
         if (preferredTaskId && !state.tasks.some(task => task.id === preferredTaskId)) fail('Task does not belong to this saved request.');
         response = await invoke('apiosk_status', { request_id }, context);
       } else if (operation === 'apiosk_requote' || operation === 'requote_basket') {
+        if (operation === 'apiosk_requote') {
+          preferredTaskId = args.state?.state_ref;
+          if (!state.tasks.some(task => task.id === preferredTaskId)) fail('Task does not belong to this saved request.');
+        }
         response = await invoke('apiosk_requote', { request_id }, context);
       } else if (operation === 'apiosk_external') {
         const source = state.sources.find(source => source.api_id === args.api_id && source.origin !== 'apiosk');
@@ -227,10 +266,18 @@ export function withEmbeddedCards(service, { store, gateway }) {
       } else if (operation === 'apiosk_sources') {
         response = await invoke('apiosk_sources', { request_id }, context);
       } else if (operation === 'apiosk_discover') {
-        response = await invoke('apiosk_follow_up', { request_id, question: args.question }, context);
+        const prefix = state.follow_up_clarification && `${state.follow_up_clarification.question}\n\nUser clarification: `;
+        const question = prefix && args.question?.startsWith(prefix) ? args.question.slice(prefix.length) : args.question;
+        response = await invoke('apiosk_follow_up', { request_id, question }, context);
       } else fail('This card action is not available in the Ask workflow.');
       return decorate(response, responseRequest(response, request_id), preferredTaskId);
-    } catch (cause) { return error(cause.message || 'This card action could not be completed.'); }
+    } catch (cause) {
+      const response = error(cause.message || 'This card action could not be completed.');
+      if (cause.gatewayError?.code) response.structuredContent.error.code = cause.gatewayError.code;
+      if (Number.isInteger(cause.gatewayError?.status)) response.structuredContent.error.status = cause.gatewayError.status;
+      if (cause.resultMeta) response._meta = cause.resultMeta;
+      return response;
+    }
   }
   const tools = service.tools.map(tool => !cardNames.has(tool.name) ? tool : ({ ...tool, _meta: { ...tool._meta, ...cardToolMeta },
     async handler(args, context) {
@@ -252,22 +299,24 @@ export function withEmbeddedCards(service, { store, gateway }) {
   tools.push({ name: CARD_READ_TOOL, title: 'Update this Ask card', description: 'Private embedded Ask UI operation. Uses only the card’s saved request. Never authorizes a purchase.',
     inputSchema: object({ request_id: reference, operation: { enum: readOperations }, args: arbitrary }, ['request_id', 'operation', 'args']),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
-    _meta: { ui: { resourceUri: CARD_URI, visibility: ['app'] }, 'openai/visibility': 'private', 'openai/outputTemplate': CHATGPT_CARD_URI },
+    _meta: { ui: { visibility: ['app'] }, 'openai/visibility': 'private', 'openai/widgetAccessible': true },
     handler: (args, context) => cardOperation(args, context, false) });
   tools.push({ name: CARD_APPROVE_TOOL, title: 'Approve the displayed Ask total', description: 'Private embedded UI action. The person must click the exact displayed approval. It never accepts consent inferred from a data question.',
     inputSchema: object({ request_id: reference, operation: { enum: ['apiosk_approve', 'apiosk_external_approve', 'approve_basket'] }, args: arbitrary,
       approval: object({ approval_id: { type: 'string' }, currency: { type: 'string' }, max_total_atomic: { type: 'string', pattern: '^(0|[1-9][0-9]*)$' },
         expires_at: { type: 'string' }, quotes: { type: 'array' }, notice: { type: 'string' } }, ['approval_id', 'currency', 'max_total_atomic']) }, ['request_id', 'operation', 'args', 'approval']),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
-    _meta: { ui: { resourceUri: CARD_URI, visibility: ['app'] }, 'openai/visibility': 'private', 'openai/outputTemplate': CHATGPT_CARD_URI },
+    _meta: { ui: { visibility: ['app'] }, 'openai/visibility': 'private', 'openai/widgetAccessible': true },
     handler: (args, context) => cardOperation(args, context, true) });
-  const resources = cardResources(gateway.baseUrl);
+  const resources = cardResources(gateway.baseUrl), aliases = legacyCardResources(gateway.baseUrl, { legacyUiMime });
+  const guide = { uri: 'apiosk://v2/host-contract', name: 'Apiosk Ask chatbot instructions', mimeType: 'text/markdown' };
   return { ...service, tools,
-    async listResources() { return [...resources, ...await service.listResources()]; },
+    async listResources() { return [...resources, guide, ...await service.listResources()]; },
     async readResource(uri, context) {
-      const resource = resources.find(resource => resource.uri === uri);
+      if (uri === guide.uri) return { contents: [{ ...guide, text: service.instructions || 'Use apiosk_ask for a new question. Review sources and the exact total before explicit approval.' }] };
+      const resource = [...resources, ...aliases].find(resource => resource.uri === uri);
       if (!resource) return service.readResource(uri, context);
-      return { contents: [{ ...resource, text: createCardHtml(gateway.baseUrl) }] };
+      return { contents: [{ ...resource, text: resources.includes(resource) ? createCardHtml(gateway.baseUrl) : createLegacyCardHtml(gateway.baseUrl) }] };
     },
   };
 }
