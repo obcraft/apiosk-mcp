@@ -68,6 +68,8 @@ Reference: [Google Search API](https://serpapi.com/search-api) and
   deployment or installed Claude/ChatGPT acceptance.
 - Graphify AST index refreshed and both repository diffs pass whitespace checks.
 
-These changes are local. Production deployment and reconnecting installed hosts
-have not been performed. The SerpApi key is configured only in the ignored
-local Gateway environment; it is not included in source or test artifacts.
+Production deployment is separate from these implementation checks. Deploy
+Gateway first, configure its SerpApi secret, then deploy MCP and verify the live
+tool catalog and card resources. Installed hosts must refresh their tool
+catalog. The SerpApi key belongs only in ignored local configuration and the
+Gateway's encrypted production secrets, never in source or test artifacts.
