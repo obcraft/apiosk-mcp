@@ -33,14 +33,25 @@
  */
 export const APIOSK_UI_BRIDGE = `
 (()=>{
-const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,taskSearchIdentity=null,pending=new Map(),rpcId=0,mcp=false,host={};
+const listeners=[],inputListeners=[];let data=null,input=null,dataKey=null,localState=null,taskSearchIdentity=null,localViewOrigin=null,pending=new Map(),rpcId=0,mcp=false,host={};
 function applyTheme(theme){if(theme!=='light'&&theme!=='dark')return;document.documentElement.dataset.theme=theme;document.documentElement.style.colorScheme=theme}
 applyTheme(window.openai?.theme);
 function sourceSearchIdentity(value){if(value?.view!=='source_search')return null;return JSON.stringify([value.question||null,value.search_id||null,value.catalog_version||null,value.parsed_request?.meta?.text_sha256||value.parsed_request||null,value.parsed_request?.meta?.parsed_at||null])}
+// Match the original host output, not just a source name. A different search,
+// purchase or later status must beat an unrelated saved widget snapshot.
+function viewOrigin(value){
+ const search=sourceSearchIdentity(value);if(search)return search;
+ if(value?.view==='external_source')return JSON.stringify([value.view,value.api_id,value.source]);
+ if(value?.view==='external_purchase')return JSON.stringify([value.view,value.purchase_id,value.status,value.quote,value.billing,value.result,value.result_present,value.result_truncated,value.error]);
+ return null;
+}
+function basketSearch(value){return value?.view==='source_basket'?value.search:value?.basket_parent?.view==='source_basket'?value.basket_parent.search:value?.basket_search}
+function cachedView(value){return ['source_basket','external_source','external_purchase'].includes(value?.view)||!!value?.basket_parent||value?.view==='source_search'&&(Array.isArray(value.selected_sources)||Array.isArray(value.selected_external_sources))}
+
 // Hosts may resend the original tool snapshot when widget state or layout
 // changes. Replaying it would overwrite a newer in-card tool response and
 // cancel the execution timer immediately after approval.
-function emit(v){if(v==null)return;const searchIdentity=sourceSearchIdentity(v);if(searchIdentity&&searchIdentity===taskSearchIdentity&&data?.state?.state_ref)return;v=restoredView(v);if(localState?.state_ref===v?.state?.state_ref&&Number(v?.state?.revision)<=Number(localState?.revision))return;if(data?.state?.state_ref&&data.state.state_ref===v?.state?.state_ref&&Number(v.state.revision)<Number(data.state.revision))return;let key;try{key=JSON.stringify(v)}catch(e){}if(key!==undefined&&key===dataKey)return;if(sourceSearchIdentity(v)){localState=null;taskSearchIdentity=null}dataKey=key;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
+function emit(v){if(v==null)return;const searchIdentity=sourceSearchIdentity(v);if(searchIdentity&&searchIdentity===taskSearchIdentity&&data?.state?.state_ref)return;if(localViewOrigin&&viewOrigin(v)===localViewOrigin&&cachedView(data))return;const restored=restoredView(v);if(restored!==v)v=restored;else if(localViewOrigin&&viewOrigin(v)!==localViewOrigin)localViewOrigin=null;if(localState?.state_ref===v?.state?.state_ref&&Number(v?.state?.revision)<=Number(localState?.revision))return;if(data?.state?.state_ref&&data.state.state_ref===v?.state?.state_ref&&Number(v.state.revision)<Number(data.state.revision))return;let key;try{key=JSON.stringify(v)}catch(e){}if(key!==undefined&&key===dataKey)return;if(sourceSearchIdentity(v)){localState=null;taskSearchIdentity=null}dataKey=key;data=v;for(const fn of listeners){try{fn(v)}catch(e){}}}
 function emitInput(v){if(v==null)return;input=v;for(const fn of inputListeners){try{fn(v)}catch(e){}}}
 function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;
  if(Array.isArray(r.content))for(const block of r.content){if(block?.type==='text'&&typeof block.text==='string'){try{const value=JSON.parse(block.text);if(value&&typeof value==='object')return value}catch(e){}}}}
@@ -63,10 +74,11 @@ window.addEventListener('message',event=>{if(event.source!==window.parent)return
  // controls; only a Gateway response may set status=cancelled.
  if(msg.method==='ui/notifications/tool-cancelled'){return}});
 // ---- OpenAI Apps SDK: globals plus an event ---------------------------------
-function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result,savedSearch=o?.widgetState?.privateContent?.apioskSourceSearchIdentity;
+function restoredView(raw){const o=window.openai,saved=o?.widgetState?.privateContent?.apioskResult??o?.widgetState?.result,savedSearch=o?.widgetState?.privateContent?.apioskSourceSearchIdentity,savedOrigin=o?.widgetState?.privateContent?.apioskViewOrigin;
  // Keep the last server-returned view for this card across remounts. This is
  // a display cache only: the card still recovers server state and never starts
  // a paid step from mounting or from persisted widget state.
+ if(cachedView(saved)&&savedOrigin&&savedOrigin===viewOrigin(raw)){localViewOrigin=savedOrigin;return saved}
  if(saved?.state?.state_ref&&((saved.state.state_ref===raw?.state?.state_ref&&Number(saved.state.revision)>=Number(raw.state.revision))||(savedSearch&&sourceSearchIdentity(raw)===savedSearch))){taskSearchIdentity=savedSearch||null;return saved}
  return raw}
 function openaiData(){const o=window.openai;return o?(o.toolOutput??o.structuredContent??null):null}
@@ -98,9 +110,10 @@ const api={
   // In-card tool responses are newer than the original host snapshot, even
   // when saving consent did not change the task revision. Explicit server
   // refreshes still render directly; this guard only rejects host replays.
-  if(value?.state){taskSearchIdentity=sourceSearchIdentity(data)||taskSearchIdentity;data=value;localState=value.state;try{dataKey=JSON.stringify(value)}catch(e){}}
+  if(cachedView(value)){localViewOrigin=sourceSearchIdentity(basketSearch(value))||sourceSearchIdentity(value)||localViewOrigin||viewOrigin(data);data=value;localState=value.state||null;try{dataKey=JSON.stringify(value)}catch(e){}}
+  else if(value?.state){localViewOrigin=null;taskSearchIdentity=sourceSearchIdentity(data)||taskSearchIdentity;data=value;localState=value.state;try{dataKey=JSON.stringify(value)}catch(e){}}
   else if(sourceSearchIdentity(value)){data=value;localState=null;taskSearchIdentity=null;try{dataKey=JSON.stringify(value)}catch(e){}}
-  let stored=false;if(window.openai?.setWidgetState){try{window.openai.setWidgetState({...window.openai.widgetState,modelContent:{status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing},privateContent:{...window.openai.widgetState?.privateContent,apioskResult:value,apioskSourceSearchIdentity:taskSearchIdentity}});stored=true}catch(e){}}
+  let stored=false;if(window.openai?.setWidgetState){try{window.openai.setWidgetState({...window.openai.widgetState,modelContent:{status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing},privateContent:{...window.openai.widgetState?.privateContent,apioskResult:value,apioskSourceSearchIdentity:taskSearchIdentity,apioskViewOrigin:localViewOrigin}});stored=true}catch(e){}}
   if(mcp&&host.updateModelContext){const summary={status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,result:value?.result,errors:value?.errors};let contextText=JSON.stringify(summary);if(contextText.length>24000)contextText=JSON.stringify({status:value?.status,state_ref:value?.state?.state_ref,billing:value?.billing,note:'Read the saved task to retrieve its result.'});await rpc('ui/update-model-context',{content:[{type:'text',text:contextText}],structuredContent:value});return true}
   return stored},
  // Cards grow when a list renders. A host sizing an iframe once shows the first

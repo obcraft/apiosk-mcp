@@ -48,6 +48,7 @@ const ready = () => ({
   context_view: { execution_enabled: true, approval_mode: 'chatbot', execution_mode: 'server', worker_active: false },
   next_actions: [{ action_id: 'run-selected', kind: 'execute_quoted_step' }],
 });
+const refreshArgs = (data = search(), search_id = data.search_id) => ({question:data.question,refresh:{parsed_request:data.parsed_request,search_id}});
 const choices = h => h.nodes.get('sections').querySelectorAll('.source-choice');
 const review = h => h.nodes.get('sections').querySelector('.review-sources');
 const approve = h => h.nodes.get('sections').querySelectorAll('button').find(button => button.textContent.startsWith('Approve up to'));
@@ -272,7 +273,7 @@ test('cached search results without authoritative source options offer a free re
   const refresh=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Refresh sources');
   assert.ok(refresh);
   const pending=refresh.onclick();await flush();
-  assert.deepEqual(client.calls()[0].args,{question});
+  assert.deepEqual(client.calls()[0].args,refreshArgs());
   await client.respond(0,search());await pending;
   assert.equal(choices(h).length,2);
 });
@@ -286,7 +287,7 @@ test('expired source proof preserves the choice and offers a free search refresh
   const refresh=h.nodes.get('feedback-actions').querySelectorAll('button').find(button=>button.textContent==='Refresh sources');
   assert.ok(refresh);
   const refreshing=refresh.onclick();await flush();
-  assert.deepEqual(client.calls()[1].args,{question});
+  assert.deepEqual(client.calls()[1].args,refreshArgs());
   assert.equal(client.calls()[1].name,'apiosk_ask');
   await client.respond(1,{...search(),search_id:'fresh-signed-proof'});await refreshing;
   assert.equal(choices(h)[0].checked,true);
@@ -331,7 +332,7 @@ for (const kind of ['skybridge', 'mcp-apps']) {
     assert.ok(approve(h));
     const change = changeSources(h), pending = change.onclick(); await flush(); await change.onclick();
     assert.equal(client.calls().length, 1, 'double click refreshes once');
-    assert.deepEqual({ name: client.calls()[0].name, args: client.calls()[0].args }, { name: 'apiosk_ask', args: { question } });
+    assert.deepEqual({ name: client.calls()[0].name, args: client.calls()[0].args }, { name: 'apiosk_ask', args: refreshArgs(search(),'saved-signed-proof') });
     const fresh = search(); fresh.search_id = 'fresh-signed-proof'; fresh.catalog_version = 'catalog-2';
     for (const option of fresh.source_options) delete option.source.endpoint;
     fresh.source_options.push({ source: { ...registry, endpoint_id: 'related-hidden-source', endpoint: undefined }, subject_id: 'acme', endpoint: { ...registry.endpoint, endpoint_id: 'related-hidden-source' } });
@@ -356,7 +357,7 @@ for (const kind of ['skybridge', 'mcp-apps']) {
     assert.equal(changeSources(h).disabled, false);
     assert.match(h.nodes.get('feedback-text').textContent, /could not be refreshed/);
     const retry = changeSources(h).onclick(); await flush();
-    assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [0, 1].map(() => ({ name: 'apiosk_ask', args: { question } })));
+    assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [0, 1].map(() => ({ name: 'apiosk_ask', args: refreshArgs(search(),'saved-signed-proof') })));
     await client.respond(1, search()); await retry;
     assert.deepEqual(choices(h).map(choice => choice.checked), [true, true]);
   });
@@ -446,7 +447,7 @@ test('a saved related choice refreshes freely and restores its schema-bound sour
   quote.context_view.selected_sources = [{ endpoint_id: fresh.source_options[2].source.endpoint_id, capability: fresh.source_options[2].source.capability, subject_id: 's1', input: { 'company.name': 'FCCA saved spelling' } }];
   const client = await host('skybridge', quote), { h } = client;
   const pending = changeSources(h).onclick(); await flush();
-  assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [{ name: 'apiosk_ask', args: { question: fresh.question } }]);
+  assert.deepEqual(client.calls().map(call => ({ name: call.name, args: call.args })), [{ name: 'apiosk_ask', args: refreshArgs(fresh) }]);
   await client.respond(0, fresh); await pending;
   assert.deepEqual(choices(h).map(choice => choice.checked), [false, false, true]);
   const reviewing = review(h).onclick(); await flush();
@@ -478,7 +479,7 @@ test('a lost free related-source refresh leaves its button available for a singl
   await h.tick(0); await h.tick(350); await h.tick(2000);
   assert.equal(client.calls().length, 1); assert.equal(refresh.disabled, false);
   const retry = refresh.onclick(); await flush();
-  assert.deepEqual(client.calls()[1].args, { question: data.question });
+  assert.deepEqual(client.calls()[1].args, refreshArgs(data));
   await client.respond(1, fccaRelatedSearch()); await retry;
   assert.equal(choices(h).length, 3);
   assert.ok(choices(h).every(choice => !choice.checked));
@@ -503,4 +504,112 @@ test('ordinary free refresh clears drafts when the same subject ID now identifie
   assert.equal(review(h).disabled, true);
   assert.ok(h.nodes.get('sections').querySelectorAll('.source-input').filter(control => control.dataset.field === 'company.name').every(control => control.value === 'Different company'));
   assert.equal(client.calls().length, 1, 'the identity change never prepares or purchases');
+});
+
+test('lookup by name uses only the advertised lookup field and switching back preserves declared identifier inputs',async()=>{
+  const data=search(),endpoint=data.matches[0].apiosk[0].endpoint;
+  endpoint.lookup={field:'company.name',resolves:['company.kvk'],schema:{type:'string',title:'Company name'}};
+  endpoint.input_values={'company.name':'ACME'};
+  const client=await host('skybridge',data),{h}=client;
+  await h.change(choices(h)[0],true);
+  const lookup=h.nodes.get('sections').querySelector('.source-lookup');assert.equal(lookup.checked,true);
+  assert.equal(h.nodes.get('sections').querySelectorAll('.source-input').some(node=>node.dataset.field==='company.kvk'),false);
+  let pending=review(h).onclick();await flush();
+  assert.deepEqual(client.calls()[0].args.input.apiosk_source_selection_v1.selections[0].input,{'company.name':'ACME'});
+  await client.respond(0,{error_code:'gateway.unavailable',message:'Try again'});await pending;
+  await h.change(lookup,false);
+  const kvk=h.nodes.get('sections').querySelectorAll('.source-input').find(node=>node.dataset.field==='company.kvk');
+  await h.change(kvk,'00123456');pending=review(h).onclick();await flush();
+  assert.deepEqual(client.calls()[1].args.input.apiosk_source_selection_v1.selections[0].input,{'company.kvk':'00123456'});
+  await client.respond(1,ready());await pending;
+});
+
+for(const kind of ['skybridge','mcp-apps'])test(`${kind}: signed displayed discovery prepares one automatic plan only after clicking and keeps retry identity`,async()=>{
+  const client=await host(kind),{h}=client,button=h.nodes.get('sections').querySelector('.plan-search');
+  assert.ok(button);assert.equal(client.calls().length,0);
+  let pending=button.onclick();await flush();await button.onclick();
+  assert.equal(client.calls().length,1);const first=client.calls()[0];
+  assert.equal(first.name,'apiosk_ask');assert.deepEqual(first.args.research,{parsed_request:search().parsed_request,search_id:'signed-search-proof'});
+  assert.equal(first.args.question,question);assert.equal(first.args.selections,undefined);
+  await client.respond(0,{error_code:'gateway.unavailable',message:'Try again'});await pending;
+  pending=button.onclick();await flush();assert.equal(client.calls()[1].args.request_id,first.args.request_id);
+  await client.respond(1,ready());await pending;assert.ok(approve(h));assert.equal(client.calls().length,2,'a prepared plan still awaits one approval');
+});
+
+test('empty and incomplete source searches retain a free retry without preparing or approving',async()=>{
+  for(const incomplete of [false,true]){
+    const data=search();data.matches=data.matches.map(row=>({...row,apiosk:[],coinbase:[],coinbase_status:incomplete?'unavailable':'complete'}));data.source_options=[];
+    const client=await host('skybridge',data),{h}=client;
+    const refresh=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Refresh sources');assert.ok(refresh);
+    const pending=refresh.onclick();await flush();assert.deepEqual(client.calls()[0].args,refreshArgs());assert.equal(client.calls()[0].name,'apiosk_ask');
+    await client.respond(0,search());await pending;assert.equal(choices(h).length,2);assert.equal(client.calls().length,1);
+  }
+});
+
+test('source search displays the actual planning message and source dated web context without unsafe links',async()=>{
+  const data=search();data.planning_message='Which financial year should be compared?';
+  data.company_context=[{company:'ACME',search_status:'completed',homepage_status:'unavailable',pages:[{title:'Official ACME page',url:'https://example.test/acme',description:'Source description',retrieved_at:'2026-10-23T08:00:00Z'},{title:'Unsafe',url:'javascript:alert(1)'},{title:'Credentials',url:'https://user:pass@example.test/'}]}];
+  const {h}=await host('skybridge',data),content=flatten(h.nodes.get('sections')).join(' ');
+  assert.match(content,/Which financial year/);assert.match(content,/Official ACME page/);assert.match(content,/Retrieved 2026-10-23/);assert.match(content,/could not be loaded/);assert.doesNotMatch(content,/Unsafe|Credentials/);
+});
+
+for(const [schema,invalid,valid,expected,tag] of [
+  [{type:'boolean'},'maybe','false',false,'SELECT'],
+  [{type:'integer',minimum:0,maximum:5},'6','0',0,'INPUT'],
+  [{type:'number',exclusiveMinimum:0},'0','0.5',0.5,'INPUT'],
+  [{type:'string',enum:['NL','BE']},'FR','NL','NL','SELECT'],
+  [{type:'array',items:{type:'integer'},minItems:1},'["1"]','[1,2]',[1,2],'TEXTAREA'],
+  [{type:'object',required:['active'],properties:{active:{type:'boolean'}},additionalProperties:false},'{"active":"yes"}','{"active":false}',{active:false},'TEXTAREA'],
+])test(`clarification preserves typed ${schema.type} values and rejects invalid declared input`,async()=>{
+  const task={protocol_version:'2',status:'needs_input',state:{state_ref:'task',revision:1},context_view:{},next_actions:[{kind:'supply_input',action_id:'input-action',label:'Provide check.value',input_schema:{properties:{value:{...schema,title:'Requested value'}}}}]};
+  const client=await host('skybridge',task),{h}=client,form=h.nodes.get('sections').querySelector('form'),field=form.children[0];assert.equal(field.tagName,tag);
+  await h.change(field,invalid);await form.onsubmit({preventDefault(){}});assert.equal(client.calls().length,0);
+  await h.change(field,valid);const pending=form.onsubmit({preventDefault(){}});await flush();
+  assert.equal(client.calls()[0].name,'apiosk_execute');assert.deepEqual(client.calls()[0].args.input,{value:expected});
+  await client.respond(0,ready());await pending;
+});
+
+const externalOffer=()=>({resource:'https://external.example.test/data',method:'GET',name:'External records',host:'external.example.test',description:'Records for a query',source:'External records',provider_atomic:10000,total_atomic:11000,inputs:[{field:'query.limit',name:'limit',location:'query',required:true,schema:{type:'integer',minimum:1,maximum:20}}]});
+const externalPurchase=()=>({protocol_version:'2',view:'external_purchase',purchase_id:'external-purchase',status:'requires_approval',source:externalOffer(),quote:{quote_ref:'external-quote',max_total_atomic:'11000',currency:'USD',expires_at:'2099-01-01'},result:null,result_present:false,billing:null,error:null});
+for(const kind of ['skybridge','mcp-apps'])test(`${kind}: standalone external source prepares freely, approves the exact price once and reads saved results freely`,async()=>{
+  const api_id='bazaar:opaque-identifier',client=await host(kind,{protocol_version:'2',view:'external_source',api_id,source:externalOffer()}),{h}=client;
+  const form=h.nodes.get('sections').querySelector('form'),field=form.querySelector('.source-input');
+  await h.change(field,'21');await form.onsubmit({preventDefault(){}});assert.equal(client.calls().length,0);
+  await h.change(field,'2');let pending=form.onsubmit({preventDefault(){}});await flush();assert.equal(client.calls()[0].name,'apiosk_external');assert.equal(client.calls()[0].args.action,'prepare');assert.deepEqual(client.calls()[0].args.input,{'query.limit':2});
+  const quote=externalPurchase();await client.respond(0,quote);await pending;
+  await h.tick(0);await h.tick(100);assert.equal(client.calls().length,1,'preparation never approves');
+  pending=approve(h).onclick();await flush();await approve(h).onclick();assert.equal(client.calls().length,2);assert.equal(client.calls()[1].name,'apiosk_external_approve');assert.deepEqual(client.calls()[1].args,{purchase_id:'external-purchase',quote_ref:'external-quote',max_total_atomic:'11000'});
+  const result={...quote,status:'succeeded',result_present:true,result:{records:[{name:'Saved external evidence'}]},billing:{status:'captured',charged_micro_usd:11000}};
+  await client.respond(1,result);await pending;assert.equal(approve(h),undefined);assert.match(flatten(h.nodes.get('sections')).join(' '),/Saved external evidence/);
+  pending=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Check status').onclick();await flush();assert.deepEqual(client.calls()[2].args,{action:'status',purchase_id:'external-purchase'});assert.equal(client.calls()[2].name,'apiosk_external');await client.respond(2,result);await pending;
+  assert.equal(client.calls().filter(call=>call.name==='apiosk_external_approve').length,1);
+});
+
+test('an uncertain external approval blocks another approval until read-only status recovers the purchase',async()=>{
+  const quote=externalPurchase(),client=await host('skybridge',quote),{h}=client;
+  let pending=approve(h).onclick();await flush();await client.respond(0,{error_code:'gateway.unavailable',message:'Unconfirmed'});await pending;
+  assert.equal(approve(h).disabled,true);await approve(h).onclick();assert.equal(client.calls().length,1);
+  pending=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Check status').onclick();await flush();assert.equal(client.calls()[1].args.action,'status');
+  await client.respond(1,{...quote,status:'running'});await pending;assert.equal(approve(h),undefined);assert.equal(client.calls().filter(call=>call.name==='apiosk_external_approve').length,1);
+});
+
+test('conversation saved-answer cards open only a returned saved task and new-data cards search only after a click',async()=>{
+  const client=await host('skybridge',{protocol_version:'2',view:'conversation',question:'Summarize these records',kind:'saved_answer',task_refs:['one','two']}),{h}=client;
+  const buttons=h.nodes.get('sections').querySelectorAll('button');assert.equal(buttons.length,2);assert.equal(client.calls().length,0);
+  let pending=buttons[1].onclick();await flush();assert.equal(client.calls()[0].name,'apiosk_status');assert.deepEqual(client.calls()[0].args,{task_ref:'two'});await client.respond(0,ready());await pending;
+  await client.update({protocol_version:'2',view:'conversation',question:'New records',kind:'search'});pending=h.nodes.get('sections').querySelector('button').onclick();await flush();assert.equal(client.calls()[1].name,'apiosk_ask');assert.deepEqual(client.calls()[1].args,{question:'New records'});await client.respond(1,{...search(),question:'New records'});await pending;
+  await client.update({protocol_version:'2',view:'conversation',question:'Explain this',kind:'clarification',message:'Which record do you mean?'});assert.match(flatten(h.nodes.get('sections')).join(' '),/Which record do you mean/);assert.equal(client.calls().length,2);
+});
+
+test('an unsigned legacy source card refreshes by question instead of inventing a signed parse',async()=>{
+  const data=search();delete data.search_id;
+  const client=await host('skybridge',data),{h}=client;
+  const button=h.nodes.get('sections').querySelectorAll('button').find(button=>button.textContent==='Refresh sources');
+  const pending=button.onclick();await flush();assert.deepEqual(client.calls()[0].args,{question});
+  await client.respond(0,search());await pending;
+});
+
+test('a pure conversation displays its planning reply without a misleading empty-source result',async()=>{
+  const data=search();data.matches=[];data.source_options=[];data.planning_message='Hello. What would you like to find?';data.parsed_request.capabilities=[{slug:'general.conversation'}];
+  const {h}=await host('skybridge',data);assert.equal(h.nodes.get('title').textContent,'Your request');assert.match(flatten(h.nodes.get('sections')).join(' '),/Hello\. What would you like to find/);assert.doesNotMatch(flatten(h.nodes.get('sections')).join(' '),/couldn.t find any results|No results/);
 });

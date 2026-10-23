@@ -88,3 +88,561 @@
   "security_relevant": true,
   "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
 }
+{
+  "session_id": "1792617756-39643",
+  "timestamp": "2026-10-21T21:22:36Z",
+  "files_modified": 1,
+  "languages": "",
+  "tests_touched": false,
+  "security_relevant": false,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792619394-68704",
+  "timestamp": "2026-10-21T21:49:54Z",
+  "files_modified": 18,
+  "languages": "python",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792619419-69061",
+  "timestamp": "2026-10-21T21:50:19Z",
+  "files_modified": 18,
+  "languages": "python",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655087-31368",
+  "timestamp": "2026-10-22T07:44:47Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655095-32273",
+  "timestamp": "2026-10-22T07:44:55Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655099-32376",
+  "timestamp": "2026-10-22T07:44:59Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655109-33281",
+  "timestamp": "2026-10-22T07:45:09Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655112-33491",
+  "timestamp": "2026-10-22T07:45:12Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655118-33822",
+  "timestamp": "2026-10-22T07:45:18Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655125-34509",
+  "timestamp": "2026-10-22T07:45:25Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655128-34621",
+  "timestamp": "2026-10-22T07:45:28Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655131-34722",
+  "timestamp": "2026-10-22T07:45:31Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655139-35198",
+  "timestamp": "2026-10-22T07:45:39Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655142-35411",
+  "timestamp": "2026-10-22T07:45:42Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655146-35512",
+  "timestamp": "2026-10-22T07:45:46Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655154-36358",
+  "timestamp": "2026-10-22T07:45:54Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655157-36568",
+  "timestamp": "2026-10-22T07:45:57Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655160-36779",
+  "timestamp": "2026-10-22T07:46:00Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655169-37237",
+  "timestamp": "2026-10-22T07:46:09Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655172-37665",
+  "timestamp": "2026-10-22T07:46:12Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655175-38115",
+  "timestamp": "2026-10-22T07:46:15Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655182-38689",
+  "timestamp": "2026-10-22T07:46:22Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655185-38794",
+  "timestamp": "2026-10-22T07:46:25Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655189-38894",
+  "timestamp": "2026-10-22T07:46:29Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655198-39578",
+  "timestamp": "2026-10-22T07:46:38Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655201-39904",
+  "timestamp": "2026-10-22T07:46:41Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655204-40455",
+  "timestamp": "2026-10-22T07:46:44Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655210-40914",
+  "timestamp": "2026-10-22T07:46:50Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655213-41265",
+  "timestamp": "2026-10-22T07:46:53Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655216-41637",
+  "timestamp": "2026-10-22T07:46:56Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655219-41998",
+  "timestamp": "2026-10-22T07:46:59Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655223-42722",
+  "timestamp": "2026-10-22T07:47:03Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655226-43034",
+  "timestamp": "2026-10-22T07:47:06Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655230-43639",
+  "timestamp": "2026-10-22T07:47:10Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655235-43799",
+  "timestamp": "2026-10-22T07:47:15Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655238-44137",
+  "timestamp": "2026-10-22T07:47:18Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655241-44347",
+  "timestamp": "2026-10-22T07:47:21Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655245-44457",
+  "timestamp": "2026-10-22T07:47:25Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655248-44565",
+  "timestamp": "2026-10-22T07:47:28Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655252-44667",
+  "timestamp": "2026-10-22T07:47:32Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655260-45021",
+  "timestamp": "2026-10-22T07:47:40Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655264-45129",
+  "timestamp": "2026-10-22T07:47:44Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655267-45234",
+  "timestamp": "2026-10-22T07:47:47Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655270-45329",
+  "timestamp": "2026-10-22T07:47:50Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655273-45430",
+  "timestamp": "2026-10-22T07:47:53Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655283-45784",
+  "timestamp": "2026-10-22T07:48:03Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655287-45889",
+  "timestamp": "2026-10-22T07:48:07Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655290-45989",
+  "timestamp": "2026-10-22T07:48:10Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655293-46087",
+  "timestamp": "2026-10-22T07:48:13Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655301-46431",
+  "timestamp": "2026-10-22T07:48:21Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655305-46550",
+  "timestamp": "2026-10-22T07:48:25Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655309-46662",
+  "timestamp": "2026-10-22T07:48:29Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655312-46760",
+  "timestamp": "2026-10-22T07:48:32Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655315-46860",
+  "timestamp": "2026-10-22T07:48:35Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655323-47201",
+  "timestamp": "2026-10-22T07:48:43Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655326-47300",
+  "timestamp": "2026-10-22T07:48:46Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655330-47405",
+  "timestamp": "2026-10-22T07:48:50Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655333-47621",
+  "timestamp": "2026-10-22T07:48:53Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655341-48058",
+  "timestamp": "2026-10-22T07:49:01Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655344-48165",
+  "timestamp": "2026-10-22T07:49:04Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655347-48320",
+  "timestamp": "2026-10-22T07:49:07Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}
+{
+  "session_id": "1792655351-48438",
+  "timestamp": "2026-10-22T07:49:11Z",
+  "files_modified": 6,
+  "languages": "",
+  "tests_touched": true,
+  "security_relevant": true,
+  "project_root": "/Users/olivier/Documents/Apiosk/Production/Main/mcp"
+}

@@ -10,9 +10,9 @@ test('approval card displays source scope without interpreting it as HTML',()=>{
  assert.match(html,/context_view\?\.coverage_notices/);
  assert.match(html,/el\('p','notice',notice\)/);
 });
-test('v2 exposes five model tools and app-only approval and price refresh tools',async()=>{
- const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_ask','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve','apiosk_requote']);
- for(const tool of tools){const privateTool=['apiosk_approve','apiosk_requote'].includes(tool.name),uri=privateTool?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],privateTool?undefined:APIO_V2_CHATGPT_CARD_URI);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,privateTool?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
+test('v2 exposes six model tools and app-only approval and price refresh tools',async()=>{
+ const v2=createApioskMcpRuntime({env});const tools=await v2.listTools();assert.deepEqual(tools.map(t=>t.name),['apiosk_sources','apiosk_ask','apiosk_external','apiosk_external_approve','apiosk_discover','apiosk_execute','apiosk_status','apiosk_approve','apiosk_requote']);
+ for(const tool of tools){const privateTool=['apiosk_approve','apiosk_requote','apiosk_external_approve'].includes(tool.name),uri=privateTool?undefined:APIO_V2_CARD_URI;assert.equal(tool._meta.ui.resourceUri,uri);assert.equal(tool._meta['openai/outputTemplate'],privateTool?undefined:APIO_V2_CHATGPT_CARD_URI);assert.equal(tool.outputSchema.type,'object');assert.deepEqual(tool._meta.ui.visibility,privateTool?['app']:['model','app']);assert.equal(tool._meta['openai/widgetAccessible'],true)}
  assert.ok(tools.find(t=>t.name==='apiosk_sources').outputSchema.properties.sources);
  assert.ok(tools.find(t=>t.name==='apiosk_discover').outputSchema.properties.next_actions);
  assert.ok(tools.find(t=>t.name==='apiosk_execute').outputSchema.properties.result);

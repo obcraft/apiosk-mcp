@@ -53,7 +53,7 @@
       "environmentVariables": [
         {
           "name": "APIOSK_CONNECT_TOKEN",
-          "description": "Apiosk agent token for stdio (apk_access_… from a connection, or a legacy apk_live_… agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
+          "description": "Apiosk agent token for stdio (apk_access_\u2026 from a connection, or a legacy apk_live_\u2026 agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
           "isRequired": true,
           "isSecret": true,
           "format": "string"
@@ -77,7 +77,7 @@
       "environmentVariables": [
         {
           "name": "APIOSK_CONNECT_TOKEN",
-          "description": "Apiosk agent token for stdio (apk_access_… from a connection, or a legacy apk_live_… agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
+          "description": "Apiosk agent token for stdio (apk_access_\u2026 from a connection, or a legacy apk_live_\u2026 agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
           "isRequired": true,
           "isSecret": true,
           "format": "string"
@@ -114,6 +114,8 @@
       "tools": [
         "apiosk_sources",
         "apiosk_ask",
+        "apiosk_external",
+        "apiosk_external_approve",
         "apiosk_discover",
         "apiosk_execute",
         "apiosk_status",

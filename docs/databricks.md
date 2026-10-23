@@ -47,12 +47,12 @@ Expose these tools in the service:
 
 - `apiosk_sources`: browse sources without buying data.
 - `apiosk_discover`: prepare a new data request.
-- `apiosk_ask`: ask a question one source answers, then prepare the chosen source.
+- `apiosk_ask`: search, refresh the signed search, prepare chosen sources or a complete plan, and route saved-data follow-ups.
+- `apiosk_external`: inspect or prepare an external Bazaar source, or read its saved purchase.
 - `apiosk_execute`: continue a returned action on the same task.
 - `apiosk_status`: read the existing task and saved results.
 
-**Deselect `apiosk_approve`.** It is an app-only interactive-card tool, not an
-agent tool. Do not rely on a host understanding the MCP Apps visibility metadata.
+**Deselect `apiosk_approve`, `apiosk_requote` and `apiosk_external_approve`.** These belong to the interactive card, not the model. Do not rely on a host understanding the MCP Apps visibility metadata.
 
 Databricks clients can consume `structuredContent` and JSON text responses
 without rendering Apiosk's HTML card. The existing host contract explicitly
@@ -60,6 +60,7 @@ permits `proposal.approval_url` when the host cannot use the card. Show that
 returned URL and the total ceiling to the person. A chat message or tool-use
 permission is not purchase approval. After approval, the backend continues;
 use `apiosk_status` and the existing task reference to recover saved results.
+External Bazaar approval requires an interactive card; do not invoke the private approval tool from a headless agent.
 An account's existing automatic-approval rules may authorize a request during
 discovery; do not use discovery as a no-spend connectivity test.
 

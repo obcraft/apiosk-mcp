@@ -23,7 +23,7 @@ async function refreshPrice(data,button){
  }catch(e){showFeedback(e&&e.message||'Could not refresh the price. Check status and try again.','error')}
  finally{busy=false;button.disabled=false}
 }
-async function refreshTask(publish=true){if(busy||!output?.state?.state_ref)return;const before=output;if(publish)busy=true;try{const next=await window.apiosk.callTool('apiosk_status',{task_ref:before.state.state_ref});if(!next?.state||next.state.state_ref!==before.state.state_ref||Number(next.state.revision)<Number(before.state.revision))throw new Error(next?.message||'Could not recover this request. Use Check status to try again.');if(publish){approvalRecoveryTask=null;acceptResponse(next)}else if(!busy&&output===before&&next?.state?.state_ref===before.state.state_ref&&Number(next.state.revision)>=Number(before.state.revision)){approvalRecoveryTask=null;render(next);void window.apiosk.context(next).catch(()=>{})}return true}catch(e){if(publish)showFeedback(e&&e.message||'Could not refresh this request. Use Check status to try again.','error')}finally{if(publish)busy=false}}
+async function refreshTask(publish=true){if(busy||!output?.state?.state_ref)return;const before=output;if(publish)busy=true;try{const next=await window.apiosk.callTool('apiosk_status',{task_ref:before.state.state_ref});if(!next?.state||next.state.state_ref!==before.state.state_ref||Number(next.state.revision)<Number(before.state.revision))throw new Error(next?.message||'Could not recover this request. Use Check status to try again.');if(publish){approvalRecoveryTask=null;acceptResponse(next)}else if(!busy&&output===before&&next?.state?.state_ref===before.state.state_ref&&Number(next.state.revision)>=Number(before.state.revision)){approvalRecoveryTask=null;if(!acceptBasketChild(next)){render(next);void window.apiosk.context(next).catch(()=>{})}}return true}catch(e){if(publish)showFeedback(e&&e.message||'Could not refresh this request. Use Check status to try again.','error')}finally{if(publish)busy=false}}
 async function approvePlan(data,button){
  if(busy)return;
  if(output!==data){showFeedback('This request was updated. Use the current plan below.','error');return}
@@ -51,7 +51,7 @@ function renderActions(data){
  const approved=data.billing&&data.billing.authorization_active&&data.billing.quote_ref===(data.proposal&&data.proposal.quote_ref),enabled=data.context_view?.execution_enabled!==false;
  if(run&&planSurface){
   const wrap=el('div','actions plan-actions');
-  if(!approved&&enabled&&data.proposal?.approval_url){
+  if(!approved&&enabled&&data.proposal?.approval_url&&!data.basket_parent){
    const b=el('button','primary','Approve up to '+money(data.proposal.max_total_atomic,data.proposal.currency,true));
    if(approvalRecoveryTask===data.state.state_ref){b.disabled=true;b.textContent='Check status before approving again'}
    else if(quoteExpired(data)){b.disabled=true;b.textContent='Quote expired — request a new price';const renew=el('button','primary','Get new price');renew.onclick=()=>refreshPrice(data,renew);wrap.append(renew)}

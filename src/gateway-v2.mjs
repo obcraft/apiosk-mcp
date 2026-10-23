@@ -10,8 +10,11 @@ import { resolveConnectToken } from "./gateway-client.mjs";
 import { content } from "./tool-result.mjs";
 import { APIO_V2_CARD_URI, APIO_V2_CHATGPT_CARD_URI } from "./gateway-v2-card.mjs";
 import { V2_RESULT_PRESENTATION, V2_RESULT_TOOL_DESCRIPTION, V2_SOURCES_PRESENTATION } from "./result-presentation.mjs";
-import { GROUPED_SOURCES_TOOL_TEXT, presentSources, sourcesOutputSchema } from "./source-groups.mjs";
-import { ASK_TOOLS, askDefinitions, askRequest, presentSearch } from "./gateway-v2-ask.mjs";
+import { GROUPED_SOURCES_TOOL_TEXT, presentSources } from "./source-groups.mjs";
+import { ASK_TOOLS, askDefinitions, askRequest, presentSearch, presentConversation } from "./gateway-v2-ask.mjs";
+
+import { errorFields, sourcesOutput, taskOutput } from "./gateway-v2-output-schemas.mjs";
+import { EXTERNAL_TOOLS, externalDefinitions, externalRequest, presentExternal } from "./gateway-v2-external.mjs";
 
 export const V2_INSTRUCTIONS = readFileSync(new URL('./gateway-v2-instructions.md', import.meta.url), 'utf8');
 export const V2_DESCRIPTION = "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.";
@@ -19,36 +22,6 @@ export const V2_RESOURCE = { uri: "apiosk://v2/host-contract", name: "Apiosk v2 
 const failure = value => ({ ...content(value), isError: true });
 const schemes = [{ type: "oauth2", scopes: ["mcp:tools"] }];
 const displayCurrency = currency => !currency || currency === "USDC" ? "USD" : currency;
-const errorFields = {
-  error_code: { type: "string" }, message: { type: "string" },
-  request_id: { type: "string", format: "uuid" }, idempotency_key: { type: "string", format: "uuid" },
-  recover_task_ref: { type: "string", format: "uuid" },
-};
-const sourcesOutput = sourcesOutputSchema(errorFields);
-const actionOutput = {
-  type: "object", additionalProperties: false, required: ["action_id", "kind", "label", "requires_authorization", "input_schema"],
-  properties: { action_id: { type: "string", format: "uuid" }, kind: { type: "string" }, label: { type: "string" }, requires_authorization: { type: "boolean" }, input_schema: { type: "object" } },
-};
-const proposalOutput = {
-  type: "object", additionalProperties: false, required: ["label", "quote_ref", "price_status", "currency", "max_total_atomic", "expires_at", "approval_url", "steps", "step_details"],
-  properties: {
-    label: { type: "string" }, quote_ref: { type: "string", format: "uuid" }, price_status: { type: "string" }, currency: { type: "string" },
-    max_total_atomic: { type: "string", pattern: "^[0-9]+$" }, expires_at: { type: "string", format: "date-time" }, approval_url: { type: "string", format: "uri" },
-    steps: { type: "array", items: { type: "string" } }, step_details: { type: "array", items: { type: "object", additionalProperties: true } },
-  },
-};
-const taskOutput = {
-  type: "object", additionalProperties: false,
-  properties: {
-    protocol_version: { type: "string", const: "2" }, request_id: { type: "string", format: "uuid" },
-    status: { type: "string", enum: ["ready", "needs_input", "needs_selection", "requires_approval", "running", "cancelled", "succeeded", "partial", "unsupported", "state_conflict", "failed"] },
-    intent_ref: { type: ["string", "null"], format: "uuid" }, context_view: { type: "object", additionalProperties: true },
-    proposal: { anyOf: [proposalOutput, { type: "null" }] }, result: {}, billing: {},
-    next_actions: { type: "array", items: actionOutput }, state: { anyOf: [schemas.state, { type: "null" }] },
-    errors: { type: "array", items: { type: "object", additionalProperties: true } }, retry_after_ms: { type: "integer", minimum: 0 }, ...errorFields,
-  },
-  anyOf: [{ required: ["protocol_version", "request_id", "status", "context_view", "proposal", "result", "next_actions", "state", "errors"] }, { required: ["error_code", "message"] }],
-};
 
 export function createV2Runtime(options = {}) {
   const env = options.env || process.env;
@@ -69,6 +42,7 @@ export function createV2Runtime(options = {}) {
   const definitions = [
     { name: "apiosk_sources", title: "Browse Apiosk sources", description: `Find published data sources by name, category, sector, tag or capability. Browsing is free and paginated. ${GROUPED_SOURCES_TOOL_TEXT} Recommend sources that match the person's need. Use only when the person asks to browse sources. Do not substitute a source list for a failed data request. Keep replies concise and never expose protocol fields or describe catalog endpoints as chatbot tools.`, inputSchema: schemas.sources, outputSchema: sourcesOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false } },
     ...askDefinitions(errorFields, taskOutput),
+    ...externalDefinitions(errorFields),
     { name: "apiosk_discover", title: "Plan a data request", description: "Start a NEW data question; preserve the user's wording, source, entity, period and requested deliverable. Use one call for multi-source supplier onboarding and due diligence, including ownership/controllers, filed accounts, VAT, directors/officers, screening, a combined PDF and a short summary. Never add latest, a year, freshness, a company number or a VAT number that was not requested or returned by a source. Returns one plan, total price ceiling or required clarification. No provider purchase unless the connection's own automatic-approval rule covers the plan: then context_view.auto_approval.applied is true, billing.authorization_active is true and the request is already running within the connection's limits; say so and do not ask for approval. Otherwise, when approval_mode is chatbot, tell the person to approve in the card; do not ask for an extra yes/no answer or send them to an external link. Continue the SAME question through apiosk_execute with returned next_actions.", inputSchema: discover, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_execute", title: "Continue an Apiosk task", description: "Use a returned next_action to execute, supply input, select an entity, poll or cancel. Paid steps require saved plan approval and the current quote_ref. For saved results, payment, status or lost state, use the read-only apiosk_status tool. Never invent action IDs or change payment identity on retry.", inputSchema: execute, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true } },
     { name: "apiosk_status", title: "Read saved Apiosk results", description: "Read an existing task's saved results, actual charges and current status. Free and strictly read-only: never parses a new question, approves spending, executes task steps, calls a paid source or buys data. Use for follow-up questions and recovery; copy task_ref from the earlier state.state_ref.", inputSchema: { type: "object", additionalProperties: false, required: ["task_ref"], properties: { task_ref: { type: "string", format: "uuid" } } }, outputSchema: taskOutput, annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true } },
@@ -81,17 +55,17 @@ export function createV2Runtime(options = {}) {
       properties: { state: schemas.state, quote_ref: { type: "string", format: "uuid" }, request_id: { type: "string", format: "uuid" } },
     }, outputSchema: taskOutput, annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false } },
   ].map(d => ({ ...d,
-    description: d.name === 'apiosk_sources' ? `${d.description} ${V2_SOURCES_PRESENTATION}` : ['apiosk_discover', 'apiosk_ask', 'apiosk_execute', 'apiosk_status'].includes(d.name) ? `${d.description} ${V2_RESULT_TOOL_DESCRIPTION}` : d.description,
+    description: d.name === 'apiosk_sources' ? `${d.description} ${V2_SOURCES_PRESENTATION}` : ['apiosk_discover', 'apiosk_ask', 'apiosk_execute', 'apiosk_status', 'apiosk_external'].includes(d.name) ? `${d.description} ${V2_RESULT_TOOL_DESCRIPTION}` : d.description,
     securitySchemes: schemes, _meta: {
     securitySchemes: schemes,
-    ui: ["apiosk_approve", "apiosk_requote"].includes(d.name) ? { visibility: ["app"] } : { resourceUri: APIO_V2_CARD_URI, visibility: ["model", "app"] },
+    ui: ["apiosk_approve", "apiosk_requote", "apiosk_external_approve"].includes(d.name) ? { visibility: ["app"] } : { resourceUri: APIO_V2_CARD_URI, visibility: ["model", "app"] },
     "openai/widgetAccessible": true,
     // App-only calls update the calling card. A private tool must not claim
     // the shared output template: ChatGPT marks that template unusable.
     // Modern MCP Apps and legacy Skybridge have distinct cache identities.
     // Never vary the new standard resource's MIME based on the host user agent.
-    ...(["apiosk_approve", "apiosk_requote"].includes(d.name) ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
-    "openai/visibility": ["apiosk_approve", "apiosk_requote"].includes(d.name) ? "private" : "public",
+    ...(["apiosk_approve", "apiosk_requote", "apiosk_external_approve"].includes(d.name) ? {} : { "openai/outputTemplate": APIO_V2_CHATGPT_CARD_URI }),
+    "openai/visibility": ["apiosk_approve", "apiosk_requote", "apiosk_external_approve"].includes(d.name) ? "private" : "public",
     "openai/toolInvocation/invoking": d.name === "apiosk_sources" ? "Exploring sources…" : d.name === "apiosk_ask" ? "Asking Apiosk…" : d.name === "apiosk_discover" ? "Preparing your data plan…" : "Updating your Apiosk request…",
     "openai/toolInvocation/invoked": d.name === "apiosk_sources" ? "Sources ready" : d.name === "apiosk_discover" ? "Request reviewed" : "Request updated",
   } }));
@@ -109,18 +83,19 @@ export function createV2Runtime(options = {}) {
       if (!validate.get(name)(cleanArgs).valid) return failure({ error_code: 'invalid_arguments', message: 'Use the tool schema and copy the latest gateway-issued state and action. Recovery takes only recover_task_ref.' });
       const recover = name === "apiosk_status" ? cleanArgs.task_ref : name === "apiosk_execute" && cleanArgs.recover_task_ref;
       if (recover && name === "apiosk_execute" && Object.keys(cleanArgs).some(k => !['recover_task_ref', 'request_id'].includes(k))) return failure({ error_code: 'invalid_recovery', message: 'Recover using only recover_task_ref and an optional request_id.' });
-      const ask = ASK_TOOLS.includes(name) && askRequest(name, cleanArgs), searching = ask?.path === "/v2/ask";
-      const body = ask ? ask.body : { ...cleanArgs, request_id: cleanArgs.request_id || randomUUID() };
+      const ask = ASK_TOOLS.includes(name) && askRequest(name, cleanArgs), searching = ["/v2/ask", "/v2/ask/search"].includes(ask?.path);
+      const external = EXTERNAL_TOOLS.includes(name) && externalRequest(name, cleanArgs);
+      const body = external ? external.body || {} : ask ? ask.body : { ...cleanArgs, request_id: cleanArgs.request_id || randomUUID() };
       if (name === "apiosk_execute" && !recover) body.idempotency_key ||= args.action_id;
       const browsing = name === "apiosk_sources";
-      const path = ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : name === "apiosk_requote" ? "/v2/ask/requote" : "/v2/execute";
+      const path = external ? external.path : ask ? ask.path : browsing ? "/v2/sources" : recover ? `/v2/tasks/${recover}` : name === "apiosk_discover" ? "/v2/discover" : name === "apiosk_approve" ? "/v2/approve" : name === "apiosk_requote" ? "/v2/ask/requote" : "/v2/execute";
       try {
         const url = new URL(path, base);
         if (browsing) for (const [key, value] of Object.entries(cleanArgs)) url.searchParams.set(key, String(value));
         const request = async () => {
         const response = await (options.fetchImpl || fetch)(url, {
-          method: recover || browsing ? "GET" : "POST", redirect: "error", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-          body: recover || browsing ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(80_000),
+          method: external ? external.method : recover || browsing ? "GET" : "POST", redirect: "error", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: recover || browsing || external?.method === "GET" ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(80_000),
         });
         if (response.status === 401) { await response.body?.cancel(); return authFailure(); }
         const reader = response.body?.getReader();
@@ -142,11 +117,14 @@ export function createV2Runtime(options = {}) {
         }
         const {response} = received;
         let {result} = received;
-        if (!response.ok) return failure(gatewayFailure(result, recover || args.state?.state_ref));
-        if (searching) result = presentSearch(result, cleanArgs.question);
+        if (!response.ok) return failure({ ...gatewayFailure(result, recover || args.state?.state_ref),
+          ...(external && (cleanArgs.purchase_id || body.request_id) && { recover_purchase_id: cleanArgs.purchase_id || body.request_id }) });
+        if (external) result = presentExternal(result, external, cleanArgs);
+        else if (searching) result = presentSearch(result, cleanArgs.question);
+        else if (ask?.path === "/v2/ask/conversation") result = presentConversation(result, cleanArgs);
         else if (result?.protocol_version !== '2' || (browsing ? !Array.isArray(result.sources) : !Array.isArray(result.next_actions) || !Array.isArray(result.errors))) throw new Error('Unexpected protocol');
         if (browsing) result = presentSources(result);
-        if (!browsing) {
+        if (!browsing && !external) {
           result = { ...result,
             ...(result.proposal && { proposal: { ...result.proposal, label: "Data request", currency: displayCurrency(result.proposal.currency) } }),
             ...(result.billing && { billing: { ...result.billing, currency: displayCurrency(result.billing.currency) } }),
@@ -172,7 +150,7 @@ export function createV2Runtime(options = {}) {
           ];
           for (const notice of sourceUsageNotices(noticeSources)) reply.content.push({ type: 'text', text: notice.text + (notice.url ? ` ${notice.label}: ${notice.url}` : '') });
         }
-        if (result.status === 'needs_input') reply.content.push({type:'text',text:CLARIFICATION_GUIDANCE});
+        if (!external && result.status === 'needs_input') reply.content.push({type:'text',text:CLARIFICATION_GUIDANCE});
         if (result.status === 'unsupported') reply.content.push({type:'text',text:UNSUPPORTED_GUIDANCE});
         // Say what the gateway did, never more: only an applied rule is an automatic approval.
         const autoApproved = result.context_view?.auto_approval?.applied === true && result.billing?.authorization_active === true;
@@ -183,7 +161,8 @@ export function createV2Runtime(options = {}) {
         // log only a fixed reason code.
         const reason = error?.message === 'Response limit' ? 'size' : error?.message === 'Unexpected protocol' ? 'protocol' : error instanceof SyntaxError ? 'json' : error?.name === 'TimeoutError' ? 'timeout' : 'transport';
         console.error(JSON.stringify({ event: "gateway_response_rejected", tool: name, reason }));
-        return failure({ error_code: "gateway.unavailable", message: browsing ? "The source catalog is temporarily unavailable. Retry browsing shortly." : "The gateway response could not be confirmed. Recover the saved task before continuing.", request_id: body.request_id, idempotency_key: body.idempotency_key, recover_task_ref: recover || args.state?.state_ref || undefined });
+        if (external) return failure({ error_code: "gateway.unavailable", message: external.kind === 'source' ? "The Bazaar source inputs could not be read. Retry source inspection shortly; nothing was purchased." : "The Bazaar response could not be confirmed. Read the same purchase with apiosk_external action status before continuing.", ...(cleanArgs.purchase_id || body.request_id ? { recover_purchase_id: cleanArgs.purchase_id || body.request_id } : {}) });
+        return failure({ error_code: "gateway.unavailable", message: browsing ? "The source catalog is temporarily unavailable. Retry browsing shortly." : searching ? "The source search could not be confirmed. Retry the same question or signed search; nothing was purchased." : "The gateway response could not be confirmed. Recover the saved task before continuing.", request_id: body.request_id, idempotency_key: body.idempotency_key, recover_task_ref: recover || args.state?.state_ref || undefined });
       }
     },
   };

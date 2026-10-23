@@ -19,6 +19,98 @@ const endpoint = { endpoint_id: '7b0f4c0e-7a55-4a55-9d6e-0f3e7f0a1b2c', capabili
 const answer = (apiosk, extra = {}) => ({ status: 'choices', question, parsed_request: parsed, model: 'fixture', attempts: 1, timing: { parse_ms: 4 }, apis: [],
   searches: { apiosk: { apiosk_sources_searched: 112, catalog_version: 'v1', timing: { search_ms: 3 }, ...apiosk } }, errors: [], execution: { method: 'POST', path: '/v2/execute' }, ...extra });
 
+test('Ask accepts the same question length as the page, preserving clarification and free web context', async () => {
+  const requests = [], context = [{ subject_id: 's1', label: 'Amsterdam', pages: [{ url: 'https://example.test', title: 'City' }] }];
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async (url, options) => {
+    requests.push(JSON.parse(options.body));
+    return Response.json(answer({ matches: [] }, { planning_message: 'Which city?', company_context: context, context_status: 'completed', discovery_id: 'external-proof', complete_plan_available: false }));
+  } });
+  const result = await runtime.callTool('apiosk_ask', { question: 'x'.repeat(16000) });
+  assert.equal(result.isError, undefined);
+  assert.equal(requests[0].question.length, 16000);
+  assert.equal(result.structuredContent.message, 'Which city?');
+  assert.deepEqual(result.structuredContent.company_context, context);
+  assert.equal(result.structuredContent.discovery_id, 'external-proof');
+  const tool = (await runtime.listTools()).find(tool => tool.name === 'apiosk_ask');
+  assert.equal(new AjvJsonSchemaValidator().getValidator(tool.outputSchema)(result.structuredContent).valid, true);
+  assert.equal((await runtime.callTool('apiosk_ask', { question: 'x'.repeat(16001) })).isError, true);
+  assert.equal(requests.length, 1);
+});
+
+test('complete planning reuses the exact displayed signed search without another discovery or approval', async () => {
+  const requests = [], runtime = createApioskMcpRuntime({ env, fetchImpl: async (url, options) => {
+    requests.push({ path: new URL(url).pathname, body: JSON.parse(options.body) });
+    return Response.json({ protocol_version: '2', status: 'ready', next_actions: [], errors: [], billing: { authorization_active: false } });
+  } });
+  const args = { question, request_id: '00000000-0000-4000-8000-000000000123', research: { parsed_request: parsed, search_id: 'signed-search', discovery_id: 'external-proof' } };
+  const result = await runtime.callTool('apiosk_ask', args);
+  assert.equal(result.isError, undefined);
+  assert.deepEqual(requests, [{ path: '/v2/ask/research', body: { question, request_id: args.request_id, ...args.research } }]);
+  for (const invalid of [
+    { ...args, task_refs: [args.request_id] }, { ...args, input: {} }, { ...args, endpoint_id: endpoint.endpoint_id },
+    { ...args, research: { parsed_request: parsed } }, { ...args, research: { ...args.research, approved: true } },
+  ]) assert.equal((await runtime.callTool('apiosk_ask', invalid)).isError, true);
+  assert.equal(requests.length, 1);
+});
+
+test('retrying searches keeps the signed interpretation instead of parsing the question again', async () => {
+  const requests = [], runtime = createApioskMcpRuntime({ env, fetchImpl: async (url, options) => {
+    requests.push({ path: new URL(url).pathname, body: JSON.parse(options.body) });
+    return Response.json(answer({ matches: [] }, { search_id: 'refreshed-proof' }));
+  } });
+  const refresh = { parsed_request: parsed, search_id: 'previous-proof' };
+  const result = await runtime.callTool('apiosk_ask', { question, refresh });
+  assert.equal(result.isError, undefined);
+  assert.equal(result.structuredContent.search_id, 'refreshed-proof');
+  assert.deepEqual(requests, [{ path: '/v2/ask/search', body: { question, ...refresh } }]);
+  for (const invalid of [{ question, refresh, research: refresh }, { question, refresh, selections: [] }, { question, refresh: { parsed_request: parsed } }]) {
+    assert.equal((await runtime.callTool('apiosk_ask', invalid)).isError, true);
+  }
+  assert.equal(requests.length, 1);
+});
+
+test('saved-data follow-ups route on the gateway and never silently fall back to a new paid request', async () => {
+  const task = '00000000-0000-4000-8000-000000000123', requests = [];
+  let reply = { kind: 'saved_answer', task_refs: [task] }, status = 200;
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async (url, options) => {
+    requests.push({ path: new URL(url).pathname, body: JSON.parse(options.body) });
+    return Response.json(reply, { status });
+  } });
+  const args = { question: 'Summarize the bought records', task_refs: [task], request_id: task };
+  for (const next of [{ kind: 'saved_answer', task_refs: [task] }, { kind: 'search' }, { kind: 'clarification', message: 'Which record?' }]) {
+    reply = next;
+    const result = await runtime.callTool('apiosk_ask', args);
+    assert.equal(result.isError, undefined);
+    assert.equal(result.structuredContent.view, 'conversation');
+    assert.equal(result.structuredContent.kind, next.kind);
+    assert.deepEqual(result.structuredContent.task_refs, [task]);
+    const tool = (await runtime.listTools()).find(tool => tool.name === 'apiosk_ask');
+    assert.equal(new AjvJsonSchemaValidator().getValidator(tool.outputSchema)(result.structuredContent).valid, true);
+  }
+  assert.ok(requests.every(request => request.path === '/v2/ask/conversation'));
+  assert.deepEqual(requests[0].body, args);
+  reply = { kind: 'saved_answer', task_refs: ['00000000-0000-4000-8000-000000000456'] };
+  assert.equal((await runtime.callTool('apiosk_ask', args)).isError, true);
+  reply = { error: { code: 'follow_up_unavailable', message: 'Retry this follow-up.' } }; status = 503;
+  assert.equal((await runtime.callTool('apiosk_ask', args)).structuredContent.error_code, 'follow_up_unavailable');
+  assert.equal(requests.length, 5);
+});
+
+test('repeated scopes preserve missing local coverage and consume external rows only once', async () => {
+  const request = { ...parsed, capabilities: [parsed.capabilities[0], { ...parsed.capabilities[0], name: 'Time yesterday' }] };
+  const row = { slug: parsed.capabilities[0].slug, subject_id: 's1', apiosk: [], coinbase: [], coinbase_status: 'pending' };
+  const payload = answer({ matches: [{ ...row, apiosk: [{ name: 'Current time' }] }] }, { parsed_request: request });
+  payload.searches.coinbase = { matches: [{ ...row, coinbase: [{ name: 'Today' }], coinbase_status: 'ready' }, { ...row, coinbase: [{ name: 'Yesterday' }], coinbase_status: 'ready' }] };
+  const runtime = createApioskMcpRuntime({ env, fetchImpl: async () => Response.json(payload) });
+  let result = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.equal(result.matches.length, 2);
+  assert.deepEqual(result.matches[1].apiosk, []);
+  assert.deepEqual(result.matches.map(row => row.coinbase[0].name), ['Today', 'Yesterday']);
+  payload.searches.coinbase.matches.pop();
+  result = (await runtime.callTool('apiosk_ask', { question })).structuredContent;
+  assert.ok(result.matches.every(row => !row.coinbase.length && row.coinbase_status === 'unavailable'));
+});
+
 test('apiosk_ask searches from a question and prepares only a signed explicit selection', async () => {
   const tools = await createApioskMcpRuntime({ env }).listTools();
   const ask = tools.find(t => t.name === 'apiosk_ask');

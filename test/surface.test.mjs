@@ -1,7 +1,7 @@
 // The tool surface, asserted by name.
 //
 // This test is the thing that stops the drawer refilling. Since 2.0 the only
-// runtime is Gateway v2: five model-visible tools and app-only approval and
+// runtime is Gateway v2: six model-visible tools and app-only approval and
 // price refresh tools the interactive card calls. Every other time this fails, something grew
 // back.
 
@@ -18,6 +18,8 @@ const EXPECTED = [
   "apiosk_sources",
   // The Ask page for one source: Apiosk reads the question, then prepares the chosen endpoint.
   "apiosk_ask",
+  "apiosk_external",
+  "apiosk_external_approve",
   // The planner, for a question across several sources.
   "apiosk_discover",
   "apiosk_execute",

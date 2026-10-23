@@ -39,6 +39,7 @@ render=function(data){
  for(const detail of data.proposal?.step_details||[]){if(detail.error?.message&&!(data.errors||[]).some(e=>e.message===detail.error.message))section('Needs attention').append(el('p','notice error',detail.error.message))}
  if(planSurface){const disclosure=planSurface.querySelector('.compact-details');if(disclosure)planSurface.append(disclosure)}
  if(typeof observeTask==='function')observeTask(data);
+ if(typeof observeSavedPurchases==='function')observeSavedPurchases(data);
  window.apiosk.resize();
 };
 `;

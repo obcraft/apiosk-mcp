@@ -27,7 +27,15 @@
     },
     {
       "name": "apiosk_ask",
-      "description": "Ask a question one source answers: Apiosk reads it, ranks its sources and pre-fills their inputs. Called again with a chosen source, it prepares that source's price and approval card. Nothing is bought until the person approves."
+      "description": "Find sources, refresh a signed search, prepare selected sources or a complete plan, and continue questions using saved evidence. Review one total price before manual approval."
+    },
+    {
+      "name": "apiosk_external",
+      "description": "Inspect a Bazaar source, prepare its quote without buying, and read saved purchase results."
+    },
+    {
+      "name": "apiosk_external_approve",
+      "description": "App-only: approve the exact saved Bazaar quote after the person clicks Approve. Never invoked by the model."
     },
     {
       "name": "apiosk_discover",

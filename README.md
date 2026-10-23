@@ -35,7 +35,9 @@ endpoints.
 | Tool | What it does | Gateway v2 route | Spends |
 | --- | --- | --- | --- |
 | `apiosk_sources` | Browse published data sources by name, category, sector, tag or capability. Paginated with `next_offset`. | `GET /v2/sources` | no |
-| `apiosk_ask` | Find sources for the person's question. Choose 1–10 supported sources and edit their declared inputs in the card. The signed `search_id`, unchanged `parsed_request` and exact `selections` prepare one combined quote requiring explicit approval. The legacy `endpoint_id` path remains compatible. | `POST /v2/ask`, then `POST /v2/ask/prepare`; legacy `POST /v2/ask-v2/prepare` | search and selections: no; legacy preparation may use standing approval |
+| `apiosk_ask` | Find sources for the person's question. Choose 1–10 supported sources and edit their declared inputs in the card. The signed `search_id`, unchanged `parsed_request` and exact `selections` prepare one combined quote requiring explicit approval. Use `research` to plan from that signed search, `refresh` to retry both origins without parsing again, or `task_refs` to continue with saved evidence. Questions accept up to 16,000 characters. The legacy `endpoint_id` path remains compatible. | `POST /v2/ask`, `/v2/ask/prepare`, `/v2/ask/research`, `/v2/ask/search`, `/v2/ask/conversation`; legacy `POST /v2/ask-v2/prepare` | search and selections: no; legacy preparation may use standing approval |
+| `apiosk_external` | Inspect a returned Bazaar source, prepare its declared inputs and exact quote, or read a saved purchase. | `/v2/ask/external/source`, `/prepare`, `/{id}` | no |
+| `apiosk_external_approve` | **App-only.** Approve the exact saved Bazaar quote and execute within its ceiling. | `POST /v2/ask/external/{id}/authorize` | yes, after explicit approval |
 | `apiosk_discover` | Plan a NEW data question across several sources: one plan with `proposal.max_total_atomic` as the total price ceiling, or the clarification it needs. Fixed Pre-KYB Screening, company and tender workflows can be started with `workflow` instead of `question`. | `POST /v2/discover`, `POST /v2/workflows/{slug}/start` | may execute within standing approval |
 | `apiosk_execute` | Continue the same task with a returned `next_actions` entry: supply input, select an entity, run an approved step, cancel. | `POST /v2/execute` | only an approved step |
 | `apiosk_status` | Read a task's saved results, actual charges and status. Free and read-only; used for follow-ups and recovery. | `GET /v2/tasks/{id}` | no |
@@ -59,7 +61,7 @@ Loading a card or recovering a task never approves or buys.
 
 ### Recovery
 
-Every response carries `state.state_ref`. If state is lost or a response was
+Task responses carry `state.state_ref`. Bazaar purchases carry `purchase_id`: recover those with `apiosk_external` action `status`, never with a second preparation or approval. If state is lost or a response was
 interrupted, call `apiosk_status` with `{"task_ref": "<state_ref>"}`. It reads
 only; it never parses, approves or buys.
 
@@ -88,8 +90,8 @@ direct bearer credentials; see the [Databricks guide](docs/databricks.md).
 
 Register `https://mcp.apiosk.com/mcp` as an external MCP server in Unity
 Gateway. Use **Dynamic Client Registration** with scopes
-`mcp:tools offline_access` for per-user OAuth. Select the five model tools;
-exclude the app-only `apiosk_approve` and `apiosk_requote` tools. Hosts without interactive cards
+`mcp:tools offline_access` for per-user OAuth. Select the six model tools;
+exclude the app-only `apiosk_approve`, `apiosk_requote` and `apiosk_external_approve` tools. Hosts without interactive cards
 use the existing `proposal.approval_url` fallback.
 
 See the [Databricks setup and validation guide](docs/databricks.md) for

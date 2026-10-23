@@ -76,6 +76,7 @@ export function cardHarness(html = null, openai = null) {
   else vm.runInContext(APIOSK_UI_BRIDGE, context);
   return {
     sent, nodes, window,
+    async event(name, event = {}) { listeners.get(name)?.(event); await flush(); },
     async globals(globals) {
       Object.assign(window.openai, globals);
       listeners.get('openai:set_globals')?.({ detail: { globals } });
