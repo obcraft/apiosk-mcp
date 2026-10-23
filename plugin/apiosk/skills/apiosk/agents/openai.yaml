@@ -1,12 +1,12 @@
 interface:
-  display_name: "Apiosk"
-  short_description: "Find sources and retrieve verified data"
+  display_name: "Apiosk Ask"
+  short_description: "Ask questions and retrieve source-backed data"
   brand_color: "#6349DB"
-  default_prompt: "Use $apiosk to retrieve annual-account data for Mollie B.V. from KVK and show the plan and total price first."
+  default_prompt: "Use $apiosk to show the registered profile for Mollie B.V., KVK 30204462, and screen the company name against sanctions sources. Let me review matching sources, inputs and the total first."
 dependencies:
   tools:
     - type: "mcp"
       value: "apiosk"
-      description: "Apiosk source discovery and approved data requests"
+      description: "Apiosk question-scoped source discovery, approved requests and saved evidence"
       transport: "streamable_http"
       url: "https://mcp.apiosk.com/mcp"

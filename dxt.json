@@ -1,61 +1,210 @@
 {
+  "manifest_version": "0.3",
   "name": "apiosk-mcp",
-  "version": "2.0.0",
-  "description": "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.",
-  "author": "Apiosk",
-  "license": "MIT",
+  "display_name": "Apiosk Ask",
+  "version": "3.0.0",
+  "description": "Ask a data question, review matching sources and one total price, approve the exact request, and reopen source-backed results without repurchasing.",
+  "author": {
+    "name": "Apiosk",
+    "url": "https://apiosk.com"
+  },
   "homepage": "https://apiosk.com",
-  "icon": "https://mcp.apiosk.com/brand/mark-20260918.svg",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/obcraft/apiosk-mcp"
+  },
+  "icon": "assets/brand/apiosk-a-20260921.png",
+  "license": "MIT",
   "keywords": [
-    "payments",
-    "finance",
-    "x402",
-    "commerce",
-    "crypto"
+    "mcp",
+    "api",
+    "data",
+    "research",
+    "evidence"
   ],
-  "repository": "https://github.com/obcraft/apiosk-mcp",
-  "mcp": {
-    "command": "node",
-    "args": [
-      "index.mjs"
-    ]
+  "privacy_policies": [
+    "https://apiosk.com/privacy"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "index.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/index.mjs"
+      ],
+      "env": {
+        "APIOSK_CONNECT_TOKEN": "${user_config.apiosk_token}",
+        "APIOSK_MCP_STATE_DIR": "${user_config.state_directory}"
+      }
+    }
+  },
+  "compatibility": {
+    "runtimes": {
+      "node": ">=22.16.0"
+    }
+  },
+  "user_config": {
+    "apiosk_token": {
+      "type": "string",
+      "title": "Apiosk connection token",
+      "description": "Use an existing Apiosk agent connection token. Never enter provider keys or a password.",
+      "sensitive": true,
+      "required": true
+    },
+    "state_directory": {
+      "type": "directory",
+      "title": "Saved Ask data",
+      "description": "Private persistent directory for saved evidence and approval recovery.",
+      "default": "${HOME}/.apiosk/mcp-state",
+      "required": true
+    }
   },
   "tools": [
     {
-      "name": "apiosk_sources",
-      "description": "Browse published data sources by name, category, sector, tag or capability. Free and paginated; creates no task and buys nothing."
-    },
-    {
       "name": "apiosk_ask",
-      "description": "Find sources, refresh a signed search, prepare selected sources or a complete plan, and continue questions using saved evidence. Review one total price before manual approval."
+      "description": "Start a new Ask conversation. Discover the same sources and background context as Ask. sources mode lets the user select; automatic prepares a combined plan. Never purchases."
     },
     {
-      "name": "apiosk_external",
-      "description": "Inspect a Bazaar source, prepare its quote without buying, and read saved purchase results."
+      "name": "apiosk_capabilities",
+      "description": "Explain the Ask workflow, authentication limits and available interactions. No source calls."
     },
     {
-      "name": "apiosk_external_approve",
-      "description": "App-only: approve the exact saved Bazaar quote after the person clicks Approve. Never invoked by the model."
+      "name": "apiosk_sources",
+      "description": "List saved source options grouped by provider, with prices, subjects and inputs. Pass source_id to inspect its complete input schema. This never buys data."
     },
     {
-      "name": "apiosk_discover",
-      "description": "Plan a new data question across several sources: one plan, one total price ceiling or the clarification it needs. Nothing is bought until the person approves."
-    },
-    {
-      "name": "apiosk_execute",
-      "description": "Continue a task with a returned next_action: supply input, select an entity, run an approved step or cancel. Paid steps require the saved approval and current quote."
-    },
-    {
-      "name": "apiosk_status",
-      "description": "Read a task's saved results, actual charges and status. Free and read-only; never approves or buys."
+      "name": "apiosk_prepare",
+      "description": "Review selected source_id rows and exact editable input objects, or prepare the complete automatic plan. Returns a saved quote and one total for explicit approval; never executes a source."
     },
     {
       "name": "apiosk_approve",
-      "description": "App-only: called by the interactive card when the person clicks Approve, within the connection's spending limits. Never invoked by the model."
+      "description": "Purchase ONLY after the user explicitly approves this exact approval_id, currency and maximum total. Approval dispatch is durably recorded before sending. After errors/repeats use status, never a new purchase."
+    },
+    {
+      "name": "apiosk_status",
+      "description": "Read saved execution, payment, partial results and current actions. Never creates a quote or reauthorizes. Set recover=true to ask Gateway to resume an already authorized worker within its original budget."
     },
     {
       "name": "apiosk_requote",
-      "description": "App-only: called by the interactive card to refresh an expired saved quote for the exact selected sources. Never approves spending, calls paid sources or starts execution."
+      "description": "Refresh existing unapproved quotes without buying. Every new or changed quote must be reviewed and approved explicitly."
+    },
+    {
+      "name": "apiosk_continue",
+      "description": "Continue a returned entity choice or missing-input action using exactly the saved action_id and its schema. Also supports cancel/retry_analysis (input:null). Never approves a new quote or executes an arbitrary paid action."
+    },
+    {
+      "name": "apiosk_result",
+      "description": "View or export saved results and evidence without fetching or buying source data. Supports local tables/charts, filters, selected columns and JSON/CSV/HTML. Use status to refresh execution separately."
+    },
+    {
+      "name": "apiosk_evidence",
+      "description": "Inspect an exact JSON Pointer in a saved task, including evidence, raw values, dates, provenance, coverage or derived inputs. No provider call."
+    },
+    {
+      "name": "apiosk_artifact",
+      "description": "List saved PDF reports, evidence ZIPs and image assets. Pass the exact saved artifact_url to download a Gateway artifact; external links are returned without forwarding credentials. Never regenerates or repurchases."
+    },
+    {
+      "name": "apiosk_result_page",
+      "description": "Read another page of an existing saved result using its read_result action. Never fetches new source data or authorizes a purchase."
+    },
+    {
+      "name": "apiosk_follow_up",
+      "description": "Ask about saved purchased results. Gateway first routes to saved evidence, clarification, or a new source search. New data still requires a new quote and approval."
+    },
+    {
+      "name": "apiosk_retry_search",
+      "description": "Explicitly resume or retry source discovery without approving or buying. Preserves prior purchases; a request with an approval attempt must use a new follow-up for new data."
+    },
+    {
+      "name": "apiosk_chats",
+      "description": "List or reopen local saved Ask conversations in this credential/workspace. Import reads an existing Gateway task with Gateway access checks; it never repurchases. App chat history sync is separate."
+    },
+    {
+      "name": "apiosk_integrations",
+      "description": "Read connected integration accounts and their availability."
+    },
+    {
+      "name": "apiosk_integration_connect",
+      "description": "Start a requested integration connection and return its hosted consent URL. The user completes sign-in in their browser."
+    },
+    {
+      "name": "apiosk_actions",
+      "description": "List action schemas for connected apps; an optional toolkit limits the list."
+    },
+    {
+      "name": "apiosk_action_prepare",
+      "description": "Prepare and save exact app-action arguments from the question and saved source results. Requires a personal App session; sends no message and runs no action."
+    },
+    {
+      "name": "apiosk_action_edit",
+      "description": "Create a new review with explicitly edited action arguments. Original reviewed or attempted actions remain unchanged."
+    },
+    {
+      "name": "apiosk_action_execute",
+      "description": "Execute exactly the saved action only after the user requests sending/writing and approves its displayed destination/content. Never repeat after an unknown outcome."
+    },
+    {
+      "name": "apiosk_recurring_access",
+      "description": "Check whether native recurring orders are enabled. Gateway currently requires a personal App session."
+    },
+    {
+      "name": "apiosk_recurring_list",
+      "description": "Read native Apiosk recurring orders for the current account/workspace."
+    },
+    {
+      "name": "apiosk_recurring_read",
+      "description": "Read a saved native recurring order or one saved occurrence. This does not run sources or retry delivery."
+    },
+    {
+      "name": "apiosk_recurring_destinations",
+      "description": "Read available Slack delivery conversations for an owned connected account."
+    },
+    {
+      "name": "apiosk_recurring_channel_review",
+      "description": "Save the exact Slack account, channel name and visibility for review. Creates no channel, sends no message and changes no recurring order. Channel creation requires a personal App session and native recurring availability."
+    },
+    {
+      "name": "apiosk_recurring_channel_create",
+      "description": "Create only the reviewed Slack channel after the user explicitly approves its account, name and visibility. Returns the destination ID for a separate recurring quote or delivery review. Sends no message and never retries an uncertain creation."
+    },
+    {
+      "name": "apiosk_recurring_quote",
+      "description": "Price a native recurring order from saved completed tasks. Saves a review, reserves nothing, starts nothing. Requires personal App session and native recurring availability; prefer host-owned scheduling for agents."
+    },
+    {
+      "name": "apiosk_recurring_approve",
+      "description": "Approve exactly the displayed recurring price, cap, workflow, schedule and destination. This reserves funds or enables per-run charges; requires explicit user approval."
+    },
+    {
+      "name": "apiosk_recurring_change_review",
+      "description": "Read the current order and prepare a review to pause/resume/cancel it or change its delivery. Changes nothing until the saved review is applied."
+    },
+    {
+      "name": "apiosk_recurring_change_apply",
+      "description": "Apply the exact saved recurring change after the user reviews it. Never resends an attempted change with an unknown outcome."
+    },
+    {
+      "name": "apiosk_review_read",
+      "description": "Read a locally saved app-action or recurring review and its attempt status. This never executes or retries a write."
+    },
+    {
+      "name": "apiosk_schedule_handoff",
+      "description": "Return an inspectable recipe for the host AI scheduler. Does not create a schedule, authorize payments, execute sources or send messages."
+    },
+    {
+      "name": "apiosk_task_options",
+      "description": "Read a saved task’s offered source-selection and extended-analysis choices, models and saved-output references. No replan or purchase."
+    },
+    {
+      "name": "apiosk_source_selection",
+      "description": "Reprice an unapproved saved research plan with exact offered source and subject choices. Requires a personal App session. This route cannot authorize or run sources; review the new total afterward."
+    },
+    {
+      "name": "apiosk_analysis_quote",
+      "description": "Quote an offered extended-analysis model, enable/disable it on an unapproved plan, or quote analysis of an offered completed saved output. Requires a personal App session. Reuses evidence and never approves or executes; a new price needs explicit approval."
     }
-  ]
+  ],
+  "tools_generated": true
 }

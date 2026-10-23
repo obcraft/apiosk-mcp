@@ -4,12 +4,26 @@ primary_region = "ams"
 [env]
   APIOSK_GATEWAY_V2_URL = "https://apiosk-gateway-v2.fly.dev"
   APIOSK_MCP_PUBLIC_BASE_URL = "https://mcp.apiosk.com"
+  APIOSK_MCP_HOST = "0.0.0.0"
+  APIOSK_MCP_ALLOWED_HOSTS = "mcp.apiosk.com,apiosk-mcp.fly.dev,localhost,127.0.0.1"
+  APIOSK_MCP_STATE_DIR = "/data/state"
   APIOSK_CONTROL_PLANE_BACKEND_URL = "https://dashboard.apiosk.com"
   APIOSK_DASHBOARD_URL = "https://dashboard.apiosk.com"
+
+[[mounts]]
+  source = "mcp_state"
+  destination = "/data"
 
 [http_service]
   internal_port = 3000
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"

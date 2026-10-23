@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "apiosk": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/Users/olivier/Documents/Apiosk/Production/Main/mcp/index.mjs"],
+      "env": {
+        "APIOSK_GATEWAY_V2_URL": "${APIOSK_GATEWAY_V2_URL:-https://gateway.apiosk.com}",
+        "APIOSK_CONNECT_TOKEN": "${APIOSK_CONNECT_TOKEN}"
+      }
+    }
+  }
+}

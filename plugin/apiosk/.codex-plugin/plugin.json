@@ -1,7 +1,7 @@
 {
   "name": "apiosk",
-  "version": "2.0.0",
-  "description": "Find data sources, plan priced data requests, and retrieve approved source-backed results through Apiosk.",
+  "version": "3.0.0",
+  "description": "Ask a data question, review matching sources and one total price, approve the exact request, and reopen source-backed results without repurchasing.",
   "author": {
     "name": "Apiosk",
     "email": "hello@apiosk.com",
@@ -15,27 +15,26 @@
     "mcp",
     "data",
     "research",
-    "x402"
+    "evidence"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Apiosk",
-    "shortDescription": "Find sources and retrieve verified data",
-    "longDescription": "Apiosk browses published data sources, plans a data request with one total price ceiling, and runs it after the person approves within their connected account's spending limits. Results come back source-backed, with saved evidence you can recover without buying again.",
+    "shortDescription": "Ask questions and retrieve source-backed data",
+    "longDescription": "Ask a data question, review matching sources and one total price, approve the exact request, and reopen source-backed results without repurchasing.",
     "developerName": "Apiosk",
     "category": "Productivity",
     "capabilities": [
-      "Browse data sources",
-      "Plan priced data requests",
-      "Run approved requests"
+      "Find sources matching a question",
+      "Review and approve one exact total",
+      "Read saved results and evidence"
     ],
     "websiteURL": "https://apiosk.com",
     "privacyPolicyURL": "https://apiosk.com/privacy",
     "termsOfServiceURL": "https://apiosk.com/terms",
     "defaultPrompt": [
-      "Show me which company-data sources Apiosk has.",
-      "Retrieve the annual-account data for Mollie B.V. from KVK and show the plan and total price first.",
-      "Check whether this supplier is safe to pay before I approve the invoice."
+      "What does ASML do? Show the matching sources before retrieving paid data.",
+      "Show the registered company profile for Mollie B.V., KVK 30204462, and screen its company name against sanctions sources. Let me review the inputs and total first."
     ],
     "brandColor": "#6349DB",
     "composerIcon": "./assets/icon.svg",

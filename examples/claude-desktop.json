@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "apiosk": {
+      "command": "/Users/olivier/.nvm/versions/node/v24.18.0/bin/node",
+      "args": ["/Users/olivier/Documents/Apiosk/Production/Main/mcp/index.mjs"],
+      "env": {
+        "APIOSK_GATEWAY_V2_URL": "https://gateway.apiosk.com",
+        "APIOSK_CONNECT_TOKEN": "REPLACE_WITH_YOUR_APIOSK_CONNECTION_TOKEN"
+      }
+    }
+  }
+}

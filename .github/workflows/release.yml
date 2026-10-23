@@ -1,0 +1,63 @@
+name: Package or publish MCP (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact version already declared in package.json and server.json"
+        required: true
+        type: string
+      publish_npm:
+        description: "Publish the reviewed package to the public npm registry"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  package:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Verify release identities
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json'));
+          const server = JSON.parse(readFileSync('server.json'));
+          const manifest = JSON.parse(readFileSync('manifest.json'));
+          if (!/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(process.env.RELEASE_VERSION)) throw new Error('Supply an exact semantic version.');
+          for (const value of [pkg.version, server.version, manifest.version, ...server.packages.map(item => item.version)]) if (value !== process.env.RELEASE_VERSION) throw new Error('Release version differs from package metadata.');
+          if (pkg.name !== '@apiosk/mcp' || pkg.mcpName !== server.name) throw new Error('Canonical MCP package identity differs.');
+          JS
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apiosk-mcp-package
+          path: apiosk-mcp-*.tgz
+          if-no-files-found: error
+  publish-npm:
+    if: inputs.publish_npm && github.ref == 'refs/heads/main'
+    needs: package
+    environment: npm-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@v4
+        with:
+          name: apiosk-mcp-package
+      - run: npm publish apiosk-mcp-*.tgz --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

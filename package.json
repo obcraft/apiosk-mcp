@@ -1,83 +1,54 @@
 {
   "name": "@apiosk/mcp",
-  "version": "2.0.0",
-  "description": "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.",
-  "mcpName": "io.github.obcraft/apiosk-mcp",
-  "main": "index.mjs",
-  "exports": {
-    ".": "./src/create-server.mjs",
-    "./runtime": "./src/runtime.mjs",
-    "./package.json": "./package.json"
+  "version": "3.0.0",
+  "description": "Ask-first Apiosk MCP with source-backed answers and embedded review components",
+  "type": "module",
+  "engines": {
+    "node": ">=22.16"
   },
   "bin": {
-    "apiosk-mcp-server": "./index.mjs",
-    "apiosk-mcp": "./index.mjs",
-    "apiosk": "./index.mjs"
+    "apiosk-mcp-server": "index.mjs",
+    "apiosk-mcp": "index.mjs",
+    "apiosk": "index.mjs",
+    "apiosk-mcp-2": "bin/mcp-2.mjs"
   },
   "scripts": {
-    "pack:check": "npm pack --dry-run",
-    "test": "node --test",
-    "dev": "node server.mjs",
     "start": "node server.mjs",
-    "dev:v2": "node --env-file=.env.v2.local server.mjs"
+    "start:http": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check.mjs",
+    "dev:chat": "node dev/host.mjs",
+    "start:stdio": "node index.mjs",
+    "dev": "node server.mjs",
+    "pack:check": "npm pack --dry-run"
   },
-  "keywords": [
-    "mcp",
-    "apiosk",
-    "api",
-    "model-context-protocol",
-    "agent-tools",
-    "agent-commerce",
-    "compare-apis",
-    "api-discovery",
-    "api-comparison",
-    "payments",
-    "x402",
-    "commerce",
-    "usdc"
-  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "ajv": "8.20.0",
+    "express": "5.2.1"
+  },
+  "main": "index.mjs",
+  "mcpName": "io.github.obcraft/apiosk-mcp",
   "author": "Apiosk",
   "license": "MIT",
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "type": "module",
   "homepage": "https://apiosk.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/obcraft/apiosk-mcp.git"
   },
-  "bugs": {
-    "url": "https://github.com/obcraft/apiosk-mcp/issues"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "index.mjs",
-    "logo-optimized-light.png",
     "server.mjs",
-    "well-known.mjs",
-    "server.json",
-    "dxt.json",
+    "bin",
     "src",
     "README.md",
+    "LICENSE",
+    "server.json",
+    "dxt.json",
+    "manifest.json",
+    "assets",
+    "plugin",
     "docs",
-    "examples",
-    "assets/brand",
-    "plugin"
-  ],
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "@flydotio/dockerfile": "^0.7.10",
-    "@types/express": "^5.0.6",
-    "@types/node": "^25.5.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
-  }
+    "examples"
+  ]
 }

@@ -1,0 +1,9 @@
+[mcp_servers.apiosk]
+command = "node"
+args = ["/Users/olivier/Documents/Apiosk/Production/Main/mcp/index.mjs"]
+env_vars = ["APIOSK_CONNECT_TOKEN", "APIOSK_TOKEN", "APIOSK_WORKSPACE_ID"]
+startup_timeout_sec = 20
+tool_timeout_sec = 180
+
+[mcp_servers.apiosk.env]
+APIOSK_GATEWAY_V2_URL = "https://gateway.apiosk.com"

@@ -1,18 +1,43 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
-
-name: Fly Deploy
+name: Deploy MCP to Fly (manual)
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      confirm_deployment:
+        description: "Deploy this reviewed revision to the live apiosk-mcp Fly app"
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: apiosk-mcp-production
+  cancel-in-progress: false
 jobs:
   deploy:
-    name: Deploy app
+    if: inputs.confirm_deployment && github.ref == 'refs/heads/main'
+    environment: production
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Require one machine and an existing durable journal volume
+        run: |
+          flyctl volumes list --app apiosk-mcp --json > volumes.json
+          flyctl machine list --app apiosk-mcp --json > machines.json
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          const volumes = JSON.parse(readFileSync('volumes.json'));
+          const machines = JSON.parse(readFileSync('machines.json'));
+          if (!volumes.some(volume => volume.name === 'mcp_state' && volume.region === 'ams')) throw new Error('Provision and review the mcp_state volume in ams before deploying.');
+          if (machines.length > 1) throw new Error('This file-backed approval journal requires one machine. Complete a reviewed migration before deployment.');
+          JS
+      - run: flyctl deploy --app apiosk-mcp --remote-only --ha=false

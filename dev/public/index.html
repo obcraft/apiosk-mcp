@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Ask · MCP 2 tester</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Apiosk Ask tester home"><span class="brand-mark" aria-hidden="true">a</span><span>apiosk<span class="brand-divider">/</span><span class="brand-section">Ask</span></span></a>
+    <span class="local-badge"><span></span> Local development</span>
+    <div class="topbar-actions">
+      <button id="settings-toggle" class="button ghost settings-toggle" type="button" aria-controls="settings" aria-expanded="false">Settings</button>
+      <button id="trace-toggle" class="button ghost" type="button" aria-controls="inspector" aria-expanded="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 5-5 5 5 5m6-10 5 5-5 5"/></svg><span>Inspector</span><span id="trace-count" class="count">0</span></button>
+    </div>
+  </header>
+  <div class="workspace">
+    <aside id="settings" class="settings" aria-label="Playground settings">
+      <div class="panel-heading"><h2>Workspace</h2><button id="new-chat" class="button icon-button" type="button" title="Start a new chat" aria-label="Start a new chat"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button></div>
+      <section class="settings-section">
+        <div class="section-label">MCP SERVER <span id="connection-status" class="connection-badge">Offline</span></div>
+        <label for="server-url">Server URL</label>
+        <input id="server-url" type="url" readonly spellcheck="false" value="Loading configuration…" aria-describedby="server-hint">
+        <p id="server-hint" class="hint">The MCP endpoint configured for this local session.</p>
+        <details class="token-settings"><summary>Use an access token</summary><label for="access-token">Bearer token <span class="optional">optional</span></label><input id="access-token" type="password" placeholder="Paste a token" autocomplete="off" spellcheck="false"><p class="hint">Kept only for this session. Never saved in your browser.</p></details>
+        <div class="connection-actions"><button id="connect" class="button primary" type="button">Connect to Apiosk</button><button id="disconnect" class="button secondary hidden" type="button">Disconnect</button></div>
+        <a id="sign-in" class="button secondary sign-in hidden" target="_blank" rel="noopener noreferrer">Continue sign-in <span aria-hidden="true">↗</span></a>
+        <p id="connection-detail" class="hint status-detail" role="status">Loading the local server…</p>
+      </section>
+      <section class="settings-section">
+        <div class="section-label">MODEL</div>
+        <label for="model-search">Find a model</label><div class="search-field"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="model-search" type="search" placeholder="Search models…" autocomplete="off"></div>
+        <label for="model-select" class="sr-only">Chat model</label><select id="model-select"><option value="">Loading models…</option></select>
+        <p id="model-hint" class="hint">Choose the model that will call your MCP tools.</p>
+      </section>
+      <section class="settings-section">
+        <div class="section-label">APPEARANCE</div>
+        <select id="host-mode" class="hidden" aria-hidden="true"><option value="mcp">Ask</option></select>
+        <label for="theme">Appearance</label><select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">System</option></select>
+        <p class="hint">Sources and results belong to the question you ask.</p>
+      </section>
+      <div class="settings-footer"><span class="tiny-logo">a</span><div><strong>Real tools. Real responses.</strong><p>Your connection’s spending rules apply.</p></div></div>
+    </aside>
+    <main class="chat-panel">
+      <div class="chat-heading"><div><h1>Ask</h1><p>Ask a question, review matching sources, and inspect the saved answer.</p></div><span id="chat-connection" class="subtle-badge"><span class="status-dot"></span> Not connected</span></div>
+      <div id="conversation" class="conversation" role="log" aria-label="Chat conversation" aria-live="polite" aria-relevant="additions">
+        <section id="empty-state" class="empty-state">
+          <div class="empty-mark" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M16 5v6m0 10v6M5 16h6m10 0h6M8.2 8.2l4.2 4.2m7.2 7.2 4.2 4.2M8.2 23.8l4.2-4.2m7.2-7.2 4.2-4.2"/></svg></div>
+          <span class="eyebrow">ASK · MCP 2</span>
+          <h2>Start with a question.</h2><p>Find sources for your question, review the inputs and total,<br class="desktop-break"> then approve the request and read its results.</p>
+          <p id="empty-footnote" class="empty-footnote">Connect to ask a question. Sources appear after you ask.</p>
+        </section>
+      </div>
+      <div class="composer-area">
+        <div id="activity" class="activity" role="status"><span class="activity-dot"></span><span id="activity-text">Ready when you are</span></div>
+        <form id="chat-form" class="composer"><label for="message" class="sr-only">Your message</label><textarea id="message" placeholder="Ask a question…" rows="2" maxlength="16000"></textarea><div class="composer-bottom"><span id="composer-context">Connect to start a conversation</span><div><button id="stop" class="button secondary hidden" type="button"><span class="stop-icon" aria-hidden="true"></span> Stop</button><button id="send" class="button send-button" type="submit" disabled><span>Send</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4"/></svg></button></div></div></form>
+        <div class="composer-caption"><span>Enter to send <span class="key-divider">·</span> Shift + Enter for a new line</span><span id="model-label">No model selected</span></div>
+      </div>
+    </main>
+    <aside id="inspector" class="inspector" aria-label="Protocol inspector">
+      <div class="inspector-heading"><div class="tabs" role="tablist" aria-label="Inspector view"><button id="activity-tab" class="tab active" role="tab" aria-selected="true" aria-controls="activity-panel" type="button">Activity</button><button id="tools-tab" class="tab" role="tab" aria-selected="false" aria-controls="tools-panel" type="button">Tools <span id="tools-count" class="count">0</span></button></div><button id="clear-trace" class="button icon-button" type="button" title="Clear activity" aria-label="Clear activity"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 6h12M8 3h4M6 6l1 11h6l1-11M9 9v5m3-5v5"/></svg></button></div>
+      <section id="activity-panel" class="inspector-panel" role="tabpanel" aria-labelledby="activity-tab"><div id="trace-empty" class="inspector-empty"><span aria-hidden="true">↔</span><h3>A clear view of every call</h3><p>Model activity, tool arguments and source results appear here.</p></div><div id="trace-list" class="trace-list"></div></section>
+      <section id="tools-panel" class="inspector-panel hidden" role="tabpanel" aria-labelledby="tools-tab"><div id="tools-empty" class="inspector-empty"><h3>Connect to inspect tools</h3><p>Explore the actual tool definitions advertised by your MCP server.</p></div><div id="tools-list" class="tools-list"></div><form id="tool-form" class="tool-runner hidden"><h3>Call a tool directly</h3><p class="hint">Test a model-visible tool without a language model. This calls your connected server.</p><label for="tool-select">Tool</label><select id="tool-select"></select><label for="tool-arguments">Arguments <span class="optional">JSON object</span></label><textarea id="tool-arguments" rows="7" spellcheck="false">{}</textarea><button id="run-tool" class="button secondary" type="submit">Run tool</button><p id="tool-error" class="hint error-text" role="alert"></p></form></section>
+      <footer class="inspector-footer"><span class="status-dot"></span><span>Local protocol inspector</span></footer>
+    </aside>
+  </div>
+  <div id="toast" class="toast hidden" role="alert"></div>
+  <script type="module" src="/app.mjs"></script>
+</body>
+</html>

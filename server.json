@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.obcraft/apiosk-mcp",
-  "title": "Apiosk Connect",
-  "description": "Ask a data question, review one plan and total price ceiling, approve in the chat card within your connected account's spending limits, and receive source-backed results. Resume without buying the same work twice.",
-  "version": "2.0.0",
+  "title": "Apiosk Ask",
+  "description": "Ask data questions, compare matching sources, approve one price, and reopen saved evidence.",
+  "version": "3.0.0",
   "websiteUrl": "https://apiosk.com",
   "icons": [
     {
@@ -46,45 +46,28 @@
     {
       "registryType": "npm",
       "identifier": "@apiosk/mcp",
-      "version": "2.0.0",
+      "version": "3.0.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "APIOSK_CONNECT_TOKEN",
-          "description": "Apiosk agent token for stdio (apk_access_\u2026 from a connection, or a legacy apk_live_\u2026 agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
+          "description": "Existing Apiosk agent connection token for stdio. Hosted connections use the configured OAuth flow.",
           "isRequired": true,
           "isSecret": true,
           "format": "string"
         },
         {
           "name": "APIOSK_GATEWAY_V2_URL",
-          "description": "Gateway v2 origin. Defaults to https://gateway.apiosk.com; set only for a local or staging gateway.",
+          "description": "Optional Gateway v2 origin override for local or staging use.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"
-        }
-      ]
-    },
-    {
-      "registryType": "pypi",
-      "identifier": "apiosk-mcp",
-      "version": "2.0.0",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "APIOSK_CONNECT_TOKEN",
-          "description": "Apiosk agent token for stdio (apk_access_\u2026 from a connection, or a legacy apk_live_\u2026 agent key). Hosted MCP uses OAuth instead. Every tool acts for a connected account.",
-          "isRequired": true,
-          "isSecret": true,
-          "format": "string"
         },
         {
-          "name": "APIOSK_GATEWAY_V2_URL",
-          "description": "Gateway v2 origin. Defaults to https://gateway.apiosk.com; set only for a local or staging gateway.",
+          "name": "APIOSK_MCP_STATE_DIR",
+          "description": "Persistent private directory for saved conversations and approval journals.",
           "isRequired": false,
           "isSecret": false,
           "format": "string"
@@ -101,26 +84,53 @@
   "_meta": {
     "com.apiosk": {
       "tags": [
-        "payments",
-        "finance",
-        "x402",
-        "commerce",
-        "crypto"
+        "api",
+        "data",
+        "research",
+        "evidence",
+        "mcp"
       ],
       "categories": [
-        "payments",
-        "finance"
+        "data",
+        "productivity"
       ],
       "tools": [
-        "apiosk_sources",
         "apiosk_ask",
-        "apiosk_external",
-        "apiosk_external_approve",
-        "apiosk_discover",
-        "apiosk_execute",
-        "apiosk_status",
+        "apiosk_capabilities",
+        "apiosk_sources",
+        "apiosk_prepare",
         "apiosk_approve",
-        "apiosk_requote"
+        "apiosk_status",
+        "apiosk_requote",
+        "apiosk_continue",
+        "apiosk_result",
+        "apiosk_evidence",
+        "apiosk_artifact",
+        "apiosk_result_page",
+        "apiosk_follow_up",
+        "apiosk_retry_search",
+        "apiosk_chats",
+        "apiosk_integrations",
+        "apiosk_integration_connect",
+        "apiosk_actions",
+        "apiosk_action_prepare",
+        "apiosk_action_edit",
+        "apiosk_action_execute",
+        "apiosk_recurring_access",
+        "apiosk_recurring_list",
+        "apiosk_recurring_read",
+        "apiosk_recurring_destinations",
+        "apiosk_recurring_channel_review",
+        "apiosk_recurring_channel_create",
+        "apiosk_recurring_quote",
+        "apiosk_recurring_approve",
+        "apiosk_recurring_change_review",
+        "apiosk_recurring_change_apply",
+        "apiosk_review_read",
+        "apiosk_schedule_handoff",
+        "apiosk_task_options",
+        "apiosk_source_selection",
+        "apiosk_analysis_quote"
       ]
     }
   }

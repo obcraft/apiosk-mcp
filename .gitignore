@@ -1,19 +1,8 @@
-node_modules
-.env
-.env.*
+node_modules/
+.state/
+.local/
+.env*
 !.env.example
-.DS_Store
-dist
+!dev/.env.example
+coverage/
 *.log
-.fly
-__pycache__
-.pytest_cache
-*.egg-info
-build
-
-# Keep the local review screenshot private.
-/submission/2026-10-13/mcp-1.0.1-kvk-result.jpg
-
-# Raw review reports contain private operational metadata.
-/.local/release-review-20261013/
-/.local/company-monitor/
