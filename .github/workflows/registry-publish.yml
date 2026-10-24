@@ -1,0 +1,99 @@
+name: Publish MCP Registry metadata (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Exact version already published to npm and declared in server.json"
+        required: true
+        type: string
+        default: "3.0.0"
+      confirm_publish:
+        description: "Publish the reviewed server.json to the existing official MCP Registry entry"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apiosk-mcp-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: inputs.confirm_publish && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # Same GitHub OIDC namespace proof as the previous publisher.
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Require matching metadata and an already published npm package
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json'));
+          const server = JSON.parse(readFileSync('server.json'));
+          const version = process.env.RELEASE_VERSION;
+          assert.match(version, /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/);
+          assert.equal(pkg.name, '@apiosk/mcp');
+          assert.equal(server.name, 'io.github.obcraft/apiosk-mcp');
+          assert.equal(pkg.mcpName, server.name);
+          assert.equal(pkg.version, version);
+          assert.equal(server.version, version);
+          assert.equal(server.packages.length, 1);
+          assert.equal(server.packages[0].registryType, 'npm');
+          assert.equal(server.packages[0].identifier, pkg.name);
+          assert.equal(server.packages[0].version, version);
+          const response = await fetch(`https://registry.npmjs.org/@apiosk%2Fmcp/${encodeURIComponent(version)}`, { signal: AbortSignal.timeout(30000) });
+          assert.equal(response.status, 200, 'Publish the exact npm version before updating the MCP Registry.');
+          const published = await response.json();
+          assert.equal(published.name, pkg.name);
+          assert.equal(published.version, version);
+          assert.equal(published.mcpName, server.name, 'Published npm package must prove this MCP namespace.');
+          console.log(`Verified public npm package ${pkg.name}@${version} and its MCP ownership marker.`);
+          JS
+      - name: Install checksum-pinned official publisher
+        run: |
+          curl --fail --show-error --silent --location --retry 3 \
+            https://github.com/modelcontextprotocol/registry/releases/download/v1.8.4/mcp-publisher_linux_amd64.tar.gz \
+            --output mcp-publisher.tar.gz
+          echo '5dc2fd415369c73551259f31cd33e2aacc9e0d1021e7f08fef1492d93b781628  mcp-publisher.tar.gz' | sha256sum --check --strict
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+      - name: Authenticate using the existing GitHub OIDC publishing identity
+        run: ./mcp-publisher login github-oidc
+      - name: Publish reviewed registry metadata
+        run: ./mcp-publisher publish server.json
+      - name: Verify the exact version in the official registry
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { setTimeout } from 'node:timers/promises';
+          const server = JSON.parse(readFileSync('server.json'));
+          const url = new URL('https://registry.modelcontextprotocol.io/v0.1/servers');
+          url.searchParams.set('search', server.name);
+          url.searchParams.set('limit', '100');
+          for (let attempt = 0; attempt < 12; attempt++) {
+            const response = await fetch(url, { signal: AbortSignal.timeout(15000), cache: 'no-store' });
+            if (response.ok) {
+              const data = await response.json();
+              const published = data.servers?.find(entry => entry.server?.name === server.name && entry.server?.version === server.version);
+              if (published?._meta?.['io.modelcontextprotocol.registry/official']?.status === 'active'
+                && published.server.packages?.some(pkg => pkg.registryType === 'npm' && pkg.identifier === '@apiosk/mcp' && pkg.version === server.version)) {
+                console.log(`Official MCP Registry verified ${server.name}@${server.version}.`);
+                process.exit(0);
+              }
+            }
+            if (attempt < 11) await setTimeout(5000);
+          }
+          throw new Error('The registry has not exposed the published version; inspect the publication before retrying.');
+          JS
