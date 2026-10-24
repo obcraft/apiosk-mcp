@@ -4,6 +4,7 @@
 import { gatewayV2CardHtml, gatewayV2CardMeta } from './ask-ui/gateway-v2-card.mjs';
 import { readFileSync } from 'node:fs';
 import { ASK_PAGE_BRIDGE } from './ask-page-bridge.mjs';
+import { withIntrinsicCardSize } from './card-size.mjs';
 
 const ASK_PAGE_BUNDLE = readFileSync(new URL('./ask-page/bundle.js', import.meta.url), 'utf8').replace(/<\/script/gi, '<\\/script');
 const ASK_PAGE_PROPERTIES = readFileSync(new URL('./ask-page/properties.css', import.meta.url), 'utf8');
@@ -120,7 +121,7 @@ export function createLegacyCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
 }
 
 export function createCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
-  return createLegacyCardHtml(gatewayUrl)
+  return withIntrinsicCardSize(createLegacyCardHtml(gatewayUrl))
     .replace('</style>', () => `${ASK_PAGE_PROPERTIES}\n.card.ask-page-discovery{border:0;border-radius:0;padding:0;background:transparent}.ask-page-discovery>.shell{display:none}.ask-page-discovery>#sections{padding:0}.ask-page-mount{width:100%;min-width:0}</style>`)
     .replace('<script>', () => `<script>window.apioskAskPageLogoOrigins=${JSON.stringify(SOURCE_LOGO_ORIGINS)};window.apioskAskPageGatewayUrl=${JSON.stringify(new URL(gatewayUrl).origin)};if(document.createElement('div').attachShadow){${ASK_PAGE_BUNDLE}}</script><script>`)
     .replace('   acceptResponse(next);\n  }catch{recover()}', '   void mcp2AcceptLiveTask(next);\n  }catch{recover()}')

@@ -53,7 +53,7 @@ function PurchaseInputs({ item, disabled }: { item: Props['inputs'][number]; dis
   useEffect(() => { item.onValues(buildInputs(fields, values).built?.inputs ?? null, byName) }, [])
   return <section aria-label={`Purchase ${source.name}`} className="flex flex-col gap-2">
     <div className="space-y-2">
-      <form data-purchase-inputs className="space-y-2 [&_input:not([type=checkbox])]:h-9 [&_textarea]:min-h-9 [&_textarea]:py-1.5"
+      <form data-purchase-inputs className="space-y-3 [&_input:not([type=checkbox])]:h-9 [&_textarea]:min-h-9 [&_textarea]:py-1.5"
         onSubmit={event => event.preventDefault()} onBlur={event => {
           const name = (event.target as HTMLElement).closest<HTMLElement>('[data-input-field]')?.dataset.inputField
           if (!name) return
@@ -64,7 +64,7 @@ function PurchaseInputs({ item, disabled }: { item: Props['inputs'][number]; dis
           <p className="text-body text-muted">{lookup.field === 'geo.input.q'
             ? byName ? 'We’ll find the address and look up its linked records first. The lookup is included in your total price.' : 'Use the location identifiers you already have.'
             : byName ? `We’ll look up the ${lookup.resolves.some((field: string) => /kvk/i.test(field)) ? 'KVK number' : 'company identifier'} with ${source.name} first. The lookup is included in your total price.` : 'Use the company identifier you already have.'}</p>
-          <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => {
+          <Button type="button" variant="ghost" size="sm" className="-ml-3 h-auto min-h-8 justify-start whitespace-normal py-1 text-left" disabled={disabled} onClick={() => {
             const next = !byName
             setByName(next)
             update(valuesFrom(purchaseFields(descriptor, next), source.endpoint?.input_values), next)
@@ -127,7 +127,7 @@ function Discovery(props: Props) {
       onPrepareQuestion={result.onPrepareQuestion ? question => setFollowUp({ question, send: result.onPrepareQuestion! }) : undefined} />
   </div>)
   return <MoneyContext.Provider value={money}>
-    <PortalRootContext value={portalRoot}><div ref={setPortalRoot} className={`ask-app min-w-0 w-full space-y-4${dark ? ' dark' : ''}`} onClick={event => {
+    <PortalRootContext value={portalRoot}><div ref={setPortalRoot} className={`ask-app answer-content min-w-0 w-full space-y-5${dark ? ' dark' : ''}`} onClick={event => {
       const link = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
       if (link) { event.preventDefault(); void (window as any).apiosk.openLink(link.href) }
     }}>
@@ -146,7 +146,7 @@ function Discovery(props: Props) {
         onToggle={onToggle} onGetPrice={onReview} onClear={onClear}>
         {hasSaved ? <div className="space-y-5">{decisionNodes}{savedResults}</div> : inputs.length > 0 ? <div className="space-y-4">
           <div className="grid scroll-mt-[calc(var(--header-height)+1rem)] gap-5">
-            {groups.map(group => <section key={group.key} className="min-w-0 rounded-lg border border-border-2 p-3" aria-label={group.items[0].source.name}>
+            {groups.map(group => <section key={group.key} className="min-w-0 rounded-xl border border-border-2 p-4 sm:p-5" aria-label={group.items[0].source.name}>
               {inputs.length > 1 && <p className="mb-2 truncate text-tiny font-medium text-muted">{group.items[0].source.name}</p>}
               <div className="space-y-3">{group.items.map(item => <div key={item.key} className="space-y-2"><PurchaseInputs item={item} disabled={busy} /></div>)}</div>
               {purchase && purchase.steps.length > 1 && <details className="text-tiny text-muted">
@@ -175,7 +175,7 @@ function Discovery(props: Props) {
               <p aria-live="polite" className={total && !busy && !purchase?.expired ? 'text-body font-medium tabular-nums' : 'text-tiny text-muted'}>{busy ? 'Checking details…' : purchase?.expired ? 'This price expired. Refresh it to continue.' : total ? `Total ${total}` : quoteError || purchase?.errors.length || purchase?.incomplete ? 'Check the details above and try again.' : 'Fill in the required details.'}</p>
               {total && <p className="text-tiny text-muted">Nothing is charged until you approve.</p>}
             </div>
-            <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+            <div className="ask-purchase-actions ml-auto flex shrink-0 items-center justify-end gap-2">
               {purchase?.incomplete ? <Button type="button" variant="primary" size="lg" className="rounded-full text-menu" disabled={busy} onClick={purchase.onRetry}>Try again</Button>
                 : purchase?.needsRecovery ? <Button type="button" variant="primary" size="lg" className="rounded-full text-menu" disabled={busy} onClick={purchase.onStatus}>Check saved status</Button>
                 : purchase?.expired ? <Button type="button" variant="primary" size="lg" className="rounded-full text-menu [&_svg]:size-3" disabled={busy} onClick={purchase.onRefresh}><RefreshCw aria-hidden="true" />Refresh price</Button>

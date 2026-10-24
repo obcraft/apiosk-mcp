@@ -310,6 +310,9 @@
   .mb-3 {
     margin-bottom: calc(var(--spacing) * 3);
   }
+  .-ml-3 {
+    margin-left: calc(var(--spacing) * -3);
+  }
   .ml-0\.5 {
     margin-left: calc(var(--spacing) * 0.5);
   }
@@ -716,6 +719,9 @@
   }
   .justify-end {
     justify-content: flex-end;
+  }
+  .justify-start {
+    justify-content: flex-start;
   }
   .gap-0\.5 {
     gap: calc(var(--spacing) * 0.5);
@@ -1240,6 +1246,9 @@
   }
   .break-all {
     word-break: break-all;
+  }
+  .whitespace-normal {
+    white-space: normal;
   }
   .whitespace-nowrap {
     white-space: nowrap;
@@ -2192,6 +2201,20 @@
     }
   }
 }
+/* The host supplies the outer tool card. Give every embedded Ask state the
+   same reading inset without changing the App's source and result components. */
+.ask-app { padding:16px; }
+@media (min-width:640px) {
+  .ask-app { padding:24px; }
+}
+.ask-sticky-bar > :first-child { flex-basis:200px; }
+@media (max-width:479px) {
+  .ask-sticky-bar { flex-direction:column; align-items:stretch; }
+  .ask-sticky-bar > :first-child { flex-basis:auto; }
+  .ask-purchase-actions { width:100%; margin-left:0; }
+  .ask-purchase-actions > button { width:100%; white-space:normal; height:auto; min-height:40px; padding-block:8px; }
+}
+
 /* Inputs are the existing scoped MCP controls, hosted beneath the real App
    source chooser. They retain the App's field size, type scale and tokens. */
 .source-input-editor { display:grid; gap:12px }

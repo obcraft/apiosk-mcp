@@ -8,7 +8,7 @@ export const useMoney = () => useContext(MoneyContext)
 export type PurchaseSource = Record<string, any>
 export type AskSourceItem = { key: string; source: PurchaseSource }
 export type AskTurnSelection = { items: AskSourceItem[]; open: boolean }
-export const stickyBar = 'ask-sticky-bar flex w-full items-center justify-between gap-3 rounded-xl border border-border-2 bg-surface px-3 py-3 sm:px-4'
+export const stickyBar = 'ask-sticky-bar flex w-full flex-wrap items-center justify-between gap-4 rounded-xl border border-border-2 bg-surface p-4 sm:p-5'
 
 export function safeSourceUrl(value: string | null | undefined): string | undefined {
   if (!value) return undefined
