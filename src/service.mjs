@@ -434,8 +434,13 @@ export function createAskService({ gateway, store }) {
     tool('apiosk_retry_search', 'Explicitly resume or retry source discovery without approving or buying. Preserves prior purchases; a request with an approval attempt must use a new follow-up for new data.', obj({ request_id: id }, ['request_id']), async ({ request_id }, { signal }) => store.withLock(request_id, async () => {
       const state = await readAsk(request_id);
       if (state.approved_id) throw new Error('Use follow-up for new data; this request already has approved purchases.');
-      if (!sessionCredential && state.discovery?.search_id) {
-        state.discovery = await call('/v2/ask/page/search', { question: state.question, parsed_request: state.discovery.parsed_request, search_id: state.discovery.search_id }, signal);
+      const parsedReceipt = state.discovery?.parse_id || state.discovery?.search_id || state.discovery?.discovery_id;
+      if (!sessionCredential && parsedReceipt) {
+        const moneyDisplay = state.discovery?.context_view?.money_display;
+        state.discovery = await call('/v2/ask/page/search', { question: state.question, parsed_request: state.discovery.parsed_request, search_id: parsedReceipt }, signal);
+        if (moneyDisplay && !state.discovery.context_view?.money_display) {
+          state.discovery.context_view = { ...state.discovery.context_view, money_display: moneyDisplay };
+        }
         state.sources = sourceRows(state.discovery); state.approval = null; state.status = state.discovery.errors?.length ? 'partial_discovery' : 'sources_ready'; await store.save(state);
       } else await discoverSaved(state, signal);
       return show(state);

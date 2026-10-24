@@ -193,6 +193,30 @@ test('source refresh and automatic planning retain the displayed Ask page parse 
   assert.equal(f.calls.filter(call => call.path === '/v2/approve' || call.path === '/v2/execute').length, 0);
 });
 
+test('retry keeps the signed App parse when neither source origin has a usable snapshot', async t => {
+  const f = await fixture(t), asked = await f.ask(), request_id = requestId(asked);
+  const saved = await f.store.get(request_id);
+  saved.discovery.search_id = null; saved.discovery.discovery_id = null; saved.discovery.parse_id = 'signed-parse-only';
+  const parsed = clone(saved.discovery.parsed_request);
+  await f.store.save(saved);
+  await f.invoke('apiosk_retry_search', { request_id });
+  const retry = f.calls.find(call => call.path === '/v2/ask/page/search');
+  assert.equal(retry.body.search_id, 'signed-parse-only');
+  assert.deepEqual(retry.body.parsed_request, parsed);
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/page').length, 1, 'No new model interpretation is requested');
+});
+
+test('retry preserves the account display currency when refreshed sources omit display context', async t => {
+  const f = await fixture(t), asked = await f.ask(), request_id = requestId(asked);
+  const saved = await f.store.get(request_id);
+  const money = { base_currency: 'USD', preferred_currency: 'EUR', currency: 'EUR', rate: '0.92', as_of_date: '2026-08-21' };
+  saved.discovery.context_view = { money_display: money };
+  await f.store.save(saved);
+  const refreshed = await f.invoke('apiosk_retry_search', { request_id });
+  assert.deepEqual(stateOf(refreshed).discovery.context_view.money_display, money);
+  assert.equal(f.paidCalls().length, 0);
+});
+
 test('session discovery sends App search bodies and retains offered metadata without displaying unmatched endpoints', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'apiosk-session-discovery-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
