@@ -209,7 +209,11 @@ export function createAskService({ gateway, store }) {
       pending.calls[key] ??= randomUUID(); await store.save(state);
       const view = await call(path, { ...body, request_id: pending.calls[key] }, signal);
       const taskId = kind === 'external' ? view.purchase_id : view.state?.state_ref;
-      if (!taskId) { state.preparation_response = view; throw new Error('Gateway did not return a saved task. The preparation response is retained for review.'); }
+      if (!taskId) {
+        state.preparation_response = view;
+        throw Object.assign(new Error((view.errors || []).map(error => error.message).filter(Boolean).join('\n')
+          || 'Gateway did not return a saved task. The preparation response is retained for review.'), { code: view.errors?.[0]?.code || 'preparation_unavailable' });
+      }
       let task = state.tasks.find(t => t.id === taskId);
       if (task) task.view = view; else { task = { id: taskId, kind, view }; state.tasks.push(task); }
       state.active_task_ids.push(taskId); await store.save(state);
@@ -220,12 +224,12 @@ export function createAskService({ gateway, store }) {
           search_id: found.search_id, ...(found.discovery_id ? { discovery_id: found.discovery_id } : {}) });
       } else {
         const local = selected.filter(s => s.source.origin === 'apiosk');
-        if (local.length && !sessionCredential) {
-          await executePrepare('local', 'endpoint', '/v2/ask/prepare', { question: state.question, parsed_request: found.parsed_request, search_id: found.search_id,
-            selections: local.map(({ source, input }) => ({ endpoint_id: source.endpoint_id, capability: source.capability ?? source.requested_capability,
-              ...(source.subject_id ? { subject_id: source.subject_id } : {}), input })) });
-        } else for (const { source, input } of local) {
-          await executePrepare(source.id, 'endpoint', '/v2/ask-v2/prepare', { endpoint_id: source.endpoint_id, capability: source.capability ?? source.requested_capability, input,
+        // Manual source selection uses the App's endpoint preparation for each
+        // chosen source. The connected adapter persists manual approval before
+        // returning; it never applies a connection's standing approval rule.
+        for (const { source, input } of local) {
+          await executePrepare(source.id, 'endpoint', sessionCredential ? '/v2/ask-v2/prepare' : '/v2/ask/source/prepare', {
+            endpoint_id: source.endpoint_id, capability: source.capability ?? source.requested_capability, input,
             ...(Buffer.byteLength(state.question, 'utf8') <= 8000 ? { question: state.question } : {}) });
         }
         for (const { source, input } of selected.filter(s => s.source.origin !== 'apiosk')) {

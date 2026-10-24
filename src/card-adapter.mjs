@@ -29,7 +29,7 @@ function compact(state, card) {
     source_count: visible.length, company_context: card.company_context || state.discovery?.company_context || [],
     money_display: card.context_view?.money_display || null, approval: state.approval || null, tasks,
     input_requirements: (state.input_requirements || []).map(item => ({ source_id: item.source_id, source: item.source,
-      missing: item.missing, errors: item.errors })), errors: state.error ? [state.error] : state.discovery?.errors || [],
+      missing: item.missing, errors: item.errors })), errors: state.preparation_response?.errors?.length && state.pending_prepare ? state.preparation_response.errors : state.error ? [state.error] : state.discovery?.errors || [],
     next_step: state.approval ? 'Review this exact total. Only explicit user approval permits execution.'
       : sources.length && !tasks.length ? 'Choose sources in the embedded card. Nothing has been purchased.'
       : 'Use the saved request ID to inspect status, result or evidence. Do not repeat a purchase.',
@@ -156,7 +156,7 @@ export function presentCard(state, preferredTaskId, gatewayUrl) {
       request_id: task.id, response: { ...taskCard(state, task, gatewayUrl), _mcp2: marker },
       approval_submitted: !!task.approval_attempt, uncertain: ['dispatching', 'outcome_unknown'].includes(task.approval_attempt?.status),
       error: task.approval_attempt?.error?.message })), ...(incomplete ? [{ kind: 'local', label: 'Remaining source prices',
-      request_id: state.pending_prepare.request_id, error: state.error?.message || 'Price preparation is incomplete. Retry the saved selection.' }] : [])] };
+      request_id: state.pending_prepare.request_id, error: (state.preparation_response?.errors || []).map(error => error.message).filter(Boolean).join('\n') || state.error?.message || 'Price preparation is incomplete. Retry the saved selection.' }] : [])] };
   return { ...sourceCard(state), request_id: state.id, _mcp2: marker };
 }
 

@@ -83,11 +83,10 @@ function gatewayFixture() {
       } else if (req.method === 'GET' && req.url === `/v2/ask-v2/endpoints/${ENDPOINT}?capability=${CAPABILITY}`) {
         assert.equal(body, undefined);
         response = descriptor;
-      } else if (req.method === 'POST' && req.url === '/v2/ask/prepare') {
+      } else if (req.method === 'POST' && req.url === '/v2/ask/source/prepare') {
         counts.prepare++;
         assert.match(body.request_id, UUID);
-        assert.deepEqual(body, { request_id: body.request_id, question: QUESTION, parsed_request: parsed,
-          search_id: 'signed-search-fixture', selections: [{ endpoint_id: ENDPOINT, capability: CAPABILITY, subject_id: 'subject_1', input: INPUT }] });
+        assert.deepEqual(body, { request_id: body.request_id, endpoint_id: ENDPOINT, capability: CAPABILITY, input: INPUT, question: QUESTION });
         assert.equal(counts.sourceExecutions, 0, 'Preparing may not execute the source.');
         response = view;
       } else if (req.method === 'GET' && req.url === `/v2/tasks/${TASK}`) {

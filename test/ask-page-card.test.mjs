@@ -277,6 +277,27 @@ test('mixed preparation shows required task decisions and retries only incomplet
   } finally { dom.window.close(); }
 });
 
+test('a rejected combined price keeps valid inputs, shows the source failure and retries the saved preparation', async () => {
+  const search = fixture();
+  search.selected_sources = [0, 6].map(index => ({ endpoint_id: `endpoint-${index}`, capability: 'company.profile', subject_id: 'mollie', input: { 'company.name': 'Mollie B.V.' } }));
+  const error = 'OpenSanctions cannot preserve the requested filters and output scope. Choose another source or revise the inputs.';
+  const view = { view: 'source_basket', _mcp2: { request_id: 'request1' }, search,
+    entries: [{ kind: 'local', label: 'Remaining source prices', request_id: 'saved-prepare', error }] };
+  const { dom, shadow, calls } = await mount(view, () => view);
+  try {
+    assert.equal(shadow.querySelectorAll('form[data-purchase-inputs] input').length, 2);
+    assert.ok(shadow.textContent.includes(error));
+    assert.ok(shadow.textContent.includes('Check the details above and try again.'));
+    assert.ok(!shadow.textContent.includes('Fill in the required details.'));
+    assert.equal(calls.length, 0, 'restoring a rejected preparation must not automatically retry');
+    const retry = [...shadow.querySelectorAll('button')].find(button => button.textContent === 'Try again');
+    assert.ok(retry); assert.equal(retry.disabled, false);
+    retry.click(); await wait(30);
+    assert.ok(calls.some(call => call.args.operation === 'retry_preparation' && call.args.request_id === 'request1'));
+    assert.ok(!calls.some(call => call.name === 'apiosk_card_approve'));
+  } finally { dom.window.close(); }
+});
+
 test('running work keeps its exact cancel action and cannot offer a new purchase yet', async () => {
   const view = { status: 'running', state: { state_ref: 'running1', revision: 1 }, _mcp2: { request_id: 'request1' },
     billing: { authorization_active: true }, next_actions: [{ action_id: 'cancel-exact', kind: 'cancel', requires_authorization: false }], errors: [], context_view: { worker_active: true, execution_mode: 'server' } };

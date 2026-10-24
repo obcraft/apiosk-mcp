@@ -44,7 +44,7 @@ async function fixture(t, options = {}) {
       const custom = await options.respond(path, request, calls.length);
       if (custom !== undefined) return custom;
     }
-    if (path === '/v2/ask/prepare' || path === '/v2/ask/research' || path === '/v2/discover' || path === '/v2/ask-v2/prepare') return clone(current);
+    if (path === '/v2/ask/source/prepare' || path === '/v2/ask/prepare' || path === '/v2/ask/research' || path === '/v2/discover' || path === '/v2/ask-v2/prepare') return clone(current);
     if (path === '/v2/ask/conversation') return { kind: 'saved_answer', task_refs: [TASK] };
     if (path === `/v2/tasks/${TASK}`) return clone(current);
     if (path === '/v2/approve' || path === '/v2/execute') {

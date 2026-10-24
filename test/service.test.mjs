@@ -64,7 +64,7 @@ async function fixture(t, options = {}) {
     calls.push({ path, body: clone(request.body), headers: clone(request.headers), responseType: request.responseType, method: request.method ?? (request.body === undefined ? 'GET' : 'POST') });
     if (request.responseType === 'bytes') return new TextEncoder().encode('%PDF fixture');
     if (path === '/v2/ask') return discovery(options);
-    if (path === '/v2/ask/prepare' || path === '/v2/ask/research') return clone(currentTask);
+    if (path === '/v2/ask/source/prepare' || path === '/v2/ask/research') return clone(currentTask);
     if (path === '/v2/ask/conversation') return { kind: 'saved_answer', task_refs: [TASK_ID] };
     if (path === `/v2/tasks/${TASK_ID}`) return clone(currentTask);
     if (path.startsWith('/v2/tasks/') && historical.has(path.slice('/v2/tasks/'.length))) return clone(historical.get(path.slice('/v2/tasks/'.length)));
@@ -115,7 +115,10 @@ async function fixture(t, options = {}) {
   };
   const prepare = async () => {
     const asked = await ask(), request_id = requestId(asked), sources = stateOf(asked).sources;
-    const selections = sources.map(source => ({ source_id: source.id, input: clone(source.input_values ?? source.endpoint?.input_values ?? {}) }));
+    // These durable-state cases deliberately exercise one native task.
+    // Independent native quotes are covered by their own fixture below.
+    const selected = [sources.find(source => source.origin === 'apiosk'), ...sources.filter(source => source.origin !== 'apiosk')].filter(Boolean);
+    const selections = selected.map(source => ({ source_id: source.id, input: clone(source.input_values ?? source.endpoint?.input_values ?? {}) }));
     const result = await invoke('apiosk_prepare', { request_id, selections });
     return { request_id, selections, result, approval: stateOf(result).approval };
   };
@@ -213,19 +216,83 @@ test('session discovery sends App search bodies and retains offered metadata wit
   assert.equal(calls.some(call => /approve|authorize|execute/.test(call.path)), false);
 });
 
-test('discovery and preparation preserve each subject/input identity and never execute', async t => {
-  const f = await fixture(t), prepared = await f.prepare();
-  assert.equal(prepared.selections.length, 2);
-  assert.notEqual(prepared.selections[0].source_id, prepared.selections[1].source_id);
-  const preparation = f.calls.find(call => call.path === '/v2/ask/prepare');
-  assert.ok(preparation);
-  assert.match(JSON.stringify(preparation.body), /12345670/);
-  assert.match(JSON.stringify(preparation.body), /12345671/);
-  assert.match(JSON.stringify(preparation.body), /company-1/);
-  assert.match(JSON.stringify(preparation.body), /company-2/);
-  assert.equal(f.paidCalls().length, 0);
-  assert.equal(prepared.approval.max_total_atomic, '140000');
-  assert.equal(prepared.approval.currency, 'USD');
+async function independentNativePreparation(t, { credentialKind = 'connection', mollie = false, question } = {}) {
+  const directory = await mkdtemp(join(tmpdir(), 'apiosk-independent-native-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const store = new StateStore({ directory, scope: 'independent-native-fixture' }), calls = [], found = discovery();
+  const taskIds = [TASK_ID, '55555555-5555-4555-8555-555555555555'];
+  const prices = mollie ? ['70000', '108696'] : ['70000', '70000'];
+  if (mollie) {
+    Object.assign(found.apis[0], { name: 'KVK', subject_id: 'mollie', description: 'Registered company profile', input_values: { 'company.id': '30204462' } });
+    Object.assign(found.apis[1], { name: 'OpenSanctions', subject_id: 'mollie', endpoint_id: '66666666-6666-4666-8666-666666666666',
+      capability: 'company.sanctions', description: 'Screen the company name against sanctions lists', input_values: { 'company.name': 'Mollie B.V.' } });
+    found.parsed_request.subjects = [{ id: 'mollie', type: 'company', label: 'Mollie B.V.', identifiers: { 'company.id': '30204462' } }];
+    found.parsed_request.capabilities = found.apis.map(source => ({ slug: source.capability, subject_id: 'mollie' }));
+  }
+  for (const source of found.apis) source.endpoint = { ...source.endpoint, input_values: clone(source.input_values) };
+  found.searches.apiosk.matches = found.apis.map(source => ({ slug: source.capability, subject_id: source.subject_id, apiosk: [source] }));
+  const askedQuestion = question ?? (mollie ? 'KYB check for Mollie B.V. (KVK number 30204462): show the registered company profile and screen the company name against sanctions lists.' : found.question);
+  const gateway = { credentialKind, async request(path, request = {}) {
+    calls.push({ path, body: clone(request.body) });
+    if (path === '/v2/ask') return clone(found);
+    if (path === '/v2/ask-v2/parse') return { parsed_request: clone(found.parsed_request), planning_token: 'fixture-planning' };
+    if (path === '/v2/ask-v2/search') return clone(found.searches[request.body.origin]);
+    if (path.startsWith('/v2/ask-v2/endpoints/')) {
+      const source = found.apis.find(source => path.includes(source.endpoint_id));
+      return { endpoint_id: source.endpoint_id, inputs: Object.keys(source.input_values).map(field => ({ field, required: true, schema: { type: 'string' } })) };
+    }
+    if (path === (credentialKind === 'session' ? '/v2/ask-v2/prepare' : '/v2/ask/source/prepare')) {
+      const index = found.apis.findIndex(source => source.endpoint_id === request.body.endpoint_id && JSON.stringify(source.input_values) === JSON.stringify(request.body.input));
+      assert.notEqual(index, -1, 'Each preparation preserves its endpoint and exact source inputs');
+      const view = preparedTask();
+      view.state.state_ref = taskIds[index]; view.proposal.quote_ref = `independent-${index}`; view.proposal.max_total_atomic = prices[index];
+      return view;
+    }
+    throw new Error(`Unexpected request during free preparation: ${path}`);
+  } };
+  const service = createAskService({ gateway, store });
+  const invoke = (name, args) => service.tools.find(tool => tool.name === name).handler(args, {});
+  const asked = await invoke('apiosk_ask', { question: askedQuestion });
+  assert.equal(asked.isError, undefined);
+  const sources = stateOf(asked).sources;
+  assert.equal(sources.length, 2);
+  assert.notEqual(sources[0].id, sources[1].id);
+  const selections = sources.map(source => ({ source_id: source.id, input: clone(source.input_values) }));
+  const response = await invoke('apiosk_prepare', { request_id: requestId(asked), selections });
+  assert.equal(response.isError, undefined);
+  const saved = stateOf(response), preparations = calls.filter(call => call.path.endsWith('/prepare'));
+  assert.equal(preparations.length, 2);
+  assert.notEqual(preparations[0].body.request_id, preparations[1].body.request_id);
+  for (const [index, preparation] of preparations.entries()) assert.deepEqual(preparation.body, {
+    request_id: preparation.body.request_id, endpoint_id: sources[index].endpoint_id, capability: sources[index].capability,
+    input: sources[index].input_values, ...(Buffer.byteLength(askedQuestion, 'utf8') <= 8000 ? { question: askedQuestion } : {}),
+  });
+  assert.deepEqual(saved.active_task_ids, taskIds);
+  assert.deepEqual(saved.approval.quotes.map(quote => quote.task_id), taskIds);
+  assert.deepEqual(saved.approval.quotes.map(quote => quote.max_total_atomic), prices);
+  assert.equal(saved.approval.max_total_atomic, prices.reduce((sum, price) => sum + BigInt(price), 0n).toString());
+  assert.equal(saved.approval.currency, 'USD');
+  assert.equal(saved.tasks.some(task => task.approval_attempt), false);
+  assert.equal(calls.some(call => /approve|authorize|execute|research/.test(call.path)), false);
+  return { saved, calls, preparations };
+}
+
+test('manual preparation gives two subjects independent tasks while preserving both source input identities', async t => {
+  await independentNativePreparation(t);
+});
+
+test('KVK and sanctions for the same Mollie question form one combined approval from two exact independent quotes', async t => {
+  for (const credentialKind of ['connection', 'session']) {
+    const result = await independentNativePreparation(t, { credentialKind, mollie: true });
+    assert.equal(result.saved.approval.max_total_atomic, '178696');
+    assert.deepEqual(result.preparations.map(call => call.path), Array(2).fill(credentialKind === 'session' ? '/v2/ask-v2/prepare' : '/v2/ask/source/prepare'));
+    assert.deepEqual(result.preparations.map(call => call.body.input), [{ 'company.id': '30204462' }, { 'company.name': 'Mollie B.V.' }]);
+  }
+});
+
+test('manual source preparation omits oversized UTF-8 question context while preserving the selected inputs', async t => {
+  const result = await independentNativePreparation(t, { question: '🌍'.repeat(2100) });
+  assert.ok(result.preparations.every(call => !Object.hasOwn(call.body, 'question')));
 });
 
 test('approval binds explicit ID, currency and maximum before executing once', async t => {
@@ -360,7 +427,7 @@ test('missing required input is shown before any task preparation', async t => {
   assert.notEqual(response.isError, true);
   assert.equal(stateOf(response).status, 'needs_input');
   assert.equal(stateOf(response).approval, null);
-  assert.equal(f.calls.filter(call => call.path === '/v2/ask/prepare').length, 0);
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/source/prepare').length, 0);
   assert.equal(f.paidCalls().length, 0);
   assert.match(textOf(response), /company\.id/);
 });
@@ -517,14 +584,14 @@ test('saved-page transport is blocked while an unapproved quote can trigger stan
 test('failed metadata review for edited inputs invalidates old approval before status or consent can reuse it', async t => {
   const f = await fixture(t), prepared = await f.prepare();
   const selections = prepared.selections.map((selection, index) => index === 0 ? { ...selection, input: { 'company.id': '87654321' } } : selection);
-  const prepareCount = f.calls.filter(call => call.path === '/v2/ask/prepare').length;
+  const prepareCount = f.calls.filter(call => call.path === '/v2/ask/source/prepare').length;
   f.setDescriptorFailure(true);
   await f.invoke('apiosk_prepare', { request_id: prepared.request_id, selections });
   const failed = await f.store.get(prepared.request_id);
   assert.equal(failed.approval, null);
   assert.equal(failed.pending_input_review, true);
   assert.equal(failed.status, 'input_review_incomplete');
-  assert.equal(f.calls.filter(call => call.path === '/v2/ask/prepare').length, prepareCount);
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/source/prepare').length, prepareCount);
   const status = await f.invoke('apiosk_status', { request_id: prepared.request_id });
   assert.notEqual(status.isError, true);
   assert.equal(stateOf(status).approval, null);
@@ -534,7 +601,7 @@ test('failed metadata review for edited inputs invalidates old approval before s
 });
 
 test('successful metadata retry for the already prepared fingerprint clears review hold and restores its quote', async t => {
-  const f = await fixture(t), prepared = await f.prepare(), prepareCount = f.calls.filter(call => call.path === '/v2/ask/prepare').length;
+  const f = await fixture(t), prepared = await f.prepare(), prepareCount = f.calls.filter(call => call.path === '/v2/ask/source/prepare').length;
   f.setDescriptorFailure(true);
   await f.invoke('apiosk_prepare', { request_id: prepared.request_id, selections: prepared.selections });
   assert.equal((await f.store.get(prepared.request_id)).pending_input_review, true);
@@ -547,7 +614,7 @@ test('successful metadata retry for the already prepared fingerprint clears revi
   assert.equal(state.approval.max_total_atomic, prepared.approval.max_total_atomic);
   assert.equal(state.approval.currency, prepared.approval.currency);
   assert.equal(state.approval.quotes[0].quote_ref, prepared.approval.quotes[0].quote_ref);
-  assert.equal(f.calls.filter(call => call.path === '/v2/ask/prepare').length, prepareCount, 'The identical saved preparation is reused after successful input review');
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/source/prepare').length, prepareCount, 'The identical saved preparation is reused after successful input review');
   assert.equal(f.paidCalls().length, 0);
 });
 

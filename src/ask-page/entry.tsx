@@ -172,7 +172,7 @@ function Discovery(props: Props) {
           <StickyComposerSummary role="region" aria-label="Purchase summary" aria-busy={busy} className={stickyBar}>
             <div className="min-w-0 flex-1">
               <p className="truncate text-tiny text-muted">{inputs.length > 1 ? `${inputs.length} sources selected` : inputs[0].source.name}</p>
-              <p aria-live="polite" className={total && !busy && !purchase?.expired ? 'text-body font-medium tabular-nums' : 'text-tiny text-muted'}>{busy ? 'Checking details…' : purchase?.expired ? 'This price expired. Refresh it to continue.' : total ? `Total ${total}` : quoteError ? 'Check the details above and try again.' : 'Fill in the required details.'}</p>
+              <p aria-live="polite" className={total && !busy && !purchase?.expired ? 'text-body font-medium tabular-nums' : 'text-tiny text-muted'}>{busy ? 'Checking details…' : purchase?.expired ? 'This price expired. Refresh it to continue.' : total ? `Total ${total}` : quoteError || purchase?.errors.length || purchase?.incomplete ? 'Check the details above and try again.' : 'Fill in the required details.'}</p>
               {total && <p className="text-tiny text-muted">Nothing is charged until you approve.</p>}
             </div>
             <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
