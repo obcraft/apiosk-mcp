@@ -9,9 +9,9 @@ import { withIntrinsicCardSize } from './card-size.mjs';
 const ASK_PAGE_BUNDLE = readFileSync(new URL('./ask-page/bundle.js', import.meta.url), 'utf8').replace(/<\/script/gi, '<\\/script');
 const ASK_PAGE_PROPERTIES = readFileSync(new URL('./ask-page/properties.css', import.meta.url), 'utf8');
 
-export const CARD_URI = 'ui://apiosk/mcp-2-ask-v3.html';
-export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v3-chatgpt.html';
-export const CURRENT_CARD_COMPATIBILITY_URIS = [1, 2].flatMap(version => [`ui://apiosk/mcp-2-ask-v${version}.html`, `ui://apiosk/mcp-2-ask-v${version}-chatgpt.html`]);
+export const CARD_URI = 'ui://apiosk/mcp-2-ask-v4.html';
+export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v4-chatgpt.html';
+export const CURRENT_CARD_COMPATIBILITY_URIS = [1, 2, 3].flatMap(version => [`ui://apiosk/mcp-2-ask-v${version}.html`, `ui://apiosk/mcp-2-ask-v${version}-chatgpt.html`]);
 export const CARD_READ_TOOL = 'apiosk_card';
 export const CARD_APPROVE_TOOL = 'apiosk_card_approve';
 export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model', 'app'] }, 'openai/outputTemplate': CHATGPT_CARD_URI,

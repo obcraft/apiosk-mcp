@@ -31,7 +31,7 @@ async function askPageInspectNative(row,select=true,savedInput=null){
   askPageDescriptors.set(source_id,response);row.source=askPageCandidate(row.source);
   const source=row.source,key=sourceChoiceKey(source,row.match);
   attachSourceChoice(el('div'),el('div'),el('div'),source,row.match);
-  if(select){const entry=sourceChoices.get(key)?.[0];if(entry){if(select!=='restore')askPageEdit();if(savedInput){entry.draft.input={...savedInput};entry.draft.controls.clear()}selectedSources.set(key,entry.draft)}}
+  if(select){const entry=sourceChoices.get(key)?.[0];if(entry){if(select!=='restore')askPageEdit();if(savedInput){entry.draft.input={...source.endpoint.input_values,...savedInput};entry.draft.controls.clear()}selectedSources.set(key,entry.draft)}}
  }catch(error){showFeedback(error?.message||'This source’s input details are unavailable.','error')}
  finally{busy=false;sourceSelectionEdited()}
 }
@@ -43,7 +43,7 @@ async function askPageToggleExternal(candidate){
  try{
   const next=await window.apiosk.callTool('apiosk_external',{action:'source',api_id:candidate.api_id});
   if(next?.view!=='external_source'||next.api_id!==candidate.api_id||!Array.isArray(next.source?.inputs))throw new Error('The source inputs could not be loaded. Try again.');
-  askPageExternal.set(candidate.api_id,{source:{...candidate,endpoint:next.source},descriptor:next.source,values:{}});
+  askPageExternal.set(candidate.api_id,{source:{...candidate,endpoint:next.source},descriptor:next.source,values:{...next.source.input_values}});
  }catch(error){showFeedback(error?.message||'The source inputs could not be loaded.','error')}
  finally{busy=false;sourceSelectionEdited()}
 }

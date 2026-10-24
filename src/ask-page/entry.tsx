@@ -134,6 +134,7 @@ function Discovery(props: Props) {
       <AnswerLayout sources={webSources} webSearches>
         <SubjectWebContext value={context} />
       </AnswerLayout>
+      {data.discovery_coverage?.gaps?.map((gap: any, index: number) => <p key={index} role="status" className="text-tiny text-muted">{gap.notice}</p>)}
       {!rows.length && !hasSaved && !automatic && <p role="status" className="text-body text-muted">{data.message || data.planning_message || 'We couldn’t find any results for you. Try a different question.'}</p>}
       {rows.length > 0 && !approved && !hasSaved && !automatic && <p className="text-body text-muted">Choose a source to review.</p>}
       {automatic && purchase ? <div className="space-y-4">{decisionNodes}<AskAutomaticQuote proposal={purchase.proposal} coverageNotices={purchase.notices}

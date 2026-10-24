@@ -137,18 +137,19 @@ test('a supported external source uses the same Ask input form and one combined 
   search.source_rows = [source]; search.source_options = [];
   search.matches = [{ subject_id: 'mollie', slug: 'company.profile', apiosk: [], coinbase: [source] }];
   const { dom, shadow, calls } = await mount(search, (_name, args) => args.operation === 'apiosk_external'
-    ? { view: 'external_source', api_id, _mcp2: search._mcp2, source: { name: source.name, total_atomic: '30000', inputs: [{ field: 'company', required: true, schema: { type: 'string', title: 'Company name' } }] } }
+    ? { view: 'external_source', api_id, _mcp2: search._mcp2, source: { name: source.name, total_atomic: '30000', input_values: { company: 'Mollie B.V.' }, inputs: [{ field: 'company', required: true, schema: { type: 'string', title: 'Company name' } }] } }
     : { status: 'needs_input', state: { state_ref: 'task1', revision: 1 }, _mcp2: search._mcp2, next_actions: [], errors: [] });
   try {
     shadow.querySelector('input[type=checkbox]').closest('tr').click(); await wait(60);
     assert.equal(calls.length, 1); assert.equal(calls[0].args.operation, 'apiosk_external');
     const input = shadow.querySelector('form[data-purchase-inputs] input');
     assert.ok(input, 'the external descriptor uses the same App InputFieldset');
-    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, 'Mollie B.V.');
+    assert.equal(input.value, 'Mollie B.V.', 'external source inspection preserves suggested inputs');
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(input, 'Mollie B.V. edited');
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
     await wait(700);
     const quote = calls.find(call => call.args.operation === 'prepare_basket');
-    assert.ok(quote); assert.deepEqual(quote.args.args.external[0].input, { company: 'Mollie B.V.' });
+    assert.ok(quote); assert.deepEqual(quote.args.args.external[0].input, { company: 'Mollie B.V. edited' });
     assert.equal(quote.args.args.external[0].api_id, api_id);
     assert.ok(!calls.some(call => call.name === 'apiosk_card_approve'));
   } finally { dom.window.close(); }

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -77,6 +77,35 @@ async function fixture(t, options = {}) {
 }
 const ok = result => assert.equal(result.isError, undefined, JSON.stringify(result));
 const paid = fixture => fixture.calls.filter(call => ['/v2/approve', '/v2/execute'].includes(call.path) || call.path.endsWith('/authorize'));
+
+test('current and cached Ask discovery preserve the full question and identical App source rows', async t => {
+  const found = JSON.parse(await readFile(new URL('./fixtures/ask-page-mollie-public.json', import.meta.url), 'utf8'));
+  found.search_id = 'signed-native'; found.discovery_id = 'signed-external'; found.errors = [];
+  const f = await fixture(t, { respond(path) {
+    if (path === '/v2/ask/page' || path === '/v2/ask/page/search') return clone(found);
+  } });
+  const fullQuestion = found.question;
+  const cases = [
+    { question: fullQuestion },
+    { question: fullQuestion, request_id: REQUEST },
+    { question: fullQuestion, request_id: null, endpoint_id: null, capability: null, input: null,
+      parsed_request: null, search_id: null, selections: null, research: null, task_refs: null, refresh: null },
+  ];
+  const rows = [];
+  for (const args of cases) {
+    const result = await f.invoke('apiosk_ask', args); ok(result);
+    assert.deepEqual(f.calls.at(-1), { path: '/v2/ask/page', method: 'POST', body: { question: fullQuestion } });
+    rows.push(result._meta.apiosk_card_data.source_rows.map(source => ({ endpoint_id: source.endpoint_id,
+      source_slug: source.source_slug, subject_id: source.subject_id, input_values: source.endpoint?.input_values })));
+  }
+  assert.deepEqual(rows[1], rows[0]); assert.deepEqual(rows[2], rows[0]);
+  assert.ok(rows[0].some(source => source.source_slug === 'kvk-dutch-business-register' && source.input_values?.['company_registry.kvknummer'] === '30204462'));
+  assert.ok(rows[0].some(source => source.source_slug === 'opensanctions' && source.input_values?.['company.name'] === 'Mollie B.V.'));
+  const refresh = { parsed_request: found.parsed_request, search_id: found.search_id };
+  const refreshed = await f.invoke('apiosk_ask', { question: fullQuestion, request_id: NEXT_REQUEST, refresh }); ok(refreshed);
+  assert.deepEqual(f.calls.at(-1), { path: '/v2/ask/page/search', method: 'POST', body: { question: fullQuestion, ...refresh } });
+  assert.equal(paid(f).length, 0);
+});
 
 test('cached Ask selections and cached input envelope retain exact signed manual preparation', async t => {
   const f = await fixture(t);

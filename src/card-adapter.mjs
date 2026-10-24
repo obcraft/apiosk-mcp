@@ -1,6 +1,8 @@
 import { presentSearch } from './ask-ui/gateway-v2-ask.mjs';
 import { resultWithPages } from './saved-pages.mjs';
 import { visibleAskSources, sameSource } from './ask-source-view.mjs';
+import { suggestSourceInputs } from './source-input-suggestions.mjs';
+import { discoveryCoverage } from './ask-discovery-coverage.mjs';
 import { CARD_READ_TOOL, CARD_APPROVE_TOOL, CURRENT_CARD_COMPATIBILITY_URIS, cardToolMeta, cardResources, legacyCardResources, createCardHtml, createLegacyCardHtml } from './card-ui.mjs';
 
 const cardNames = new Set(['apiosk_ask', 'apiosk_sources', 'apiosk_prepare', 'apiosk_approve', 'apiosk_status', 'apiosk_requote', 'apiosk_continue', 'apiosk_result', 'apiosk_follow_up', 'apiosk_retry_search', 'apiosk_chats', 'apiosk_source_selection', 'apiosk_analysis_quote']);
@@ -16,6 +18,7 @@ const canonical = value => JSON.stringify(value, (_key, item) => item && typeof 
 
 function compact(state, card) {
   const tasks = (state.tasks || []).map(task => ({ task_id: task.id, kind: task.kind, status: task.view?.status,
+    message: task.view?.message || null, errors: task.view?.errors || [],
     next_actions: (task.view?.next_actions || []).map(action => ({ action_id: action.action_id, kind: action.kind, label: action.label,
       requires_authorization: action.requires_authorization, input_schema: action.input_schema })),
     result_available: task.view?.result != null || !!task.view?.context_view?.results?.length }));
@@ -27,12 +30,15 @@ function compact(state, card) {
     input_values: source.input_values, missing_inputs: source.endpoint?.missing_inputs }));
   return { request_id: state.id, question: state.question, status: state.status, view: card.view || 'task', sources,
     source_count: visible.length, company_context: card.company_context || state.discovery?.company_context || [],
+    discovery_coverage: discoveryCoverage(state.discovery || {}),
     money_display: card.context_view?.money_display || null, approval: state.approval || null, tasks,
     input_requirements: (state.input_requirements || []).map(item => ({ source_id: item.source_id, source: item.source,
       missing: item.missing, errors: item.errors })), errors: state.preparation_response?.errors?.length && state.pending_prepare ? state.preparation_response.errors : state.error ? [state.error] : state.discovery?.errors || [],
+    plan_ready: Boolean(state.approval),
     next_step: state.approval ? 'Review this exact total. Only explicit user approval permits execution.'
-      : sources.length && !tasks.length ? 'Choose sources in the embedded card. Nothing has been purchased.'
-      : 'Use the saved request ID to inspect status, result or evidence. Do not repeat a purchase.',
+      : sources.length && !tasks.length ? 'Wait for the user to choose sources in the displayed card. Do not call sources, prepare or status automatically; the card already displays the options. Nothing has been purchased.'
+      : state.status === 'review_required' ? 'No approval quote is available. Do not say the plan is ready or ask for approval. Explain the task errors or missing requirements, then wait for the user.'
+      : 'Use the saved request ID to inspect status, result or evidence when needed. Do not repeat a purchase.',
     data_access: 'The embedded card contains the full source forms and saved response. Use apiosk_result and apiosk_evidence for exact saved values; source options are not purchased findings.' };
 }
 
@@ -66,7 +72,10 @@ export function sourceCard(state) {
   }
   // Render the exact Ask-page projection, including for requests saved by the
   // older MCP. Offered descriptors may enrich a match, never add extra rows.
-  view.source_rows = rows;
+  view.source_rows = rows.map(source => Array.isArray(source.endpoint?.inputs)
+    ? { ...source, endpoint: { ...source.endpoint, input_values: suggestSourceInputs(source, source.endpoint, discovery.parsed_request) } }
+    : source);
+  view.discovery_coverage = discoveryCoverage(discovery);
   view.matches = fallbackMatches();
   view.source_options = (view.source_options || []).filter(option => rows.some(source => sameSource(source, {
     ...option.source, endpoint_id: option.source?.endpoint_id || option.endpoint?.endpoint_id,
@@ -78,7 +87,8 @@ export function sourceCard(state) {
   view.selected_sources = (state.selected || []).flatMap(selection => {
     const source = state.sources.find(row => row.id === selection.source_id && row.origin === 'apiosk');
     return source ? [{ endpoint_id: source.endpoint_id, capability: source.capability || source.requested_capability,
-      ...(source.subject_id ? { subject_id: source.subject_id } : {}), input: selection.input }] : [];
+      ...(source.subject_id ? { subject_id: source.subject_id } : {}),
+      input: { ...suggestSourceInputs(source, source.endpoint, discovery.parsed_request), ...selection.input } }] : [];
   });
   view.selected_external_sources = (state.selected || []).flatMap(selection => {
     const source = state.sources.find(row => row.id === selection.source_id && row.origin !== 'apiosk');
@@ -117,7 +127,10 @@ function taskCard(state, task, gatewayUrl) {
     ? {} : { money_display: state.discovery.context_view.money_display }),
     approval_outcome_unconfirmed: Boolean(raw.context_view?.approval_outcome_unconfirmed
       || ['dispatching', 'outcome_unknown'].includes(task.approval_attempt?.status)) };
-  const selection = state.discovery && state.selected?.length ? sourceCard(state) : null;
+  // An automatic plan can fail before any source was selected. Preserve the
+  // original discovery so that its available sources do not become an empty
+  // result card and the user can still review them without a new search.
+  const selection = state.discovery ? sourceCard(state) : null;
   if (task.kind === 'external') return { ...raw, protocol_version: '2', view: 'external_purchase',
     ...(selection ? { basket_search: selection } : {}), result_present: raw.result_present ?? raw.result != null };
   // The exact Gateway task stays authoritative. Explicit card approval is
@@ -189,7 +202,7 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
     return { ...response, structuredContent: summary, _meta: { ...response?._meta, apiosk_card_data: card },
       content: [{ type: 'text', text: state.approval
         ? `Review ${state.approval.max_total_atomic} atomic ${state.approval.currency} for the selected sources in the Ask card. Nothing runs until you approve. Saved request: ${state.id}.`
-        : `${state.question}\n${summary.source_count} matching source options. ${state.status}. Open the Ask card to inspect sources, inputs and saved results. Saved request: ${state.id}.` }] };
+        : `${state.question}\n${summary.source_count} matching source options. Status: ${state.status}. ${summary.next_step}${summary.discovery_coverage.gaps.map(gap => `\n${gap.notice}`).join('')}${summary.tasks.flatMap(task => [task.message, ...task.errors.map(error => error.message || error.code)].filter(Boolean)).map(message => `\n${message}`).join('')} Saved request: ${state.id}.` }] };
   };
   const selectedSources = (state, selections = [], external = []) => [
     ...selections.map(selection => {
@@ -280,7 +293,7 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
           return { content: [{ type: 'text', text: 'Review the external source inputs in the Ask card.' }],
             structuredContent: { request_id, source_id: source.id, source_name: source.name, charged: false },
             _meta: { apiosk_card_data: { protocol_version: '2', view: 'external_source', api_id: source.api_id,
-              source: inspected.structuredContent.descriptor, _mcp2: { request_id, approval: state.approval || null } } } };
+              source: { ...inspected.structuredContent.descriptor, input_values: inspected.structuredContent.suggested_input || {} }, _mcp2: { request_id, approval: state.approval || null } } } };
         }
         if (args.action === 'prepare') {
           if (!source) fail('External source does not belong to this saved question.');

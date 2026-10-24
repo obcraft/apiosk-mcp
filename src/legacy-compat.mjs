@@ -24,7 +24,14 @@ externalSchema.oneOf = [
 ];
 
 function wire(name, args) {
-  if (name === 'apiosk_ask') return { ...askRequest(name, args), method: 'POST' };
+  if (name === 'apiosk_ask') {
+    const request = askRequest(name, args);
+    // Cached schemas still enter here for request_id or legacy null fields.
+    // Their free discovery must use the same Ask-page pipeline as new calls;
+    // keep the historical signed preparation and purchase contracts intact.
+    const path = { '/v2/ask': '/v2/ask/page', '/v2/ask/search': '/v2/ask/page/search' }[request.path] || request.path;
+    return { ...request, path, method: 'POST' };
+  }
   if (name === 'apiosk_status' || name === 'apiosk_execute' && args.recover_task_ref) {
     if (name === 'apiosk_execute' && Object.keys(args).some(key => !['recover_task_ref', 'request_id'].includes(key))) throw new Error('Recover with only recover_task_ref and an optional request_id.');
     return { path: `/v2/tasks/${args.task_ref || args.recover_task_ref}`, method: 'GET' };
@@ -129,7 +136,7 @@ export function withLegacyCompatibility(service, { gateway, store }) {
         notice: 'Inspecting source inputs does not purchase data. Review the exact quote before approval.' });
     }
     if (request.path === '/v2/ask/conversation') return reply(presentConversation(raw, args));
-    const discovery = ['/v2/ask', '/v2/ask/search'].includes(request.path);
+    const discovery = ['/v2/ask/page', '/v2/ask/page/search'].includes(request.path);
     if (!discovery && (request.external ? raw?.purchase_id !== (args.purchase_id || request.body?.request_id)
       : raw?.protocol_version !== '2' || !raw.state?.state_ref || !Array.isArray(raw.next_actions))) throw new Error('Gateway returned an invalid saved task.');
     let value = discovery ? presentSearch(raw, args.question) : request.external

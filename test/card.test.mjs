@@ -70,6 +70,35 @@ test('model response stays compact while the private card preserves full source 
   assert.deepEqual(f.wrapped.tools.find(tool => tool.name === CARD_APPROVE_TOOL)._meta.ui.visibility, ['app']);
 });
 
+test('discovery hands control back to the user without asking the model to prepare or repeat the source card', async () => {
+  const f = fixture();
+  const result = await f.run('apiosk_ask', { question: f.saved.question });
+  assert.equal(result.structuredContent.plan_ready, false);
+  assert.match(result.content[0].text, /Wait for the user/);
+  assert.match(result.content[0].text, /Do not call sources, prepare or status automatically/);
+  assert.deepEqual(f.calls.map(call => call.name), ['apiosk_ask']);
+});
+
+test('unsuccessful automatic planning retains the source choices and explicitly says there is no approval quote', async () => {
+  const task = endpointTask();
+  task.view.status = 'unsupported';
+  task.view.proposal = null;
+  task.view.next_actions = [];
+  task.view.errors = [{ code: 'unsupported', message: 'No supported complete plan was found.' }];
+  const f = fixture(state({ status: 'review_required', tasks: [task], active_task_ids: [task.id], selected: [] }));
+  const result = await f.run('apiosk_prepare', { request_id: f.saved.id, mode: 'automatic' });
+  assert.equal(result.structuredContent.plan_ready, false);
+  assert.equal(result.structuredContent.approval, null);
+  assert.match(result.content[0].text, /No approval quote is available/);
+  assert.match(result.content[0].text, /No supported complete plan was found/);
+  const card = result._meta.apiosk_card_data;
+  assert.equal(card.status, 'unsupported');
+  assert.equal(card.context_view.source_selection.original_intake.source_rows.length, 2);
+  assert.deepEqual(card.context_view.source_selection.selections, []);
+  assert.equal(card.context_view.source_selection.can_choose, true);
+  assert.equal(f.calls.some(call => call.name === 'apiosk_approve'), false);
+});
+
 test('reopening the old 27-row Mollie result shows nine Ask matches and preserves context, currency and selected IDs', async () => {
   const discovery = JSON.parse(await readFile(new URL('./fixtures/ask-page-mollie-public.json', import.meta.url), 'utf8'));
   const candidates = ['apiosk', 'coinbase'].flatMap(origin => discovery.searches[origin].matches.flatMap(match => (match[origin] || []).map(source => ({
