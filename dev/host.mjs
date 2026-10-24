@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { createConnection } from './connection.mjs';
 import { readConfig } from './config.mjs';
+import { SOURCE_LOGO_ORIGINS } from '../src/card-ui.mjs';
 import { listModels, runChat, toolForCaller, modelResult } from './model.mjs';
 
 const id = () => randomBytes(32).toString('hex');
@@ -26,7 +27,7 @@ export function createDevApp(config, { connectionFactory = createConnection, fet
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
       // srcdoc inherits this policy; actual card documents install a second,
       // stricter CSP and run in an opaque-origin allow-scripts sandbox.
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" });
+      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${SOURCE_LOGO_ORIGINS.join(' ')}; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` });
     next();
   });
   app.use(express.json({ limit: '4mb' }));

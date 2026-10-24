@@ -12,6 +12,11 @@ export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model',
 // These current catalog assets were absent from MCP1's historical image CSP.
 // Keep a fixed list; source payloads cannot grant arbitrary remote origins.
 const CURRENT_LOGO_ORIGINS = ['https://app.apiosk.com', 'https://www.bodemloket.nl', 'https://www.openwebninja.com', 'https://www.crunchbase.com'];
+// srcdoc inherits the tester's parent policy. Both parent and card must use
+// this exact fixed list; the card cannot relax a restrictive parent policy.
+export const SOURCE_LOGO_ORIGINS = Object.freeze([...new Set([
+  ...gatewayV2CardMeta().ui.csp.resourceDomains, ...CURRENT_LOGO_ORIGINS,
+])]);
 
 const ADAPTER = `
 // Transport shim. Source records never select the request or spending ceiling.
@@ -110,7 +115,7 @@ export function legacyCardResources(gatewayUrl, { legacyUiMime = false } = {}) {
 
 export function cardResources(gatewayUrl) {
   const _meta = gatewayV2CardMeta(gatewayUrl);
-  const origins = [...new Set([..._meta.ui.csp.resourceDomains, ...CURRENT_LOGO_ORIGINS])];
+  const origins = [...SOURCE_LOGO_ORIGINS];
   _meta.ui.csp.resourceDomains = origins;
   _meta['openai/widgetCSP'].resource_domains = origins;
   return [
