@@ -14,6 +14,8 @@ The server exposes **36 public tools and six private component operations**, sav
 
 Source discovery uses the App’s filtering, deduplication and provider ordering. Offered endpoint descriptors enrich matching sources without adding unrelated catalog entries. Account display currency comes from Gateway’s read-only `/v2/display-context`; quoted atomic amounts remain unchanged. Rebuild the embedded bundle with `npm run build:ask-page` after editing its sources.
 
+Manual source selection prepares each chosen native endpoint with the App’s exact input values. Connected clients use `/v2/ask/source/prepare`, which requires explicit approval even when the connection has a standing spending rule. The MCP combines those saved quotes into one reviewed maximum; preparation does not purchase data.
+
 MCP Apps and ChatGPT-compatible metadata identify the embedded resources. Model-visible results carry compact source identifiers, status, input needs and the exact approval. Full component data travels separately in `_meta.apiosk_card_data`, so large source schemas and raw response trees do not flood the model context. Saved evidence remains available through the result and evidence tools.
 
 Hosts that support embedded components can show the interactive cards. Text-only hosts receive structured results and use the public tools. Support and rendering still depend on the host; passing local tests does not establish installed Claude, Codex or ChatGPT acceptance. Read-only HTML exports are separate from interactive cards.
@@ -106,7 +108,7 @@ The hosted connector address remains `https://mcp.apiosk.com/mcp`; local source 
 
 Gateway scope, budget, workspace and feature restrictions remain authoritative. Organization API keys are not substitutes for agent connection tokens in the raw task/approval protocol. Account-only integrations and native recurring operations may require a valid App session and backend enablement; an `app_only` or `public_api_required` response is not bypassed.
 
-Connection tokens use the Gateway's public `/v2/ask` discovery path. App sessions use its App discovery path. Those backend paths can classify the same question differently; this MCP preserves the returned matches and does not guarantee identical source rankings. A live ASML discovery check exposed unrelated direct matches in the connection-token response. This remains an upstream relevance issue; returned source coverage must be reviewed before approval.
+Connection tokens use `/v2/ask/page`, which applies the Ask page's interpreter, validation and source searches. App sessions use the original App routes. Both use the same source filtering, grouping, input values and display currency. Connected discovery preserves the App's matches without the older public API's interpretation repairs or extra source expansion; signed searches remain bound to the account, connection and workspace. Source refresh reuses the saved parse, and automatic planning adopts that displayed search without parsing the question again.
 
 Recurring execution needs its own explicit review of the workflow, schedule, destination and cost limits. `apiosk_schedule_handoff` supplies instructions for the host scheduler and reports `schedule_created: false`; it does not create a scheduled job. External app actions likewise require their own reviewed execution.
 

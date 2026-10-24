@@ -68,7 +68,7 @@ function gatewayFixture() {
       let response;
       if (req.method === 'GET' && req.url === '/v2/display-context') {
         response = { money_display: { base_currency: 'USD', preferred_currency: 'EUR', currency: 'EUR', rate: '0.92', as_of_date: '2026-10-24', fallback_reason: null } };
-      } else if (req.method === 'POST' && req.url === '/v2/ask') {
+      } else if (req.method === 'POST' && req.url === '/v2/ask/page') {
         counts.discovery++;
         assert.deepEqual(body, { question: QUESTION });
         response = { status: 'choices', question: QUESTION, parsed_request: parsed, model: 'local-test-fixture', attempts: 1,

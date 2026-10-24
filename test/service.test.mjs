@@ -63,7 +63,7 @@ async function fixture(t, options = {}) {
   const gateway = { credentialKind: 'connection', baseUrl: 'http://127.0.0.1:8082', async request(path, request = {}) {
     calls.push({ path, body: clone(request.body), headers: clone(request.headers), responseType: request.responseType, method: request.method ?? (request.body === undefined ? 'GET' : 'POST') });
     if (request.responseType === 'bytes') return new TextEncoder().encode('%PDF fixture');
-    if (path === '/v2/ask') return discovery(options);
+    if (path === '/v2/ask/page' || path === '/v2/ask/page/search') return discovery(options);
     if (path === '/v2/ask/source/prepare' || path === '/v2/ask/research') return clone(currentTask);
     if (path === '/v2/ask/conversation') return { kind: 'saved_answer', task_refs: [TASK_ID] };
     if (path === `/v2/tasks/${TASK_ID}`) return clone(currentTask);
@@ -151,7 +151,7 @@ test('direct preparation rejects unmatched old saved options before descriptor l
   assert.deepEqual(await f.store.get(request_id), before, 'Historic source metadata and inputs remain intact');
 });
 
-test('MCP1 legacy connect tokens use the same public Ask wire contract and preserve returned options', async t => {
+test('MCP1 legacy connect tokens use the Ask page discovery adapter and preserve returned options', async t => {
   for (const token of ['apk_access_fixture', 'aw_live_fixture', 'aw_test_fixture']) {
     const directory = await mkdtemp(join(tmpdir(), 'apiosk-legacy-connection-'));
     t.after(() => rm(directory, { recursive: true, force: true }));
@@ -167,7 +167,7 @@ test('MCP1 legacy connect tokens use the same public Ask wire contract and prese
     const result = await service.tools.find(tool => tool.name === 'apiosk_ask').handler({ question });
     assert.equal(result.isError, undefined);
     assert.equal(calls.length, 1, 'Legacy discovery must not use App-only parse or search routes');
-    assert.equal(calls[0].path, '/v2/ask');
+    assert.equal(calls[0].path, '/v2/ask/page');
     assert.equal(calls[0].method, 'POST');
     assert.equal(calls[0].headers.get('authorization'), `Bearer ${token}`);
     assert.deepEqual(calls[0].body, { question });
@@ -175,6 +175,22 @@ test('MCP1 legacy connect tokens use the same public Ask wire contract and prese
     assert.deepEqual(stateOf(result).sources.map(source => source.endpoint_id), found.apis.map(source => source.endpoint_id));
     assert.deepEqual(stateOf(result).sources.map(source => source.input_values), found.apis.map(source => source.input_values));
   }
+});
+
+test('source refresh and automatic planning retain the displayed Ask page parse and signed searches', async t => {
+  const f = await fixture(t), asked = await f.ask(), request_id = requestId(asked);
+  const displayed = stateOf(asked).discovery;
+  await f.invoke('apiosk_retry_search', { request_id });
+  const refresh = f.calls.find(call => call.path === '/v2/ask/page/search');
+  assert.deepEqual(refresh.body, { question: displayed.question, parsed_request: displayed.parsed_request, search_id: displayed.search_id });
+  const prepared = await f.invoke('apiosk_prepare', { request_id, mode: 'automatic', selections: [] });
+  assert.equal(prepared.isError, undefined);
+  const research = f.calls.find(call => call.path === '/v2/ask/research');
+  assert.deepEqual(research.body.parsed_request, displayed.parsed_request);
+  assert.equal(research.body.search_id, displayed.search_id);
+  assert.equal(research.body.discovery_id, displayed.discovery_id);
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/page').length, 1);
+  assert.equal(f.calls.filter(call => call.path === '/v2/approve' || call.path === '/v2/execute').length, 0);
 });
 
 test('session discovery sends App search bodies and retains offered metadata without displaying unmatched endpoints', async t => {
@@ -234,7 +250,7 @@ async function independentNativePreparation(t, { credentialKind = 'connection', 
   const askedQuestion = question ?? (mollie ? 'KYB check for Mollie B.V. (KVK number 30204462): show the registered company profile and screen the company name against sanctions lists.' : found.question);
   const gateway = { credentialKind, async request(path, request = {}) {
     calls.push({ path, body: clone(request.body) });
-    if (path === '/v2/ask') return clone(found);
+    if (path === '/v2/ask/page') return clone(found);
     if (path === '/v2/ask-v2/parse') return { parsed_request: clone(found.parsed_request), planning_token: 'fixture-planning' };
     if (path === '/v2/ask-v2/search') return clone(found.searches[request.body.origin]);
     if (path.startsWith('/v2/ask-v2/endpoints/')) {
@@ -385,12 +401,12 @@ test('source schema inspection is read-only and remains bound to the selected ro
 test('saved-evidence follow-up reads purchased tasks without starting discovery or repurchasing', async t => {
   const f = await fixture(t), prepared = await f.prepare();
   await f.invoke('apiosk_approve', f.approvalArgs(prepared));
-  const paid = f.paidCalls().length, discoveries = f.calls.filter(call => call.path === '/v2/ask').length;
+  const paid = f.paidCalls().length, discoveries = f.calls.filter(call => call.path === '/v2/ask/page').length;
   const response = await f.invoke('apiosk_follow_up', { request_id: prepared.request_id, question: 'What does the zero mean in this saved result?' });
   assert.notEqual(response.isError, true);
   assert.equal(requestId(response), prepared.request_id);
   assert.equal(f.paidCalls().length, paid);
-  assert.equal(f.calls.filter(call => call.path === '/v2/ask').length, discoveries);
+  assert.equal(f.calls.filter(call => call.path === '/v2/ask/page').length, discoveries);
   const route = f.calls.find(call => call.path === '/v2/ask/conversation');
   assert.deepEqual(route.body.task_refs, [TASK_ID]);
 });

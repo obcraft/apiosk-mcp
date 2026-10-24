@@ -85,7 +85,7 @@ export function createAskService({ gateway, store }) {
     return view;
   };
   async function discovery(question, signal) {
-    if (!sessionCredential) return call('/v2/ask', { question }, signal);
+    if (!sessionCredential) return call('/v2/ask/page', { question }, signal);
     const parsed = await call('/v2/ask-v2/parse', { request_id: randomUUID(), question }, signal);
     const origins = ['apiosk', 'coinbase'];
     const outcomes = await Promise.allSettled(origins.map(origin => call('/v2/ask-v2/search', {
@@ -435,7 +435,7 @@ export function createAskService({ gateway, store }) {
       const state = await readAsk(request_id);
       if (state.approved_id) throw new Error('Use follow-up for new data; this request already has approved purchases.');
       if (!sessionCredential && state.discovery?.search_id) {
-        state.discovery = await call('/v2/ask/search', { question: state.question, parsed_request: state.discovery.parsed_request, search_id: state.discovery.search_id }, signal);
+        state.discovery = await call('/v2/ask/page/search', { question: state.question, parsed_request: state.discovery.parsed_request, search_id: state.discovery.search_id }, signal);
         state.sources = sourceRows(state.discovery); state.approval = null; state.status = state.discovery.errors?.length ? 'partial_discovery' : 'sources_ready'; await store.save(state);
       } else await discoverSaved(state, signal);
       return show(state);
