@@ -1,6 +1,6 @@
 import { presentSearch } from './ask-ui/gateway-v2-ask.mjs';
 import { resultWithPages } from './saved-pages.mjs';
-import { CARD_READ_TOOL, CARD_APPROVE_TOOL, cardToolMeta, cardResources, legacyCardResources, createCardHtml, createLegacyCardHtml } from './card-ui.mjs';
+import { CARD_READ_TOOL, CARD_APPROVE_TOOL, CURRENT_CARD_COMPATIBILITY_URIS, cardToolMeta, cardResources, legacyCardResources, createCardHtml, createLegacyCardHtml } from './card-ui.mjs';
 
 const cardNames = new Set(['apiosk_ask', 'apiosk_sources', 'apiosk_prepare', 'apiosk_approve', 'apiosk_status', 'apiosk_requote', 'apiosk_continue', 'apiosk_result', 'apiosk_follow_up', 'apiosk_retry_search', 'apiosk_chats', 'apiosk_source_selection', 'apiosk_analysis_quote']);
 const readOperations = ['apiosk_ask', 'apiosk_sources', 'apiosk_external', 'apiosk_status', 'apiosk_execute', 'apiosk_requote', 'apiosk_discover', 'prepare_basket', 'status_basket', 'requote_basket', 'retry_preparation'];
@@ -316,7 +316,8 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
       if (uri === guide.uri) return { contents: [{ ...guide, text: service.instructions || 'Use apiosk_ask for a new question. Review sources and the exact total before explicit approval.' }] };
       const resource = [...resources, ...aliases].find(resource => resource.uri === uri);
       if (!resource) return service.readResource(uri, context);
-      return { contents: [{ ...resource, text: resources.includes(resource) ? createCardHtml(gateway.baseUrl) : createLegacyCardHtml(gateway.baseUrl) }] };
+      return { contents: [{ ...resource, text: resources.includes(resource) || CURRENT_CARD_COMPATIBILITY_URIS.includes(uri)
+        ? createCardHtml(gateway.baseUrl) : createLegacyCardHtml(gateway.baseUrl) }] };
     },
   };
 }

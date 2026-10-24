@@ -300,8 +300,8 @@ async function showToolResult(event) {
   const uri = mode === 'chatgpt' ? tool?._meta?.['openai/outputTemplate'] : tool?._meta?.ui?.resourceUri;
   const raw = node('details', 'raw-result');
   raw.append(node('summary', '', 'Tool response'), node('pre', '', pretty(redact(result))));
-  row.box.append(raw);
   if (!uri) {
+    row.box.append(raw);
     const text = (result.content || []).filter(content => content.type === 'text').map(content => content.text).join('\n\n');
     if (text) row.box.insertBefore(node('div', 'tool-result', text), raw);
     else raw.open = true;
@@ -311,7 +311,8 @@ async function showToolResult(event) {
   const container = node('div', 'card-container');
   const loading = node('div', 'tool-result', 'Loading interactive card…');
   container.append(loading);
-  row.box.insertBefore(container, raw);
+  row.box.append(container);
+  if (result.isError) row.box.append(raw);
   try {
     const resource = await api('/api/resource', { uri });
     if (generation !== state.generation) return;
@@ -330,6 +331,7 @@ async function showToolResult(event) {
     else state.cards.add(mounted);
   } catch (error) {
     container.replaceChildren(node('div', 'tool-result error-text', `The interactive card could not load: ${errorMessage(error)}`));
+    row.box.append(raw);
     raw.open = true;
     trace({ type: 'error', method: 'resources/read', uri, message: errorMessage(error) });
   }
@@ -562,7 +564,7 @@ $('disconnect').addEventListener('click', async () => {
     renderSession({ connected: false });
     for (const card of state.cards) card.destroy();
     state.cards.clear(); state.pendingMessages = [];
-    for (const container of document.querySelectorAll('.card-container')) container.replaceChildren(node('div', 'tool-result', 'Disconnected. The saved tool response is available below.'));
+    for (const container of document.querySelectorAll('.card-container')) container.replaceChildren(node('div', 'tool-result', 'Disconnected. The saved response is available in the Inspector.'));
     activity('Disconnected. Connect again to use tools.');
     trace({ type: 'connection', connected: false });
   } catch (error) { toast(errorMessage(error)); }

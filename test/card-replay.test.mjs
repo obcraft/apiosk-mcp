@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { cardHarness, flatten, flush, plain } from './helpers/card-harness.mjs';
 import { gatewayV2CardHtml } from '../src/ask-ui/gateway-v2-card.mjs';
-import { createCardHtml, CARD_READ_TOOL, CARD_APPROVE_TOOL } from '../src/card-ui.mjs';
+import { createCardHtml, createLegacyCardHtml, CARD_READ_TOOL, CARD_APPROVE_TOOL } from '../src/card-ui.mjs';
+import { presentSearch } from '../src/ask-ui/gateway-v2-ask.mjs';
 import { withEmbeddedCards, presentCard, decorateTaskView } from '../src/card-adapter.mjs';
 
 // Recorded MCP1 result fixtures copied unchanged from its retained snapshot.
@@ -136,6 +137,39 @@ test('MCP1 cached resources keep legacy actions; private tools never claim the s
   assert.ok(legacy.text.includes('toolResponseMetadata?.apiosk_card_data'));
   const guide = (await wrapped.readResource('apiosk://v2/host-contract')).contents[0];
   assert.equal(guide.text, 'Use apiosk_ask');
+  const previous = (await wrapped.readResource('ui://apiosk/mcp-2-ask-v1.html')).contents[0];
+  assert.ok(previous.text.includes('mcp2OriginalCall'), 'the previous MCP2 resource retains its saved-request dispatcher');
+  assert.ok(!previous.text.includes('About these results'));
+});
+
+test('cards hide host protocol notices while retaining source scope, pricing, recovery and saved evidence', async () => {
+  const source = { origin: 'apiosk', name: 'Official register', endpoint_id: 'registry', capability: 'company.profile', availability: 'supported',
+    description: 'Registered company information; ownership is not included.', price: '0.01',
+    endpoint: { endpoint_id: 'registry', capability: 'company.profile', inputs: [], price: { currency: 'USD', buyer_atomic: '10000' } } };
+  const search = presentSearch({ search_id: 'search1', parsed_request: { subjects: [{ id: 's1', label: 'ACME' }], capabilities: [{ slug: 'company.profile', subject_id: 's1' }] },
+    source_options: [{ source, subject_id: 's1' }], searches: { apiosk: { matches: [{ slug: 'company.profile', subject_id: 's1', apiosk: [source] }] } } }, 'Show ACME');
+  assert.match(search.notice, /input\.apiosk_source_selection_v1/);
+  search.message = 'Some sources could not be searched. Try again shortly.';
+  const views = [
+    { data: search, keep: ['Registered company information; ownership is not included.', search.message, 'Review selected sources'] },
+    { data: { view: 'conversation', kind: 'clarification', question: 'Which company?', message: 'Which country is the company registered in?', notice: 'Continue with task_refs and call apiosk_ask.' },
+      keep: ['Which country is the company registered in?'] },
+    { data: { view: 'external_source', api_id: 'bazaar:fixture', source: { name: 'External records', inputs: [], total_atomic: 10000 }, notice: 'Use apiosk_external action prepare with api_id.' },
+      keep: ['Source inputs', 'Review price'] },
+    { data: { view: 'external_purchase', purchase_id: 'purchase1', status: 'succeeded', source: { name: 'External records' },
+      quote: { quote_ref: 'quote1', currency: 'USD', max_total_atomic: '10000' }, result_present: true, result_truncated: true,
+      result: { company: 'ACME' }, notice: 'Call apiosk_external with purchase_id to recover this result.' },
+      keep: ['Check status', 'Full saved source data', 'This saved result is truncated; it does not contain every source record.'] },
+  ];
+  for (const html of [createCardHtml(), createLegacyCardHtml()]) for (const { data, keep } of views) {
+    const before = JSON.stringify(data), h = cardHarness(html, { toolOutput: data, callTool: async () => ({ structuredContent: data }) });
+    await flush();
+    const rendered = texts(h);
+    assert.ok(!rendered.includes(data.notice));
+    assert.ok(!rendered.some(text => /About these results|About this source|About this purchase|apiosk_source_selection_v1|task_refs|purchase_id|apiosk_external/.test(text)));
+    for (const text of keep) assert.ok(rendered.includes(text), `Keep useful buyer information: ${text}`);
+    assert.equal(JSON.stringify(data), before, 'raw protocol guidance stays available to the host');
+  }
 });
 
 test('table pagination, filters and column controls stay local and keep source evidence intact', async () => {

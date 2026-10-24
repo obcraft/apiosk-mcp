@@ -3,8 +3,9 @@
 // request/approval journal rather than the original server's tool signatures.
 import { gatewayV2CardHtml, gatewayV2CardMeta } from './ask-ui/gateway-v2-card.mjs';
 
-export const CARD_URI = 'ui://apiosk/mcp-2-ask-v1.html';
-export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v1-chatgpt.html';
+export const CARD_URI = 'ui://apiosk/mcp-2-ask-v2.html';
+export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v2-chatgpt.html';
+export const CURRENT_CARD_COMPATIBILITY_URIS = ['ui://apiosk/mcp-2-ask-v1.html', 'ui://apiosk/mcp-2-ask-v1-chatgpt.html'];
 export const CARD_READ_TOOL = 'apiosk_card';
 export const CARD_APPROVE_TOOL = 'apiosk_card_approve';
 export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model', 'app'] }, 'openai/outputTemplate': CHATGPT_CARD_URI,
@@ -86,10 +87,21 @@ acceptResponse=function(next){
 };
 `;
 
+// These notice fields contain instructions for the host AI, not source
+// findings or buyer guidance. Keep them in the protocol response without
+// printing tool names, request fields and orchestration steps in the card.
+const PROTOCOL_NOTICE_RENDERERS = [
+  "if(data.notice)section('About these results').append(el('p','meta',data.notice));",
+  "if(data.notice)s.append(el('p','meta',data.notice));",
+  "if(data.notice)section('About this source').append(el('p','meta',data.notice));",
+  "if(data.notice)section('About this purchase').append(el('p','meta',data.notice));",
+];
+const userFacingHtml = html => PROTOCOL_NOTICE_RENDERERS.reduce((value, fragment) => value.replaceAll(fragment, ''), html);
+
 // Cached MCP1 resources retain the MCP1 action signatures. The private-data
 // bridge also lets a current first Ask response render in those cached hosts.
 export function createLegacyCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
-  return gatewayV2CardHtml(gatewayUrl)
+  return userFacingHtml(gatewayV2CardHtml(gatewayUrl))
     .replace("function unwrap(r){if(r&&typeof r==='object'){if(r.structuredContent)return r.structuredContent;", "function unwrap(r){if(r&&typeof r==='object'){if(r._meta?.apiosk_card_data)return r._meta.apiosk_card_data;if(r.structuredContent)return r.structuredContent;")
     .replace('o?(o.toolOutput??o.structuredContent??null):null', 'o?(o.toolResponseMetadata?.apiosk_card_data??o.toolOutput??o.structuredContent??null):null')
     .replace('function safeLogo(url){try{const u=new URL(url);', `function safeLogo(url){try{const u=new URL(url);if(u.protocol==='https:'&&${JSON.stringify(CURRENT_LOGO_ORIGINS)}.includes(u.origin))return u.href;`);
@@ -106,6 +118,7 @@ export function legacyCardResources(gatewayUrl, { legacyUiMime = false } = {}) {
   const _meta = cardResources(gatewayUrl)[0]._meta;
   const mime = skybridge => skybridge ? 'text/html+skybridge' : 'text/html;profile=mcp-app';
   return [
+    ...CURRENT_CARD_COMPATIBILITY_URIS.map(uri => ({ uri, name: 'Apiosk Ask', mimeType: mime(uri.endsWith('-chatgpt.html')), _meta })),
     ...Array.from({ length: 66 }, (_, index) => ({ uri: `ui://apiosk/gateway-v2-card-v${index + 1}.html`, name: 'Apiosk Ask',
       mimeType: mime(index + 1 < 54 && legacyUiMime), _meta })),
     ...Array.from({ length: 20 }, (_, index) => ({ uri: `ui://apiosk/gateway-v2-card-v${index + 11}-chatgpt.html`, name: 'Apiosk Ask for ChatGPT',
