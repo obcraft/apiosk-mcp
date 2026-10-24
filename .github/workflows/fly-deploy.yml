@@ -26,6 +26,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm run build:ask-page
+      - run: git diff --exit-code -- src/ask-page/bundle.js src/ask-page/compiled.css src/ask-page/properties.css
       - run: npm run check
       - run: npm test
       - uses: superfly/flyctl-actions/setup-flyctl@master

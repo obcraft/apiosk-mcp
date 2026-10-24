@@ -82,6 +82,7 @@ export class GatewayClient {
   #fetch;
   #timeout;
   #maxBytes;
+  #displayContext;
 
   constructor({ baseUrl = resolveGatewayV2Url(),
     token = process.env.APIOSK_TOKEN || process.env.APIOSK_CONNECT_TOKEN || null,
@@ -105,6 +106,18 @@ export class GatewayClient {
     if (!this.#token) return 'none';
     if (/^apk_(org_live|access|live)_/.test(this.#token) || /^aw_(live|test)_/i.test(this.#token)) return 'connection';
     return 'session';
+  }
+
+  /** Optional display-only account context, cached only within this credential/workspace instance. */
+  async displayContext(signal) {
+    if (signal?.aborted) throw abortFailure(signal, false);
+    if (this.#displayContext?.expiresAt > Date.now()) return structuredClone(this.#displayContext.value);
+    const value = await this.request('/v2/display-context', { signal });
+    if (!value || typeof value !== 'object' || !Object.hasOwn(value, 'money_display')) {
+      throw new GatewayError('The Gateway did not return display currency context.', { code: 'invalid_display_context' });
+    }
+    this.#displayContext = { value: structuredClone(value), expiresAt: Date.now() + 30_000 };
+    return value;
   }
 
   /** GET/POST only. onProgress receives NDJSON snapshots or parsed SSE data. */

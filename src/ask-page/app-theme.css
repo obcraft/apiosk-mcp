@@ -1,0 +1,331 @@
+@import "tailwindcss";
+@custom-variant dark (&:is(.dark *));
+.ask-app {
+  color-scheme: light;
+
+  /* --- Type ---------------------------------------------------------------
+     Inter for everything, self-hosted via @fontsource in main.tsx. The brand
+     face is spent on exactly one element — the wordmark (`font-logo`). A whole
+     app set in it reads as marketing; one wordmark set in it reads as the
+     brand. There is NO monospace face — see the note on --font-mono below. */
+  --font-brand: "Google Sans", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading: "Inter", system-ui, -apple-system, sans-serif;
+
+  /* The page steps below white so cards can BE white and lift off it; the
+     fills step down from there on one hue. */
+  --background: #fafafa;
+  --background-2: oklch(0.975 0.004 265);
+  --surface: oklch(1 0 0);
+  --surface-muted: oklch(0.965 0.005 265);
+  --surface-soft: #f4f4f5;
+  --card: oklch(1 0 0);
+
+  /* Cool greys on the surfaces' hue. 17:1 and 5.3:1 on the page; `--faint` is
+     3.5:1 on purpose — captions and disabled only, never a sentence. */
+  --foreground: #303036;               /* body copy */
+  --heading: #232329;                  /* headings, the wordmark */
+  --muted: oklch(0.52 0.02 265);         /* secondary copy */
+  --faint: oklch(0.62 0.018 265);        /* captions, disabled */
+
+  /* Solid cool greys, not alpha black — one line colour on every surface.
+     Chrome, then a line next to a filled surface, then the heaviest. */
+  --border: #e9e9ed;
+  --border-2: #d8d8df;
+  --border-3: oklch(0.82 0.01 265);
+
+  /* Apiosk screenshot reference, converted from its embedded profile to sRGB.
+     Purple in light mode; lilac on dark surfaces. */
+  --accent: #6349db;
+  --accent-fg: #ffffff;
+  --accent-line: rgb(99 73 219 / 0.4);
+  --accent-wash: rgb(99 73 219 / 0.07);
+  --accent-wash-strong: rgb(99 73 219 / 0.13);
+  --accent-wash-edge: rgb(99 73 219 / 0.14);
+
+  --secondary: oklch(0.96 0.006 265);
+  --secondary-fg: oklch(0.26 0.02 265);
+  --accent-pill: color-mix(in srgb, var(--accent) 8%, white);
+  --accent-pill-fg: #4931ad;
+
+  /* How hard the search rim burns, and how it meets the page.
+     -----------------------------------------------------------------------
+     THE TWO MOVE TOGETHER, and 0.38 with `normal` was the wrong pair. The
+     reasoning behind it — "the sweep is designed on black, so the light theme
+     takes about a third of it" — had the right instinct and the wrong lever.
+     Turning a light-on-light wash DOWN does not make it read as colour, it
+     makes it read as nothing: light mode showed a pale pink haze in one corner
+     that was invisible from more than an arm's length, which is the exact
+     failure the flow exists to fix.
+
+     `multiply` takes the white ground down towards each hue instead of laying
+     light on top of it, so the spectrum arrives saturated. It is a much
+     stronger operation, which is why the strength comes DOWN again rather than
+     up — 0.34 under `multiply` is a considerably more present glow than 0.38
+     under `normal` ever was. Above about 0.45 it stops being a glow and starts
+     being a printed border. */
+  --flow-strength: 0.34;
+  --flow-blend: multiply;
+
+  /* Primary uses the brand purple; hover darkens it. */
+  --button-primary-bg: var(--accent);
+  --button-primary-bg-hover: #553cc5;
+  --button-primary-fg: var(--accent-fg);
+  --button-secondary-bg: oklch(1 0 0);
+  --button-secondary-bg-hover: var(--secondary);
+  --button-secondary-fg: var(--secondary-fg);
+  --input-bg: oklch(1 0 0);
+  /* Ink-tinted, not black: a hueless overlay on a cool page is a smudge. */
+  --hover: oklch(0.21 0.02 265 / 0.05);
+  --ring: var(--accent);
+
+  /* --- Status ------------------------------------------------------------- */
+  --success-bg: #e8faf1;
+  --success-fg: #057857;
+  --success-border: #c9efdc;
+  --warning-bg: #fdf5e6;
+  --warning-fg: #b26a12;
+  --warning-border: #f2e2c4;
+  --danger-bg: #fff2f4;
+  --danger-fg: #b42318;
+  --danger-border: #fecdd3;
+
+  /* White, and the hairline is what separates it: the page is the tinted
+     surface here, not the rail. */
+  --sidebar: oklch(1 0 0);
+  --sidebar-border: var(--border-2);
+
+  /* Four levels, tinted with the ink and never black: resting card, the same
+     card hovered, a floating bar, something over the page. */
+  --shadow-1: 0 1px 2px oklch(0.21 0.02 265 / 0.06);
+  --shadow-2:
+    0 2px 4px oklch(0.21 0.02 265 / 0.06),
+    0 1px 2px oklch(0.21 0.02 265 / 0.05);
+  --shadow-3: 0 8px 24px oklch(0.21 0.02 265 / 0.09);
+  --shadow-4: 0 16px 44px oklch(0.21 0.02 265 / 0.13);
+  --shadow-panel: var(--shadow-1);
+  --shadow-pop: var(--shadow-4);
+
+  /* Compact controls and restrained panel corners share one radius scale. */
+  --radius: 0.5rem;
+
+  /* The shell's fixed numbers, read by the sidebar and by whatever clears it. */
+  --sidebar-width: 15rem;
+  --sidebar-width-collapsed: 3.75rem;
+  /* 48px. It holds one 36px control and, below `lg`, a menu button and the
+     page's name — 56px was giving an almost-empty bar the height of a toolbar
+     with something in it, and every page then started a further 12px below
+     that. Read by the home page's landing band too, so the field it centres
+     rises with it. */
+  --header-height: 3.5rem;
+}
+
+.ask-app.dark {
+  color-scheme: dark;
+
+  /* The light theme's hue run down to a soft charcoal, with its steps
+     inverted: a neutral dark grey under a purple accent looks borrowed from
+     elsewhere. Lifted off near-black (was 0.148) — white copy on an inky page
+     glared and the steps between surfaces were too tight to read. */
+  --background: oklch(0.215 0.012 265);
+  --background-2: oklch(0.235 0.012 265);
+  --surface: oklch(0.248 0.013 265);
+  --surface-muted: oklch(0.285 0.013 265);
+  --surface-soft: oklch(0.315 0.013 265);
+  --card: oklch(0.248 0.013 265);
+
+  /* Same four jobs against this page: 12:1, 6.9:1, 4.5:1. Off-white rather
+     than near-white, so a page of copy does not glare. */
+  --foreground: oklch(0.885 0.008 265);
+  --heading: oklch(0.94 0.005 265);
+  --muted: oklch(0.715 0.016 265);
+  --faint: oklch(0.605 0.018 265);
+
+  /* A shared neutral line for chrome and inputs, with softer content dividers. */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-2: #45454f;
+  --border-3: rgba(255, 255, 255, 0.18);
+
+  /* A touch less saturated than the old #c3a0ff, which buzzed on charcoal. */
+  --accent: #b9a3f0;
+  --accent-fg: #25153c;
+  --accent-line: rgb(185 163 240 / 0.45);
+  --accent-wash: rgb(185 163 240 / 0.12);
+  --accent-wash-strong: rgb(185 163 240 / 0.2);
+  --accent-wash-edge: rgb(185 163 240 / 0.18);
+
+  --secondary: oklch(0.32 0.016 265);
+  --secondary-fg: oklch(0.89 0.008 265);
+  --accent-pill: color-mix(in srgb, var(--accent) 15%, var(--card));
+  --accent-pill-fg: #d6c8f5;
+
+  /* Laying light on a near-black ground: `normal` is already the right
+     operation and there is nothing to take down, so the dark theme keeps the
+     blend it has always had.
+
+     0.6, DOWN FROM 0.82. The rim is a great deal more present than it was when
+     that number was set — it runs the whole perimeter now rather than being
+     clipped to one edge, it has two openings rather than one, and the spectrum
+     under them is blurred wider. Same opacity against three changes that each
+     add light is a glow that had quietly become the loudest thing on an empty
+     page. This is the dial for how hard it burns; the mask decides where.
+     0.48 since the page lifted off black: the same light on charcoal reads
+     louder than it did on near-black. */
+  --flow-strength: 0.48;
+  --flow-blend: normal;
+
+  /* Lilac primary actions use dark purple ink; hover lightens the fill. */
+  --button-primary-bg: var(--accent);
+  --button-primary-bg-hover: #c9b8f5;
+  --button-primary-fg: var(--accent-fg);
+  --button-secondary-bg: oklch(0.285 0.013 265);
+  --button-secondary-bg-hover: oklch(0.315 0.013 265);
+  --button-secondary-fg: oklch(0.885 0.008 265);
+  --input-bg: oklch(0.235 0.012 265);
+  --hover: rgba(255, 255, 255, 0.06);
+
+  --success-bg: rgba(16, 185, 129, 0.14);
+  --success-fg: #6ee7b7;
+  --success-border: rgba(16, 185, 129, 0.28);
+  --warning-bg: rgba(251, 191, 36, 0.14);
+  --warning-fg: #fbbf24;
+  --warning-border: rgba(251, 191, 36, 0.28);
+  --danger-bg: rgba(244, 63, 94, 0.14);
+  --danger-fg: #fda4af;
+  --danger-border: rgba(244, 63, 94, 0.28);
+
+  /* The light rail's step, the other way: a rail within two points of the page
+     disappears outright on an OLED phone at low brightness. */
+  --sidebar: oklch(0.262 0.014 265);
+
+  /* The same four, cast much harder: nothing here is darker than the page, so
+     the depth has to come from alpha. Eased a step now the page is charcoal —
+     a black halo on a lifted ground reads as a smudge, not depth. */
+  --shadow-1: 0 1px 2px oklch(0.08 0.02 265 / 0.38);
+  --shadow-2:
+    0 2px 4px oklch(0.08 0.02 265 / 0.38),
+    0 1px 2px oklch(0.08 0.02 265 / 0.3);
+  --shadow-3: 0 8px 24px oklch(0.08 0.02 265 / 0.42);
+  --shadow-4: 0 16px 44px oklch(0.08 0.02 265 / 0.48);
+  --shadow-panel: var(--shadow-1);
+  --shadow-pop: var(--shadow-4);
+}
+
+/* The tokens as Tailwind utilities — `bg-surface`, `text-muted`, `rounded-lg`
+   and friends — so markup never reaches for a raw var() or a hex. */
+@theme inline {
+  --color-background: var(--background);
+  --color-background-2: var(--background-2);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-soft: var(--surface-soft);
+  --color-card: var(--card);
+
+  --color-foreground: var(--foreground);
+  --color-heading: var(--heading);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-border: var(--border);
+  --color-border-2: var(--border-2);
+  --color-border-3: var(--border-3);
+
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-wash: var(--accent-wash);
+  --color-accent-wash-edge: var(--accent-wash-edge);
+  --color-hover: var(--hover);
+  --color-ring: var(--ring);
+
+  /* Chips and bubbles, and the price pill. Spelled `-fg` to match
+     `--color-accent-fg`, not the brandbook's `-foreground`. */
+  --color-secondary: var(--secondary);
+  --color-secondary-fg: var(--secondary-fg);
+  --color-accent-pill: var(--accent-pill);
+  --color-accent-pill-fg: var(--accent-pill-fg);
+
+  --color-success: var(--success-fg);
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning-fg);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-danger: var(--danger-fg);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --font-sans: var(--font-body);
+  /* NO `--font-mono`, on purpose, and this is load bearing.
+     Tailwind v4 generates utilities FROM these tokens, so with no token here
+     the `font-mono` class does not exist — writing it is inert rather than
+     quietly shipping a terminal face. `src/no-mono.test.ts` fails the build if
+     the class reappears anywhere in `src/`.
+     Numbers still line up: `tabular-nums` is a figure variant, not a typeface,
+     and Inter has it. */
+  --font-display: var(--font-heading);
+  /* `font-logo` — the wordmark only. Nothing else should reach for this. */
+  --font-logo: var(--font-brand);
+
+  /* Type scale — FIVE SIZES IN THE WHOLE APP, and nothing between them.
+
+         tiny     12px/16  metadata that is true but secondary: a column
+                           header, a unit under a price, a hint under a field
+         menu     13px/20  the sidebar's menu rows and the Ask starter
+                           titles, in regular weight
+         body     14px/20  everything else: names, sentences, values,
+                           buttons, fields, the Ask composer
+         large    16px/24  a section heading or a total, semibold
+         display  24px/32  the one headline of a page, or its hero figure,
+                           semibold
+
+     Two weights inside a page: regular, and `font-medium` for a thing's name,
+     a label, a heading at body size. Semibold belongs to `large` and
+     `display` only, and they carry it themselves. Hierarchy comes from WEIGHT
+     AND COLOUR (`text-heading`, `text-muted`, `text-faint`), not from another
+     size. No uppercase micro-caps and no letter-spacing on labels.
+
+     Tailwind's own steps (`text-xs` … `text-9xl`) are switched off below, so
+     a stray `text-sm` generates nothing, and `tests/type-scale.test.ts` fails
+     the build on that or on an arbitrary pixel or rem size in brackets.
+
+     Each token carries its own line-height, so `leading-*` next to one of
+     these is a mistake: it is the thing the scale exists to stop. */
+  --text-*: initial;
+  --text-tiny: 0.75rem;
+  --text-tiny--line-height: 1rem;
+  --text-menu: 0.8125rem;
+  --text-menu--line-height: 1.25rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-large: 1rem;
+  --text-large--line-height: 1.5rem;
+  --text-large--font-weight: 600;
+  --text-large--letter-spacing: -0.011em;
+  --text-display: 1.5rem;
+  --text-display--line-height: 2rem;
+  --text-display--font-weight: 600;
+  --text-display--letter-spacing: -0.019em;
+
+  /* Radius by role: 6px controls, 8px panels, larger floating surfaces. */
+  --radius-sm: calc(var(--radius) - 4px);   /* 4  */
+  --radius-base: calc(var(--radius) - 2px); /* 6  */
+  --radius-md: calc(var(--radius) - 2px);   /* 6  */
+  --radius-lg: var(--radius);               /* 8  */
+  --radius-xl: calc(var(--radius) + 4px);   /* 12 */
+  --radius-2xl: calc(var(--radius) + 8px);  /* 16 */
+  --radius-3xl: calc(var(--radius) + 12px); /* 20 */
+
+  /* `--shadow-*: initial` drops Tailwind's seven steps of pure black; what is
+     left is the four ink-tinted levels from `:root`, same trick as `font-mono`. */
+  --shadow-*: initial;
+  --shadow-sm: var(--shadow-1);
+  --shadow-md: var(--shadow-2);
+  --shadow-lg: var(--shadow-3);
+  --shadow-xl: var(--shadow-4);
+}
+
+
+.ask-app { font-family: Inter, system-ui, -apple-system, sans-serif; font-size: 14px; line-height: 20px; color:var(--foreground); -webkit-font-smoothing:antialiased; }

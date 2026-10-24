@@ -139,7 +139,9 @@ export function mountCard({ container, resource, tool, input = {}, result = {}, 
     let initialized = false, ready = false;
     active = true;
     const iframe = document.createElement('iframe'); frame = iframe;
-    iframe.setAttribute('sandbox', 'allow-scripts');
+    // App JSON/CSV exports use a user-clicked Blob download. Keep the frame's
+    // opaque origin; downloads do not grant parent DOM, forms or popup access.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-downloads');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.setAttribute('title', `${typeof tool === 'string' ? tool : tool?.name ?? 'Apiosk'} card`);
     iframe.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");

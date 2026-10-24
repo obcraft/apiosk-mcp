@@ -1,0 +1,9 @@
+/* Inputs are the existing scoped MCP controls, hosted beneath the real App
+   source chooser. They retain the App's field size, type scale and tokens. */
+.source-input-editor { display:grid; gap:12px }
+.source-input-fields { display:grid; gap:12px }
+.source-input-label { display:grid; gap:4px; font-size:12px; line-height:16px }
+.source-input { width:100%; min-height:44px; padding:8px 12px; border:1px solid var(--border-2); border-radius:6px; background:var(--input-bg); color:var(--foreground); font:inherit; font-size:14px; line-height:20px }
+.source-input:focus { outline:2px solid var(--accent-line); outline-offset:1px }
+.source-input-editor textarea { min-height:80px; resize:vertical }
+.source-input-editor.hidden { display:none }

@@ -46,6 +46,62 @@ test('direct Gateway construction follows the canonical V2 URL and ignores the O
   }
 });
 
+test('display context preserves caller auth and workspace, expires after 30 seconds and resists caller mutation', async t => {
+  let now = 1000;
+  t.mock.method(Date, 'now', () => now);
+  const requests = [];
+  const gateway = client({ workspaceId, fetchImpl: async (url, options) => {
+    requests.push({ url, ...options });
+    return json({ money_display: { base_currency: 'USD', currency: 'EUR', rate: requests.length === 1 ? '0.92' : '0.93' } });
+  } });
+  const first = await gateway.displayContext();
+  assert.equal(requests[0].url.pathname, '/v2/display-context');
+  assert.equal(requests[0].method, 'GET');
+  assert.equal(requests[0].body, undefined);
+  assert.equal(requests[0].headers.get('authorization'), `Bearer ${token}`);
+  assert.equal(requests[0].headers.get('x-apiosk-workspace'), workspaceId);
+  first.money_display.currency = 'GBP';
+  now += 29_999;
+  const cached = await gateway.displayContext();
+  assert.equal(cached.money_display.currency, 'EUR');
+  cached.money_display.rate = '9';
+  assert.equal((await gateway.displayContext()).money_display.rate, '0.92');
+  assert.equal(requests.length, 1);
+  now += 1;
+  assert.equal((await gateway.displayContext()).money_display.rate, '0.93');
+  assert.equal(requests.length, 2);
+});
+
+test('display context cache is never shared between credential instances', async () => {
+  const calls = [];
+  const fetchImpl = async (_url, options) => {
+    const authorization = options.headers.get('authorization'); calls.push(authorization);
+    return json({ money_display: { base_currency: 'USD', currency: authorization.endsWith('buyer-a') ? 'EUR' : 'GBP', rate: '0.9' } });
+  };
+  const a = client({ token: 'apk_access_buyer-a', fetchImpl }), b = client({ token: 'apk_access_buyer-b', fetchImpl });
+  assert.equal((await a.displayContext()).money_display.currency, 'EUR');
+  assert.equal((await b.displayContext()).money_display.currency, 'GBP');
+  assert.equal((await a.displayContext()).money_display.currency, 'EUR');
+  assert.deepEqual(calls, ['Bearer apk_access_buyer-a', 'Bearer apk_access_buyer-b']);
+});
+
+test('optional display-context failures are not cached and cancellation cannot return cached data', async () => {
+  let calls = 0;
+  const gateway = client({ fetchImpl: async () => {
+    calls++;
+    if (calls === 1) return json({ errors: [{ code: 'display_unavailable', message: 'Display context unavailable' }] }, 503);
+    if (calls === 2) return json({ unexpected: true });
+    return json({ money_display: { base_currency: 'USD', currency: 'EUR', rate: '0.92' } });
+  } });
+  await assert.rejects(gateway.displayContext(), error => error.code === 'display_unavailable');
+  await assert.rejects(gateway.displayContext(), error => error.code === 'invalid_display_context');
+  assert.equal((await gateway.displayContext()).money_display.currency, 'EUR');
+  assert.equal(calls, 3);
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(gateway.displayContext(controller.signal), error => error.code === 'gateway_aborted');
+  assert.equal(calls, 3);
+});
+
 test('never retries an ambiguous mutation, including authentication and server errors', async () => {
   for (const status of [401, 429, 500, 503]) {
     let calls = 0;

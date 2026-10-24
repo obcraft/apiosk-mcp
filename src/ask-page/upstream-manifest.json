@@ -1,0 +1,134 @@
+[
+  {
+    "upstream": "app/src/components/ask-v2/ask-v2-sources.tsx",
+    "upstream_sha256": "b8d76094b180f8b90cf0def73855450c096ac571e10a6737fcec869ae676a8da",
+    "vendored": "components/ask-v2/ask-v2-sources.tsx",
+    "sha256": "8444a746a17174a5d7e78aa4038f8b6d51b3ab604767466a546d786bd0c91090"
+  },
+  {
+    "upstream": "app/src/components/ask/answer-layout.tsx",
+    "upstream_sha256": "0181dc1cc19cb52d7090bd20c1e5432d514f845fa285443583c085e487e1f734",
+    "vendored": "components/ask/answer-layout.tsx",
+    "sha256": "178b53b1bbda673a830342e2dab18bc248a0a7c25548df1dd5ba8bf305e7d46f"
+  },
+  {
+    "upstream": "app/src/components/ask/discovery-reveal.ts",
+    "upstream_sha256": "16328886cc8ec661f7968ef3242e026e108e1999aea6b53cc16fc7e02eb65e8f",
+    "vendored": "components/ask/discovery-reveal.ts",
+    "sha256": "16328886cc8ec661f7968ef3242e026e108e1999aea6b53cc16fc7e02eb65e8f"
+  },
+  {
+    "upstream": "app/src/components/ask-v2/sticky-composer-summary.tsx",
+    "upstream_sha256": "99a74dc5ccb2569635f683a32abb01709e3c36b306957573987252e5182ed020",
+    "vendored": "components/ask-v2/sticky-composer-summary.tsx",
+    "sha256": "6dc684312121317de984c8c17e2a7902e244928640ac9ebb701f7589c35b16b0"
+  },
+  {
+    "upstream": "app/src/components/explore/entity-logo.tsx",
+    "upstream_sha256": "f90a6ecadd672bdcc2f839b177c76f91021b36a52cd5079d889b31cb5439cac8",
+    "vendored": "components/explore/entity-logo.tsx",
+    "sha256": "b955946d39689a4bbb23de429c652bd7f1ec570ee81349dc2d4f50394129f960"
+  },
+  {
+    "upstream": "app/src/components/discover/source-logo.tsx",
+    "upstream_sha256": "0978cbbcb9616f09862e706ace1257918ec0f803e24b7ee8ccf96b2bf58b6975",
+    "vendored": "components/discover/source-logo.tsx",
+    "sha256": "1dd04e261a8f7f40c8504e38fedf41577e19ee02856b3ab0b98ec854f327bc66"
+  },
+  {
+    "upstream": "app/src/components/ui/button.tsx",
+    "upstream_sha256": "9230fa297848b572f44187ac5038bf62903a1c8cba2b1c0f4995ec4973cdd4ad",
+    "vendored": "components/ui/button.tsx",
+    "sha256": "01db9a05d65af51f7055243c54cda6089f279753244754cf879cfdf7caf27a24"
+  },
+  {
+    "upstream": "app/src/lib/domain/subject-context.ts",
+    "upstream_sha256": "7b15d2daf8cb3fb0f2131284d35a1d8466d3c4fa9b56c8f7c0fb0ae2716d3ec5",
+    "vendored": "lib/domain/subject-context.ts",
+    "sha256": "7b15d2daf8cb3fb0f2131284d35a1d8466d3c4fa9b56c8f7c0fb0ae2716d3ec5"
+  },
+  {
+    "upstream": "app/src/lib/domain/answer-sources.ts",
+    "upstream_sha256": "16011b87257bab0af574219954a432396187fc90442f3fa085e4d90126e2292f",
+    "vendored": "lib/domain/answer-sources.ts",
+    "sha256": "16011b87257bab0af574219954a432396187fc90442f3fa085e4d90126e2292f"
+  },
+  {
+    "upstream": "app/src/lib/domain/source-summary.ts",
+    "upstream_sha256": "bd179f279b6f161f3bdf2adddc4e771e4485b79c534efe5ee1c3b0742e4aa603",
+    "vendored": "lib/domain/source-summary.ts",
+    "sha256": "bd179f279b6f161f3bdf2adddc4e771e4485b79c534efe5ee1c3b0742e4aa603"
+  },
+  {
+    "upstream": "app/src/lib/domain/source-groups.ts",
+    "upstream_sha256": "3bc6bb7393dd015f4c38957cfa98090a5bd87d5e8c791424e08dc5f09c04accb",
+    "vendored": "lib/domain/source-groups.ts",
+    "sha256": "3bc6bb7393dd015f4c38957cfa98090a5bd87d5e8c791424e08dc5f09c04accb"
+  },
+  {
+    "upstream": "app/src/lib/ui/source-price.ts",
+    "upstream_sha256": "da246ed7ff282a4b5b764c3001cae71f9c0e9a2da63b193625d04c9e82d360aa",
+    "vendored": "lib/ui/source-price.ts",
+    "sha256": "da246ed7ff282a4b5b764c3001cae71f9c0e9a2da63b193625d04c9e82d360aa"
+  },
+  {
+    "upstream": "app/src/lib/ui/money-display.ts",
+    "upstream_sha256": "c5a70815274126d254ee2a2f1c58e2d5449c9b02f9a8e9d5a818782c34445dce",
+    "vendored": "lib/ui/money-display.ts",
+    "sha256": "c5a70815274126d254ee2a2f1c58e2d5449c9b02f9a8e9d5a818782c34445dce"
+  },
+  {
+    "upstream": "app/src/lib/ui/source-marks.ts",
+    "upstream_sha256": "c6b6ca2c959d7a48fb5dcfe69823d497684ac7e88b897d81fa6394408aad989a",
+    "vendored": "lib/ui/source-marks.ts",
+    "sha256": "c6b6ca2c959d7a48fb5dcfe69823d497684ac7e88b897d81fa6394408aad989a"
+  },
+  {
+    "upstream": "app/src/lib/ui/utils.ts",
+    "upstream_sha256": "e74d19aded9b2ade1cf15b83ee0d2927d5f9d2751ebed9d92ac11c72279f17d6",
+    "vendored": "lib/ui/utils.ts",
+    "sha256": "e74d19aded9b2ade1cf15b83ee0d2927d5f9d2751ebed9d92ac11c72279f17d6"
+  },
+  {
+    "upstream": "app/src/components/discover/input-fields.tsx",
+    "upstream_sha256": "25340dad524af2ba1a43a3a9fd9fdc6f1212bce9c69ac7713580e1c225584f95",
+    "vendored": "components/discover/input-fields.tsx",
+    "sha256": "083afba59e0177619c9a77b085b0295fbde85837849ab57f97431e1832d2651c"
+  },
+  {
+    "upstream": "app/src/components/ui/input.tsx",
+    "upstream_sha256": "9cbad0eee466d4b8d5a4c6dc27e12dc6859eaa5f87a6f8f17207a24f6e479789",
+    "vendored": "components/ui/input.tsx",
+    "sha256": "5fc005eff2c3ae031da2b93afda2cf35fbb7f38c6e3b1cad821251647656030e"
+  },
+  {
+    "upstream": "app/src/components/ui/select.tsx",
+    "upstream_sha256": "8b527701c79d94e77cae7aa0d6bcceda224b7b43120efd4eab1bc144c2f89926",
+    "vendored": "components/ui/select.tsx",
+    "sha256": "7cda6eff09c6c219893734cebb9e87611d18fc3f7584a00302871c6b9bd6adb4"
+  },
+  {
+    "upstream": "app/src/components/ui/checkbox.tsx",
+    "upstream_sha256": "72e722de7bf72e7503175be65eead83e12d1f3b42ca817ead52898e6e205c8c2",
+    "vendored": "components/ui/checkbox.tsx",
+    "sha256": "4037b71575ce3db3f60400fe196eb629460010d2d5d340981b46033720c4ba41"
+  },
+  {
+    "upstream": "app/src/lib/domain/inputs.ts",
+    "upstream_sha256": "3ed965602349b48d27b2605eef9e692aa2ea2b007a8c19aee25e773db45074a3",
+    "vendored": "lib/domain/inputs.ts",
+    "sha256": "3ed965602349b48d27b2605eef9e692aa2ea2b007a8c19aee25e773db45074a3"
+  },
+  {
+    "upstream": "app/src/components/ask/ask-thinking.tsx",
+    "upstream_sha256": "cd49f1b9752f48a2cf71d3cd030697b7d705a34d222b75d434a4b8f84d2cc480",
+    "vendored": "components/ask/ask-thinking.tsx",
+    "sha256": "f91822fc998548b87044c9ed6927ab8751c5b08ee8aae26085c49a31a4f189d8"
+  },
+  {
+    "upstream": "app/src/components/ask/gateway-v2-status.ts",
+    "upstream_sha256": "b7de38e3d245bf4e02c26c43d83fba846f913e782d8306462a63850fe6552795",
+    "vendored": "components/ask/gateway-v2-status.ts",
+    "sha256": "b7de38e3d245bf4e02c26c43d83fba846f913e782d8306462a63850fe6552795"
+  }
+]

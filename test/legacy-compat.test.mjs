@@ -241,9 +241,11 @@ test('cached approval cannot approve one member of a combined current quote', as
 
 test('legacy status reuses an approved current request and preserves sibling tasks before cached approval', async t => {
   const f = await fixture(t, { respond(path) {
-    if (path === '/v2/ask') return { question, parsed_request: parsed, search_id: 'synthetic-search', errors: [],
-      apis: [{ origin: 'apiosk', name: 'Fixture register', endpoint_id: ENDPOINT, capability: 'company.profile', subject_id: 's1', availability: 'supported', input_values: selection.input }],
-      searches: { apiosk: { matches: [] }, coinbase: { matches: [] } } };
+    if (path === '/v2/ask') {
+      const source = { origin: 'apiosk', name: 'Fixture register', endpoint_id: ENDPOINT, capability: 'company.profile', subject_id: 's1', availability: 'supported', input_values: selection.input };
+      return { question, parsed_request: parsed, search_id: 'synthetic-search', errors: [], apis: [source],
+        searches: { apiosk: { matches: [{ slug: 'company.profile', subject_id: 's1', apiosk: [source], coinbase: [] }] }, coinbase: { matches: [] } } };
+    }
     if (path.startsWith('/v2/ask-v2/endpoints/')) return { endpoint_id: ENDPOINT, inputs: [{ field: 'company.name', required: true, schema: { type: 'string' } }] };
   } });
   const asked = await f.invoke('apiosk_ask', { question }); ok(asked);

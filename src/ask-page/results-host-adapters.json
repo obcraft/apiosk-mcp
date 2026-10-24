@@ -1,0 +1,18 @@
+{
+  "components/ui/dialog.tsx": {
+    "upstream_sha256": "2105fc9892ef7f355526217ade427671856596f90d311c3da3e8039aaaefd02a",
+    "change": "Host shadow-root portal destination and active focus only; App presentation unchanged"
+  },
+  "components/ui/tooltip.tsx": {
+    "upstream_sha256": "d13d64b307490ed834e210d921bc9b835eb3060d0f4100b5516ecedd6f1277fe",
+    "change": "Host shadow-root portal destination and active focus only; App presentation unchanged"
+  },
+  "components/ui/floating-portal.tsx": {
+    "upstream_sha256": "e89719753e3c3e4ac6d4843fc82eb06b5a76196a9e2288334e4cb4e14b080d90",
+    "change": "Host shadow-root portal destination and active focus only; App presentation unchanged"
+  },
+  "hooks/use-focus-trap.ts": {
+    "upstream_sha256": "e577abd55063a3f9a4beee1edad0b0f11e83a5d3e2ea69ea82237edfdb956b79",
+    "change": "Host shadow-root portal destination and active focus only; App presentation unchanged"
+  }
+}

@@ -1,9 +1,10 @@
 import { presentSearch } from './ask-ui/gateway-v2-ask.mjs';
 import { resultWithPages } from './saved-pages.mjs';
+import { visibleAskSources, sameSource } from './ask-source-view.mjs';
 import { CARD_READ_TOOL, CARD_APPROVE_TOOL, CURRENT_CARD_COMPATIBILITY_URIS, cardToolMeta, cardResources, legacyCardResources, createCardHtml, createLegacyCardHtml } from './card-ui.mjs';
 
 const cardNames = new Set(['apiosk_ask', 'apiosk_sources', 'apiosk_prepare', 'apiosk_approve', 'apiosk_status', 'apiosk_requote', 'apiosk_continue', 'apiosk_result', 'apiosk_follow_up', 'apiosk_retry_search', 'apiosk_chats', 'apiosk_source_selection', 'apiosk_analysis_quote']);
-const readOperations = ['apiosk_ask', 'apiosk_sources', 'apiosk_external', 'apiosk_status', 'apiosk_execute', 'apiosk_requote', 'apiosk_discover', 'prepare_basket', 'status_basket', 'requote_basket', 'retry_preparation'];
+const readOperations = ['apiosk_ask', 'apiosk_sources', 'apiosk_external', 'apiosk_status', 'apiosk_execute', 'apiosk_requote', 'apiosk_discover', 'prepare_basket', 'status_basket', 'requote_basket', 'retry_preparation', 'read_result_page', 'new_purchase', 'inspect_source'];
 const object = (properties, required) => ({ type: 'object', additionalProperties: false, properties, required });
 const reference = { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,100}$' };
 const arbitrary = { type: 'object', maxProperties: 64, additionalProperties: true };
@@ -18,13 +19,15 @@ function compact(state, card) {
     next_actions: (task.view?.next_actions || []).map(action => ({ action_id: action.action_id, kind: action.kind, label: action.label,
       requires_authorization: action.requires_authorization, input_schema: action.input_schema })),
     result_available: task.view?.result != null || !!task.view?.context_view?.results?.length }));
-  const sources = (state.sources || []).slice(0, 100).map(source => ({ source_id: source.id, name: source.name,
+  const visible = visibleAskSources(state);
+  const sources = visible.slice(0, 100).map(source => ({ source_id: source.id, name: source.name,
     description: string(source.description || source.endpoint?.description).slice(0, 600), origin: source.origin,
     availability: source.availability, subject_id: source.subject_id, subject_label: source.subject_label,
     capability: source.capability || source.requested_capability, price: source.price || source.endpoint?.price,
     input_values: source.input_values, missing_inputs: source.endpoint?.missing_inputs }));
   return { request_id: state.id, question: state.question, status: state.status, view: card.view || 'task', sources,
-    source_count: state.sources?.length || 0, approval: state.approval || null, tasks,
+    source_count: visible.length, company_context: card.company_context || state.discovery?.company_context || [],
+    money_display: card.context_view?.money_display || null, approval: state.approval || null, tasks,
     input_requirements: (state.input_requirements || []).map(item => ({ source_id: item.source_id, source: item.source,
       missing: item.missing, errors: item.errors })), errors: state.error ? [state.error] : state.discovery?.errors || [],
     next_step: state.approval ? 'Review this exact total. Only explicit user approval permits execution.'
@@ -41,9 +44,10 @@ function identity(source, candidate) {
 
 export function sourceCard(state) {
   const discovery = state.discovery || {};
+  const rows = visibleAskSources(state);
   const fallbackMatches = () => {
     const groups = new Map();
-    for (const source of state.sources || []) {
+    for (const source of rows) {
       const slug = source.requested_capability || source.capability || 'requested_sources', key = JSON.stringify([slug, source.subject_id]);
       if (!groups.has(key)) groups.set(key, { slug, ...(source.subject_id ? { subject_id: source.subject_id } : {}), apiosk: [], coinbase: [], coinbase_status: 'complete' });
       groups.get(key)[source.origin === 'apiosk' ? 'apiosk' : 'coinbase'].push(source);
@@ -57,20 +61,20 @@ export function sourceCard(state) {
       parsed_request: discovery.parsed_request || {}, ...(Array.isArray(discovery.source_options) ? { source_options: discovery.source_options } : {}), matches: fallbackMatches(),
       company_context: discovery.company_context || [], message: state.error?.message };
   }
-  if (Array.isArray(discovery.apis) && state.sources.length && !(view.matches || []).some(match => match.apiosk?.length || match.coinbase?.length)) {
+  if (Array.isArray(discovery.apis) && rows.length && !(view.matches || []).some(match => match.apiosk?.length || match.coinbase?.length)) {
     view.matches = fallbackMatches(); delete view.message;
   }
-  // The Gateway's offered-source record contains identity/pricing while the
-  // full endpoint descriptor owns its logo. Preserve that authoritative URL
-  // on the exact original component's expected presentation field.
-  if (Array.isArray(view.source_options)) view.source_options = view.source_options.map(option => ({ ...option,
-    source: { ...option.source, ...(option.source?.logo_url || option.endpoint?.source?.logo_url
+  // Render the exact Ask-page projection, including for requests saved by the
+  // older MCP. Offered descriptors may enrich a match, never add extra rows.
+  view.source_rows = rows;
+  view.matches = fallbackMatches();
+  view.source_options = (view.source_options || []).filter(option => rows.some(source => sameSource(source, {
+    ...option.source, endpoint_id: option.source?.endpoint_id || option.endpoint?.endpoint_id,
+    subject_id: option.subject_id || option.source?.subject_id,
+  }))).map(option => ({ ...option, source: { ...option.source,
+    ...(option.source?.logo_url || option.endpoint?.source?.logo_url
       ? { logo_url: option.source?.logo_url || option.endpoint.source.logo_url } : {}) } }));
-  view.matches = (view.matches || []).map(match => ({ ...match, coinbase: (match.coinbase || []).map(candidate => {
-    const saved = (state.sources || []).find(source => source.origin !== 'apiosk' && (source.api_id && source.api_id === candidate.api_id
-      || source.url === candidate.url && source.method === candidate.method && (source.subject_id || null) === (candidate.subject_id || match.subject_id || null)));
-    return saved ? { ...candidate, api_id: saved.api_id } : candidate;
-  }) }));
+  view.context_view = { ...discovery.context_view, companies: view.company_context || discovery.company_context || [] };
   view.selected_sources = (state.selected || []).flatMap(selection => {
     const source = state.sources.find(row => row.id === selection.source_id && row.origin === 'apiosk');
     return source ? [{ endpoint_id: source.endpoint_id, capability: source.capability || source.requested_capability,
@@ -109,9 +113,13 @@ export function decorateTaskView(view, gatewayUrl) {
 
 function taskCard(state, task, gatewayUrl) {
   const raw = decorateTaskView(resultWithPages(task), gatewayUrl);
+  raw.context_view = { ...raw.context_view, ...(raw.context_view?.money_display || !state.discovery?.context_view?.money_display
+    ? {} : { money_display: state.discovery.context_view.money_display }),
+    approval_outcome_unconfirmed: Boolean(raw.context_view?.approval_outcome_unconfirmed
+      || ['dispatching', 'outcome_unknown'].includes(task.approval_attempt?.status)) };
+  const selection = state.discovery && state.selected?.length ? sourceCard(state) : null;
   if (task.kind === 'external') return { ...raw, protocol_version: '2', view: 'external_purchase',
-    result_present: raw.result_present ?? raw.result != null };
-  const selection = state.discovery?.search_id && state.selected?.length ? sourceCard(state) : null;
+    ...(selection ? { basket_search: selection } : {}), result_present: raw.result_present ?? raw.result != null };
   // The exact Gateway task stays authoritative. Explicit card approval is
   // mapped to MCP 2, and execution continuations only resume prior consent.
   return { ...raw, protocol_version: '2', ...(raw.proposal && !state.approval && !task.approval_attempt
@@ -171,21 +179,28 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
   };
   const decorate = async (response, requestId, preferredTaskId) => {
     if (response?.isError || !requestId) return response;
-    const state = await load(requestId), card = presentCard(state, preferredTaskId, gateway.baseUrl);
+    const state = await load(requestId);
+    if (!state.tasks?.length && typeof gateway.displayContext === 'function') {
+      const display = await gateway.displayContext().catch(() => null);
+      if (display?.money_display) state.discovery = { ...state.discovery, context_view: { ...state.discovery?.context_view, money_display: display.money_display } };
+    }
+    const card = presentCard(state, preferredTaskId, gateway.baseUrl);
     const summary = compact(state, card);
     return { ...response, structuredContent: summary, _meta: { ...response?._meta, apiosk_card_data: card },
       content: [{ type: 'text', text: state.approval
         ? `Review ${state.approval.max_total_atomic} atomic ${state.approval.currency} for the selected sources in the Ask card. Nothing runs until you approve. Saved request: ${state.id}.`
-        : `${state.question}\n${state.sources.length} matching source options. ${state.status}. Open the Ask card to inspect sources, inputs and saved results. Saved request: ${state.id}.` }] };
+        : `${state.question}\n${summary.source_count} matching source options. ${state.status}. Open the Ask card to inspect sources, inputs and saved results. Saved request: ${state.id}.` }] };
   };
   const selectedSources = (state, selections = [], external = []) => [
     ...selections.map(selection => {
+      if (!visibleAskSources(state).some(source => source.origin === 'apiosk' && identity(source, selection))) fail('Select a matching source from this saved question.');
       let matches = state.sources.filter(source => source.origin === 'apiosk' && identity(source, selection));
       if (matches.length > 1) matches = matches.filter(source => canonical(source.input_values || source.endpoint?.input_values || {}) === canonical(selection.input || {}));
       if (matches.length !== 1) fail('Select an exact source and subject from this saved question.');
       return { source_id: matches[0].id, input: selection.input || {} };
     }),
     ...external.map(selection => {
+      if (!visibleAskSources(state).some(source => source.origin !== 'apiosk' && source.api_id === selection.api_id)) fail('Select a matching external source from this saved question.');
       const matches = state.sources.filter(source => source.origin !== 'apiosk' && source.api_id === selection.api_id);
       if (matches.length !== 1) fail('Select the exact external source offered for this saved question.');
       return { source_id: matches[0].id, input: selection.input || {} };
@@ -209,6 +224,30 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
         }
         response = await invoke('apiosk_approve', { request_id, approval_id: approval.approval_id,
           currency: approval.currency, max_total_atomic: approval.max_total_atomic, confirm: true }, context);
+      } else if (operation === 'new_purchase') {
+        if (!['repeat', 'sources'].includes(args.mode)) fail('Choose a new price review or a new source selection.');
+        const active = state.tasks.filter(task => state.active_task_ids.includes(task.id));
+        if (!active.length || active.some(task => !['succeeded', 'partial', 'failed', 'cancelled', 'unsupported'].includes(task.view?.status)
+          || task.view?.context_view?.worker_active || task.view?.context_view?.analyzing
+          || ['dispatching', 'outcome_unknown'].includes(task.approval_attempt?.status)
+          || ['dispatching', 'outcome_unknown'].includes(task.pending_update?.status)
+          || task.view?.billing?.status === 'pending_reconciliation')) fail('Wait for the current request to finish before starting a new purchase.');
+        const freshResponse = await invoke('apiosk_ask', { question: state.question, mode: 'sources' }, context);
+        const freshId = responseRequest(freshResponse);
+        if (!freshId || freshId === request_id) fail('A new price review requires a new saved request.');
+        const fresh = await load(freshId);
+        if (args.mode === 'sources') return decorate(freshResponse, freshId);
+        if (state.mode === 'automatic') return decorate(await invoke('apiosk_prepare', { request_id: freshId, mode: 'automatic', selections: [] }, context), freshId);
+        const rows = visibleAskSources(fresh);
+        const selections = (state.selected || []).map(selection => {
+          const prior = state.sources.find(source => source.id === selection.source_id);
+          const matches = prior ? rows.filter(source => sameSource(source, prior)) : [];
+          return matches.length === 1 ? { source_id: matches[0].id, input: selection.input || {} } : null;
+        });
+        // Availability or subject identity may have changed. Show the fresh
+        // choices instead of substituting a provider or reusing an old quote.
+        if (!selections.length || selections.some(selection => !selection)) return decorate(freshResponse, freshId);
+        return decorate(await invoke('apiosk_prepare', { request_id: freshId, mode: 'sources', selections }, context), freshId);
       } else if (operation === 'prepare_basket') {
         response = await invoke('apiosk_prepare', { request_id, mode: 'sources', selections: selectedSources(state, args.selections, args.external) }, context);
       } else if (operation === 'retry_preparation') {
@@ -251,6 +290,22 @@ export function withEmbeddedCards(service, { store, gateway, legacyUiMime = fals
           if (!state.tasks.some(task => task.kind === 'external' && task.id === preferredTaskId)) fail('Saved purchase does not belong to this request.');
           response = await invoke('apiosk_status', { request_id }, context);
         } else fail('Unknown external source action.');
+      } else if (operation === 'inspect_source') {
+        if (!visibleAskSources(state).some(source => source.id === args.source_id)) fail('Select a matching source from this saved question.');
+        const inspected = await invoke('apiosk_sources', { request_id, source_id: args.source_id }, context);
+        const value = { view: 'source_metadata', descriptor: inspected.structuredContent?.descriptor, suggested_input: inspected.structuredContent?.suggested_input || {} };
+        return { structuredContent: value, content: [{ type: 'text', text: JSON.stringify(value) }] };
+      } else if (operation === 'read_result_page') {
+        const task = state.tasks.find(task => task.id === args.task_ref && task.kind === 'endpoint');
+        const action = task?.view.next_actions?.find(action => action.action_id === args.result_ref && action.kind === 'read_result' && action.requires_authorization === false);
+        if (!action) fail('Choose a saved result from this request.');
+        const offset = args.offset ?? 0;
+        if (!Number.isSafeInteger(offset) || offset < 0) fail('Invalid saved result offset.');
+        const savedPage = await invoke('apiosk_result_page', { request_id, task_id: task.id, action_id: action.action_id, offset }, context);
+        const page = savedPage.structuredContent?.page;
+        if (!page || page.result_ref !== args.result_ref) fail('The saved result page did not match this source.');
+        const value = { view: 'saved_result_page', page };
+        return { structuredContent: value, content: [{ type: 'text', text: JSON.stringify(value) }] };
       } else if (operation === 'apiosk_execute') {
         const taskId = args.state?.state_ref, task = state.tasks.find(task => task.id === taskId && task.kind === 'endpoint');
         if (!task) fail('Task does not belong to this saved request.');

@@ -6,6 +6,8 @@ import { extraTools } from './extras.mjs';
 import { inspectInputs } from './source-inputs.mjs';
 import { capturePage, resultWithPages } from './saved-pages.mjs';
 import { taskTools } from './task-tools.mjs';
+import { projectAskSources } from './ask-page-sources.mjs';
+import { visibleAskSources } from './ask-source-view.mjs';
 
 const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
@@ -71,7 +73,7 @@ export function createAskService({ gateway, store }) {
       ? { resource_url: source.url, method: source.method, query: source.discovery_query || source.name }
       : { api_id: source.api_id }, signal);
   const show = state => {
-    const view = rendered(presentAsk(state));
+    const view = rendered(presentAsk({ ...state, sources: visibleAskSources(state) }));
     view.structuredContent.request_id = state.id;
     view.structuredContent.status = state.status;
     view.structuredContent.approval = state.approval ?? null;
@@ -95,19 +97,7 @@ export function createAskService({ gateway, store }) {
       source_options: searches.apiosk?.source_options ?? [] };
   }
   function sourceRows(found) {
-    const matches = found.apis ?? ['apiosk', 'coinbase'].flatMap(origin => (found.searches?.[origin]?.matches ?? []).flatMap(match => (match[origin] ?? []).map(source => ({
-      ...source, requested_capability: match.slug, discovery_query: match.query, subject_id: source.subject_id ?? match.subject_id,
-    }))));
-    const candidates = [...matches, ...(found.source_options || []).flatMap(option => {
-      if (!option.source || !option.endpoint?.endpoint_id) return [];
-      return [{ ...option.source, endpoint: option.endpoint,
-        endpoint_id: option.endpoint.endpoint_id,
-        capability: option.source.capability || option.endpoint.capability,
-        subject_id: option.subject_id || option.requirement?.subject_id || option.source.subject_id,
-        requested_capability: option.requirement?.slug,
-        input_values: option.input_values ?? option.endpoint.input_values ?? option.source.input_values ?? {},
-        reason: option.reason, requirement: option.requirement }];
-    })];
+    const candidates = projectAskSources(found);
     const seen = new Set();
     return candidates.flatMap(candidate => {
       const values = candidate.input_values ?? candidate.endpoint?.input_values ?? {};
@@ -125,7 +115,10 @@ export function createAskService({ gateway, store }) {
   async function discoverSaved(state, signal) {
     state.status = 'searching'; await store.save(state);
     try {
-      state.discovery = await discovery(state.question, signal);
+      const [found, display] = await Promise.all([discovery(state.question, signal),
+        typeof gateway.displayContext === 'function' ? gateway.displayContext(signal).catch(() => null) : null]);
+      state.discovery = found;
+      if (display?.money_display) state.discovery.context_view = { ...state.discovery.context_view, money_display: display.money_display };
       state.sources = sourceRows(state.discovery);
       state.status = state.discovery.errors?.length ? 'partial_discovery' : state.sources.length ? 'sources_ready' : 'needs_input';
       state.error = null;
@@ -170,9 +163,10 @@ export function createAskService({ gateway, store }) {
     if (state.tasks.some(t => t.approval_attempt)) throw new Error('This request already has an approval attempt. Read its status or start a new request.');
     const found = state.discovery;
     if (!found?.parsed_request) throw new Error('Source discovery must finish first.');
+    const visibleIds = new Set(visibleAskSources(state).map(source => source.id));
     const selected = selections.map(item => {
       const source = state.sources.find(s => s.id === item.source_id);
-      if (!source) throw new Error('Select a source_id returned by this request.');
+      if (!source || !visibleIds.has(item.source_id)) throw new Error('Select a matching source_id returned by this request.');
       if (!['supported', 'unverified'].includes(source.availability) || (source.origin !== 'apiosk' && source.availability !== 'supported')) throw new Error('This source is not available for purchase.');
       return { source, input: item.input };
     });
@@ -251,7 +245,7 @@ export function createAskService({ gateway, store }) {
       limits: ['Core Ask uses the same Gateway as the app; available data depends on its catalog and your account.', 'Integration actions and platform-managed recurring orders require a personal App session; delegated connector/API keys may receive app_only.', 'Local conversations are scoped to this credential/workspace; they do not sync into the web app chat history.', 'Native host UI varies; every interaction is available through tools and structured results.', 'No automatic approval; no new purchase for presentation changes.'],
     })),
     tool('apiosk_ask', 'Start a new Ask conversation. Discover the same sources and background context as Ask. sources mode lets the user select; automatic prepares a combined plan. Never purchases.', obj({ question: str, mode: { enum: ['sources', 'automatic'], default: 'sources' } }, ['question']), async ({ question, mode = 'sources' }, { signal }) => {
-      const state = await store.create({ type: 'ask', question: question.trim(), mode, status: 'new', sources: [], tasks: [], active_task_ids: [], selected: [], messages: [{ role: 'user', text: question.trim() }] });
+      const state = await store.create({ type: 'ask', question, mode, status: 'new', sources: [], tasks: [], active_task_ids: [], selected: [], messages: [{ role: 'user', text: question }] });
       await discoverSaved(state, signal);
       if (mode === 'automatic' && state.discovery) await prepareSaved(state, [], mode, signal);
       return show(state);

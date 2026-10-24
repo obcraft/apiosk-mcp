@@ -10,7 +10,9 @@ This repository is the canonical `obcraft/apiosk-mcp` implementation. Versioned 
 
 ## Ask interactions and embedded components
 
-The server exposes **36 public tools and six private component operations**, saved-request resources and an Ask prompt. The original MCP1 embedded Ask components, styles and renderers are vendored in `src/ask-ui/`. The adapter connects those components to the new service; the local tester loads the same MCP resources and components. Source groups, prices, input forms, quote review, approval, status, saved results and Details use those components.
+The server exposes **36 public tools and six private component operations**, saved-request resources and an Ask prompt. The actual App Ask React components and design tokens are vendored in `src/ask-page/` and compiled into the self-contained embedded resource. The local tester loads that same resource. `src/ask-ui/` retains the original MCP transport and compatibility renderers; every operation still uses the durable saved-request and approval journal.
+
+Source discovery uses the App’s filtering, deduplication and provider ordering. Offered endpoint descriptors enrich matching sources without adding unrelated catalog entries. Account display currency comes from Gateway’s read-only `/v2/display-context`; quoted atomic amounts remain unchanged. Rebuild the embedded bundle with `npm run build:ask-page` after editing its sources.
 
 MCP Apps and ChatGPT-compatible metadata identify the embedded resources. Model-visible results carry compact source identifiers, status, input needs and the exact approval. Full component data travels separately in `_meta.apiosk_card_data`, so large source schemas and raw response trees do not flood the model context. Saved evidence remains available through the result and evidence tools.
 
@@ -27,7 +29,7 @@ Hosts that support embedded components can show the interactive cards. Text-only
 | Follow up using purchased evidence | `apiosk_follow_up` |
 | Connected app actions and recurring checks | Integration/action review tools, native recurring tools and `apiosk_schedule_handoff` |
 
-`apiosk_ask` defaults to `mode: "sources"`. Automatic planning is available with `mode: "automatic"`. Preparation never approves a purchase. Review the returned currency, maximum total, sources, gaps, expiry and approval ID before authorizing execution. Discovery-only external sources remain labelled as such; a source option is not a purchased finding.
+`apiosk_ask` defaults to `mode: "sources"`. Automatic planning is available with `mode: "automatic"`. Preparation never approves a purchase. Review the returned currency, maximum total, sources, gaps, expiry and approval ID before authorizing execution. The visible choices use the same purchasability filter as the Ask page; discovery metadata and source options are not purchased findings.
 
 Results retain source dates, citations, coverage and gaps, including meaningful `0` and `false` values. Local filters, sorting, chart/table views, saved pages and exports reuse saved data. Follow-ups use purchased evidence where possible; a need for new data creates a separately reviewed request.
 
@@ -78,9 +80,9 @@ To test the canonical hosted server on port 3000 instead:
 MCP_DEV_URL=http://127.0.0.1:3000/mcp npm run dev:chat
 ```
 
-The tester reads this checkout's `.env`, `.env.v2.local` and `.env.dev.local`, with inherited environment values taking precedence. It reuses an existing `MCP_DEV_TOKEN` and `OPENROUTER_API_KEY`. If no local OpenRouter key is set, it reads only the provider key from the sibling `gateway/.env` (`OPENROUTER_API_KEY`, then `INTENT_API_KEY`). It does not inherit Gateway execution flags or change those credentials. `MCP_DEV_PORT`, `MCP_DEV_URL` and `MCP_DEV_MODEL` override the tester defaults.
+The tester reads this checkout's `.env`, `.env.v2.local` and `.env.dev.local`, with inherited environment values taking precedence. It reuses an existing `MCP_DEV_TOKEN` and `OPENROUTER_API_KEY`. If no local OpenRouter key is set, it reads only the provider key from the sibling `gateway/.env` (`OPENROUTER_API_KEY`, then `INTENT_API_KEY`). It does not inherit Gateway execution flags or change those credentials. `MCP_DEV_PORT`, `MCP_DEV_URL` and `MCP_DEV_MODEL` override the tester defaults. Set `MCP_DEV_GATEWAY_URL` for a custom Gateway event origin; the embedded card and tester use the same fixed origin policy for live status updates.
 
-Connect the intended account before asking a question. The tester calls `apiosk_ask` for the first question and renders the same embedded components served to other hosts. Its model continuation receives a bounded projection of tool results; full card data stays available to the component. Model API usage and approved source purchases are separate operations.
+Connect the intended account before asking a question. The tester calls `apiosk_ask` for the first question and renders the same embedded components served to other hosts. An initial discovery stops at the authoritative Ask card without an extra model-written answer. Later model continuations receive a bounded projection of tool results; full card data stays available to the component. Model API usage and approved source purchases are separate operations.
 
 ## Connect Claude or Codex
 

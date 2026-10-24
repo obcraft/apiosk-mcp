@@ -66,7 +66,9 @@ function gatewayFixture() {
       assert.match(req.headers.accept, /application\/json/);
       if (req.method === 'POST') assert.match(req.headers['content-type'], /application\/json/);
       let response;
-      if (req.method === 'POST' && req.url === '/v2/ask') {
+      if (req.method === 'GET' && req.url === '/v2/display-context') {
+        response = { money_display: { base_currency: 'USD', preferred_currency: 'EUR', currency: 'EUR', rate: '0.92', as_of_date: '2026-10-24', fallback_reason: null } };
+      } else if (req.method === 'POST' && req.url === '/v2/ask') {
         counts.discovery++;
         assert.deepEqual(body, { question: QUESTION });
         response = { status: 'choices', question: QUESTION, parsed_request: parsed, model: 'local-test-fixture', attempts: 1,
@@ -77,6 +79,7 @@ function gatewayFixture() {
             endpoint_id: ENDPOINT, capability: CAPABILITY, requested_capability: CAPABILITY, subject_id: 'subject_1',
             availability: 'supported', executable: true, price: '0.07 USD', input_values: INPUT, inputs: descriptor.inputs,
             outputs: descriptor.outputs, lookup: null, missing_inputs: [], buyer_price: descriptor.price, discovery_query: QUESTION }] };
+        response.searches.apiosk.matches = [{ slug: CAPABILITY, subject_id: 'subject_1', apiosk: response.apis, coinbase: [] }];
       } else if (req.method === 'GET' && req.url === `/v2/ask-v2/endpoints/${ENDPOINT}?capability=${CAPABILITY}`) {
         assert.equal(body, undefined);
         response = descriptor;

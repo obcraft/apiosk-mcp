@@ -128,6 +128,26 @@ async function refused(operation) {
   catch (error) { if (error.code === 'ERR_ASSERTION') throw error; return String(error.message); }
 }
 
+test('direct preparation rejects unmatched old saved options before descriptor lookup and preserves the journal', async t => {
+  const f = await fixture(t, { external: true });
+  const asked = await f.ask(), request_id = requestId(asked);
+  const saved = await f.store.get(request_id);
+  saved.discovery.searches.apiosk.matches = [];
+  saved.discovery.searches.coinbase.matches = [];
+  saved.discovery.source_options = saved.sources.filter(source => source.origin === 'apiosk').map(source => ({
+    source: clone(source), subject_id: source.subject_id, endpoint: clone(source.endpoint), input_values: clone(source.input_values),
+  }));
+  await f.store.save(saved);
+  const before = await f.store.get(request_id), beforeCalls = f.calls.length;
+  for (const source of before.sources) {
+    const refused = await f.invoke('apiosk_prepare', { request_id, selections: [{ source_id: source.id, input: clone(source.input_values) }] });
+    assert.equal(refused.isError, true);
+    assert.match(refused.structuredContent.error.message, /matching source_id/);
+  }
+  assert.deepEqual(f.calls.slice(beforeCalls), [], 'No descriptor, preparation or authorization call is sent');
+  assert.deepEqual(await f.store.get(request_id), before, 'Historic source metadata and inputs remain intact');
+});
+
 test('MCP1 legacy connect tokens use the same public Ask wire contract and preserve returned options', async t => {
   for (const token of ['apk_access_fixture', 'aw_live_fixture', 'aw_test_fixture']) {
     const directory = await mkdtemp(join(tmpdir(), 'apiosk-legacy-connection-'));
@@ -154,7 +174,7 @@ test('MCP1 legacy connect tokens use the same public Ask wire contract and prese
   }
 });
 
-test('session discovery sends App search bodies and retains related offered endpoints absent from matches', async t => {
+test('session discovery sends App search bodies and retains offered metadata without displaying unmatched endpoints', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'apiosk-session-discovery-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const store = new StateStore({ directory, scope: 'session-discovery-parity' });
@@ -186,14 +206,10 @@ test('session discovery sends App search bodies and retains related offered endp
   assert.deepEqual(calls.find(call => call.body.origin === 'coinbase').body,
     { parsed_request: parsed.parsed_request, origin: 'coinbase' });
   const state = stateOf(asked);
-  assert.deepEqual(state.discovery.source_options, [option], 'The embedded card receives the App offered options');
-  assert.equal(state.sources.length, 1);
-  assert.equal(state.sources[0].endpoint_id, ENDPOINT_ID);
-  assert.deepEqual(state.sources[0].input_values, source.input_values);
-  const prepared = await invoke('apiosk_prepare', { request_id: state.id, selections: [{ source_id: state.sources[0].id, input: source.input_values }] });
-  assert.equal(prepared.isError, undefined);
-  assert.equal(stateOf(prepared).status, 'requires_approval', 'Related endpoint remains selectable without execution');
-  assert.equal(calls.at(-1).path, '/v2/ask-v2/prepare');
+  assert.deepEqual(state.discovery.source_options, [option], 'Offered endpoint metadata remains in the saved discovery');
+  assert.deepEqual(state.sources, [], 'The App shows matching rows, not unrelated offered endpoints');
+  assert.equal(state.status, 'needs_input');
+  assert.equal(calls.length, 3, 'No preparation is started for an unmatched option');
   assert.equal(calls.some(call => /approve|authorize|execute/.test(call.path)), false);
 });
 

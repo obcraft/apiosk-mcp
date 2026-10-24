@@ -80,23 +80,24 @@ const askTools = ['apiosk_ask', 'apiosk_sources', 'apiosk_capabilities', 'apiosk
   .map(name => ({ name, inputSchema: { type: 'object' } }));
 const foundSources = { structuredContent: { request_id: 'saved-ask-1', status: 'sources_ready', sources: [{ name: 'Official company register', source_id: 'source-1' }] }, _meta: { private: 'host-only' } };
 
-test('the first question reaches real Ask unchanged before the model can answer', async () => {
+test('the first question reaches real Ask verbatim and ends at its card without a second model answer', async () => {
   const order = [], calls = [], requests = [], events = [], history = [];
-  const question = 'What does ASML do? Include its registered company details.';
+  const question = '  KYB check for Mollie B.V. (KVK number 30204462): show the registered company profile and screen the company name against sanctions lists.\n';
   await runChat({ connection: { tools: askTools }, history, message: question, model: 'fixture', key: 'key',
     emit: event => events.push(event),
     invokeTool: async (name, args, source) => { order.push('mcp'); calls.push({ name, args, source }); return foundSources; },
     fetchImpl: async (_url, options) => { order.push('model'); requests.push(JSON.parse(options.body)); return final('Review the Official company register source.'); } });
-  assert.deepEqual(order, ['mcp', 'model']);
+  assert.deepEqual(order, ['mcp']);
   assert.deepEqual(calls, [{ name: 'apiosk_ask', args: { question, mode: 'sources' }, source: 'model' }]);
-  assert.deepEqual(requests[0].tools.map(item => item.function.name), ['apiosk_sources', 'apiosk_capabilities']);
-  assert.match(requests[0].messages.find(item => item.role === 'tool').content, /Official company register/);
-  assert.doesNotMatch(JSON.stringify(requests[0]), /host-only/);
-  assert.match(requests[0].messages[0].content, /Do not prepare, select or purchase/);
-  assert.doesNotMatch(requests[0].messages[0].content, /cards are displayed automatically/);
+  assert.equal(requests.length, 0);
+  assert.equal(history[0].content, question);
+  assert.match(history.at(-1).content, /Official company register/);
+  assert.doesNotMatch(history.at(-1).content, /host-only/);
   assert.equal(events[0].type, 'status');
   assert.equal(events.filter(event => event.type === 'tool_start').length, 1);
   assert.equal(events.find(event => event.type === 'tool_result').result, foundSources);
+  assert.equal(events.some(event => event.type === 'assistant' || event.type === 'assistant_delta'), false);
+  assert.equal(events.some(event => /Thinking|Reading the MCP/.test(event.message || '')), false);
 });
 
 test('initial source review cannot prepare or approve even when the model guesses a hidden call', async () => {
@@ -106,7 +107,8 @@ test('initial source review cannot prepare or approve even when the model guesse
       history, message: 'What does ASML do?', model: 'fixture', key: 'key', emit() {},
       fetchImpl: async () => ++turns === 1 ? requestTool(prohibited) : final('Please choose a matched source.') });
     assert.deepEqual(calls, ['apiosk_ask'], prohibited);
-    assert.match(history.find(item => item.role === 'tool' && item.tool_call_id === 'call_1').content, /Review the matched sources first/);
+    assert.equal(turns, 0, 'source review never asks the model to select or approve a source');
+    assert.equal(history.at(-1).role, 'tool');
   }
 });
 
@@ -127,13 +129,58 @@ test('discovery failure is retained and cannot turn into an unsupported model an
 
 test('follow-up questions keep the saved request and do not restart initial discovery', async () => {
   const history = [], calls = [];
-  const connection = { tools: askTools, async callTool(name, args) { calls.push({ name, args }); return foundSources; } };
+  const connection = { tools: askTools, async callTool(name, args) {
+    calls.push({ name, args });
+    return name === 'apiosk_ask' ? foundSources : { structuredContent: { request_id: 'saved-ask-1', status: 'completed', answer: 'Saved coverage evidence.' } };
+  } };
   await runChat({ connection, history, message: 'What does ASML do?', model: 'fixture', key: 'key', emit() {}, fetchImpl: async () => final('Choose a source.') });
   let turns = 0;
-  await runChat({ connection, history, message: 'Explain the source coverage.', model: 'fixture', key: 'key', emit() {},
-    fetchImpl: async () => ++turns === 1 ? sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'follow-up', function: { name: 'apiosk_follow_up', arguments: JSON.stringify({ request_id: 'saved-ask-1', question: 'Explain the source coverage.' }) } }] }, finish_reason: 'tool_calls' }] }]) : final('Here is the saved coverage.') });
+  const question = ' Explain the source coverage for Mollie B.V. (KVK 30204462).\n';
+  await runChat({ connection, history, message: question, model: 'fixture', key: 'key', emit() {},
+    fetchImpl: async () => ++turns === 1 ? sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'follow-up', function: { name: 'apiosk_follow_up', arguments: JSON.stringify({ request_id: 'saved-ask-1', question: 'Explain coverage.' }) } }] }, finish_reason: 'tool_calls' }] }]) : final('Here is the saved coverage.') });
   assert.deepEqual(calls.map(call => call.name), ['apiosk_ask', 'apiosk_follow_up']);
-  assert.equal(calls[1].args.request_id, 'saved-ask-1');
+  assert.deepEqual(calls[1].args, { request_id: 'saved-ask-1', question });
+  const dispatched = history.find(item => item.tool_calls?.[0]?.id === 'follow-up').tool_calls[0];
+  assert.equal(JSON.parse(dispatched.function.arguments).question, question);
+  assert.equal(turns, 2, 'saved evidence still permits a model summary');
+  assert.equal(history.at(-1).content, 'Here is the saved coverage.');
+});
+
+test('a follow-up source card stops continuation and defers the rest of a model tool batch', async () => {
+  for (const result of [foundSources, { structuredContent: { status: 'requires_approval' }, _meta: { apiosk_card_data: { view: 'source_search', status: 'partial_discovery' } } }]) {
+    const calls = [], events = [], history = [{ role: 'user', content: 'Previous question' }, { role: 'assistant', content: 'Previous result' }];
+    let turns = 0;
+    const question = 'Screen Mollie B.V. (KVK 30204462) against sanctions lists.';
+    await runChat({ connection: { tools: askTools, async callTool(name, args) { calls.push({ name, args }); return result; } },
+      history, message: question, model: 'fixture', key: 'key', emit: event => events.push(event),
+      fetchImpl: async () => {
+        turns++;
+        return sse([{ choices: [{ delta: { tool_calls: [
+          { index: 0, id: 'sources-again', function: { name: 'apiosk_ask', arguments: JSON.stringify({ question: 'Sanctions for Mollie', mode: 'sources' }) } },
+          { index: 1, id: 'premature-approval', function: { name: 'apiosk_approve', arguments: JSON.stringify({ request_id: 'saved-ask-1', approval_id: 'unselected-quote' }) } },
+        ] }, finish_reason: 'tool_calls' }] }]);
+      } });
+    assert.equal(turns, 1);
+    assert.deepEqual(calls, [{ name: 'apiosk_ask', args: { question, mode: 'sources' } }]);
+    assert.deepEqual(history.filter(item => item.role === 'tool').map(item => item.tool_call_id), ['sources-again', 'premature-approval']);
+    assert.match(history.at(-1).content, /awaiting_source_choice/);
+    assert.equal(events.filter(event => event.type === 'tool_result').length, 1);
+    assert.equal(events.at(-1).type, 'tool_deferred');
+  }
+});
+
+test('explicit later operations keep their operation inputs and continue to the returned evidence', async () => {
+  const history = [{ role: 'user', content: 'Previous question' }, { role: 'assistant', content: 'Review this exact quote.' }];
+  const calls = [];
+  let turns = 0;
+  const args = { request_id: 'saved-ask-1', approval_id: 'approved-quote', question: 'Stored operation question', max_total_micro_usd: 21739, currency: 'USD' };
+  await runChat({ connection: { tools: askTools, async callTool(name, value) {
+    calls.push({ name, args: value }); return { structuredContent: { request_id: 'saved-ask-1', status: 'completed', answer: 'Returned registered profile' } };
+  } }, history, message: 'Approve this quote for 0.021739 USD.', model: 'fixture', key: 'key', emit() {},
+  fetchImpl: async () => ++turns === 1 ? sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'approved', function: { name: 'apiosk_approve', arguments: JSON.stringify(args) } }] }, finish_reason: 'tool_calls' }] }]) : final('Returned registered profile.') });
+  assert.deepEqual(calls, [{ name: 'apiosk_approve', args }]);
+  assert.equal(turns, 2);
+  assert.equal(history.at(-1).content, 'Returned registered profile.');
 });
 
 test('stopping initial discovery retains its returned request without asking the model', async () => {

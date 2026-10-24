@@ -14,6 +14,10 @@ const object = value => value && typeof value === 'object' && !Array.isArray(val
 
 export function createDevApp(config, { connectionFactory = createConnection, fetchImpl = fetch } = {}) {
   const app = express(), sessions = new Map();
+  // srcdoc can only narrow the parent CSP. Permit the exact configured live
+  // event origin and Apiosk's production aliases, never arbitrary endpoints.
+  const gatewayOrigin = new URL(config.gatewayOrigin || 'http://127.0.0.1:8082').origin;
+  const cardConnections = [...new Set([gatewayOrigin, 'https://gateway.apiosk.com', 'https://apiosk-gateway-v2.fly.dev'])].join(' ');
   let modelsCache, modelsPromise;
   const models = async () => {
     if (modelsCache && Date.now() - modelsCache.at < 300_000) return modelsCache.value;
@@ -27,7 +31,7 @@ export function createDevApp(config, { connectionFactory = createConnection, fet
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff',
       // srcdoc inherits this policy; actual card documents install a second,
       // stricter CSP and run in an opaque-origin allow-scripts sandbox.
-      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${SOURCE_LOGO_ORIGINS.join(' ')}; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` });
+      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: ${SOURCE_LOGO_ORIGINS.join(' ')}; font-src 'self' https://mcp.apiosk.com; connect-src 'self' ${cardConnections}; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'` });
     next();
   });
   app.use(express.json({ limit: '4mb' }));
@@ -126,7 +130,7 @@ export function createDevApp(config, { connectionFactory = createConnection, fet
     const session = req.devSession;
     if (session.busy || session.activeTools) return res.status(409).json({ error: 'A chat response or card operation is already running.' });
     if (!session.connection.snapshot().connected) return res.status(409).json({ error: 'Connect to the MCP server first.' });
-    if (!config.modelKey) return res.status(400).json({ error: 'Set OPENROUTER_API_KEY in mcp-2/.env.dev.local or gateway/.env, then restart this host.' });
+    if (!config.modelKey) return res.status(400).json({ error: 'Set OPENROUTER_API_KEY in mcp/.env.dev.local or gateway/.env, then restart this host.' });
     const message = req.body.message, model = req.body.model || config.defaultModel;
     if (typeof message !== 'string' || !message.trim() || message.length > 32_000) return res.status(400).json({ error: 'Enter a message of up to 32,000 characters.' });
     session.busy = true; session.controller = new AbortController();
@@ -140,7 +144,7 @@ export function createDevApp(config, { connectionFactory = createConnection, fet
       session.controller.signal.throwIfAborted();
       res.set({ 'Content-Type': 'application/x-ndjson', 'X-Accel-Buffering': 'no' }); res.flushHeaders(); streaming = true;
       await runChat({ connection: session.connection, history: session.history, pendingContext: session.pendingContext,
-      message: message.trim(), model, key: config.modelKey, signal: session.controller.signal, fetchImpl, emit, sanitize,
+      message, model, key: config.modelKey, signal: session.controller.signal, fetchImpl, emit, sanitize,
       invokeTool: (name, args, source) => invoke(session, name, args, source) });
     } catch (error) {
       const message = session.controller.signal.aborted ? 'Chat stopped. Any already-dispatched MCP operation can still finish; recover it from its card.' : sanitize(error.message);

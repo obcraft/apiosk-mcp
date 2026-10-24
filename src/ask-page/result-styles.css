@@ -1,0 +1,357 @@
+/* Literal App result typography and overlay/motion rules; App source is unchanged. */
+/* One reading scale for conversations, answers and their expanded details.
+   Scoped component rules keep provider-specific renderers on the same scale. */
+.answer-content {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+}
+
+.answer-content :where(h2, h3, h4, h5, h6):not(.text-display),
+.answer-content .answer-section-title {
+  font-size: var(--text-large);
+  line-height: var(--text-large--line-height);
+  font-weight: var(--text-large--font-weight);
+  letter-spacing: var(--text-large--letter-spacing);
+}
+
+/* A title stays with its description, including inside space-y layouts. */
+.answer-content :where(h2, h3, h4, h5, h6):not(.text-display):has(+ :where(p, ul, ol, dl)) {
+  margin-block-end: 0;
+}
+.answer-content :where(h2, h3, h4, h5, h6):not(.text-display) + :where(p, ul, ol, dl) {
+  margin-block-start: 0.25rem;
+}
+
+/* Column labels use the same size as values, with real bold for hierarchy.
+   Row headers retain their normal weight, e.g. financial statement labels. */
+.answer-content thead th {
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.answer-prose > * + * {
+  margin-block-start: 0.75rem;
+}
+.answer-prose > :where(h2, h3, h4):not(:first-child) {
+  margin-block-start: 1rem;
+}
+.answer-prose > :where(h2, h3, h4) + * {
+  margin-block-start: 0.25rem;
+}
+
+
+
+@layer components {
+  @media (prefers-reduced-motion: reduce) {
+    .app-scroll-shadow > header::after { transition: none; }
+  }
+  .logo-in {
+    animation: logo-in 0.12s ease-out both;
+  }
+
+  @keyframes logo-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .row-in {
+    animation: row-in 0.36s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .answer-stale {
+    opacity: 0.45;
+    filter: saturate(0.6);
+    transition:
+      opacity 0.2s ease,
+      filter 0.2s ease;
+    pointer-events: none;
+  }
+  .answer-enter {
+    animation: answer-enter 0.48s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes answer-enter {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .sheet-scrim {
+    background: rgba(10, 11, 14, 0.4);
+    animation: sheet-fade 0.15s ease-out both;
+  }
+
+  .sheet-panel {
+    animation: sheet-slide 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .sheet-left {
+    animation: sheet-left-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .sheet-left-out {
+    animation: sheet-left-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  @keyframes sheet-left-in {
+    from { transform: translateX(-100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes sheet-left-out {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(-100%); opacity: 0; }
+  }
+  .sheet-scrim-out {
+    animation: sheet-fade-out 0.15s ease-in both;
+  }
+
+  .sheet-panel-out {
+    animation: sheet-slide-out 0.18s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+  .dialog-panel {
+    animation: dialog-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .dialog-panel-out {
+    animation: dialog-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes dialog-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px) scale(0.99);
+    }
+  }
+  @media (max-width: 639px) {
+    .dialog-draggable-layer > :is(.sheet-scrim, .sheet-scrim-out) {
+      background: rgb(10 11 14 / calc(0.4 * var(--sheet-dim, 1)));
+      transition: background-color 0.3s ease-out;
+    }
+
+    .dialog-draggable-layer:has(> [data-sheet-drag="active"]) > .sheet-scrim {
+      transition: none;
+    }
+
+    .dialog-draggable {
+      /* The app-content width is useful on desktop; a phone sheet meets the edges. */
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .dialog-draggable.dialog-panel {
+      animation: sheet-up 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+    }
+
+    .dialog-draggable [data-dialog-drag-handle],
+    .dialog-draggable [data-dialog-header] {
+      touch-action: none;
+      user-select: none;
+      cursor: grab;
+    }
+
+    .dialog-draggable[data-sheet-drag].dialog-panel {
+      animation: none;
+      transform: translate3d(0, var(--sheet-offset, 0px), 0);
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .dialog-draggable[data-sheet-drag="active"].dialog-panel {
+      transition: none;
+      will-change: transform;
+      cursor: grabbing;
+    }
+
+    .dialog-draggable.dialog-panel-out {
+      animation: draggable-sheet-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+    }
+
+    @keyframes draggable-sheet-out {
+      from { transform: translate3d(0, var(--sheet-offset, 0px), 0); }
+      to { transform: translate3d(0, 100%, 0); }
+    }
+
+    @keyframes dialog-in {
+      from {
+        opacity: 0.4;
+        transform: translateY(100%);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    @keyframes dialog-out {
+      from {
+        opacity: 1;
+        transform: none;
+      }
+      to {
+        opacity: 0.4;
+        transform: translateY(100%);
+      }
+    }
+  }
+  @media (width < 64rem) {
+    .sheet-draggable-layer > :is(.sheet-scrim-slow, .sheet-scrim-out) {
+      background: rgb(10 11 14 / calc(0.4 * var(--sheet-dim, 1)));
+      transition: background-color 0.3s ease-out;
+    }
+
+    .sheet-draggable-layer:has(> [data-sheet-drag="active"]) > .sheet-scrim-slow {
+      transition: none;
+    }
+
+    .sheet-draggable [data-dialog-drag-handle],
+    .sheet-draggable [data-dialog-header] {
+      touch-action: none;
+      user-select: none;
+      cursor: grab;
+    }
+
+    .sheet-draggable[data-sheet-drag].sheet-up {
+      animation: none;
+      transform: translate3d(0, var(--sheet-offset, 0px), 0);
+      transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .sheet-draggable[data-sheet-drag="active"].sheet-up {
+      transition: none;
+      will-change: transform;
+      cursor: grabbing;
+    }
+
+    .sheet-draggable.sheet-up-out {
+      animation: draggable-nav-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+    }
+
+    @keyframes draggable-nav-out {
+      from { transform: translate3d(0, var(--sheet-offset, 0px), 0); }
+      to { transform: translate3d(0, 100%, 0); }
+    }
+  }
+  .sheet-up {
+    animation: sheet-up 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  .sheet-up-out {
+    animation: sheet-up-out 0.22s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+  .sheet-scrim-slow {
+    background: rgba(10, 11, 14, 0.4);
+    animation: sheet-fade 0.34s ease-out both;
+  }
+
+  @keyframes sheet-up {
+    from { transform: translateY(100%); }
+    to { transform: none; }
+  }
+
+  @keyframes sheet-up-out {
+    from { transform: none; }
+    to { transform: translateY(100%); }
+  }
+
+  @keyframes sheet-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes sheet-fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  @keyframes sheet-slide {
+    from { transform: translateX(100%); }
+    to { transform: none; }
+  }
+
+  @keyframes sheet-slide-out {
+    from { transform: none; }
+    to { transform: translateX(100%); }
+  }
+}
+.floating-surface {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--sidebar);
+  color: var(--foreground);
+  box-shadow: var(--shadow-pop);
+  outline: none;
+  transform-origin: var(--floating-origin);
+}
+.floating-surface[data-state="open"] {
+  animation: floating-open 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.floating-surface[data-state="closed"] {
+  animation: floating-close 180ms cubic-bezier(0.4, 0, 1, 1);
+  pointer-events: none;
+}
+@keyframes floating-open {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes floating-close {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ask-glow {
+    animation: none;
+    transition: none;
+    background-position: 0% 0% !important;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+@keyframes ask-typing {
+  0%, 60%, 100% { opacity: .35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+.ask-typing-dot { animation: ask-typing 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ask-composer-stack, .ask-composer { transition: none; }
+  .ask-message, .ask-typing-dot, .ask-source-panel[data-selection-required] { animation: none; }
+}

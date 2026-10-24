@@ -219,6 +219,9 @@ test('live events refresh the saved journal before exposing new action IDs', asy
   let next;
   const client = await mount('skybridge', saved, name => { if (name === 'apiosk_status' && next) saved.tasks[0].view = next; }, { EventSource });
   assert.equal(streams.length, 1);
+  const unchangedCalls = client.calls.length;
+  streams[0].listeners.get('task')({ data: JSON.stringify(initial) }); await client.pump();
+  assert.equal(client.calls.length, unchangedCalls, 'an unchanged SSE initial snapshot cannot create a status/reconnect loop');
   next = { ...initial, state: { state_ref: 'task1', revision: 2 }, status: 'needs_input', next_actions: [{ action_id: 'input2', kind: 'supply_input', label: 'Provide company.name', input_schema: { properties: { value: { type: 'string' } } } }], context_view: { worker_active: false } };
   const before = client.calls.length;
   streams[0].listeners.get('task')({ data: JSON.stringify(next) }); await client.pump();

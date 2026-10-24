@@ -1,0 +1,1409 @@
+{
+  "question": "KYB check for Mollie B.V. (KVK number 30204462): show the registered company profile and screen the company name against sanctions lists.",
+  "parsed_request": {
+    "subjects": [
+      {
+        "id": "s1",
+        "identifiers": {
+          "kvk_number": "30204462"
+        },
+        "label": "Mollie B.V.",
+        "type": "company"
+      }
+    ],
+    "capabilities": [
+      {
+        "slug": "company.profile.get",
+        "subject_id": "s1"
+      },
+      {
+        "slug": "compliance.sanctions.check",
+        "subject_id": "s1"
+      }
+    ]
+  },
+  "searches": {
+    "apiosk": {
+      "matches": [
+        {
+          "slug": "company.profile.get",
+          "query": "Company profile retrieval. Retrieve the registered company profile for the specified company. kvk number",
+          "subject_id": "s1",
+          "coinbase_status": "pending",
+          "apiosk": [
+            {
+              "origin": "apiosk",
+              "name": "KVK Business Register",
+              "source_slug": "kvk-dutch-business-register",
+              "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+              "capability": "company.registry-profile",
+              "subject_id": "s1",
+              "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+              "url": "https://developers.kvk.nl/nl/documentation",
+              "method": "GET",
+              "price": "0.076087 USD",
+              "availability": "supported",
+              "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+              "endpoint": {
+                "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+                "capability": "company.registry-profile",
+                "name": "KVK Business Register",
+                "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+                "input_values": {
+                  "company_registry.kvknummer": "30204462"
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "76087",
+                  "currency": "USDC",
+                  "provider_atomic": "66162"
+                },
+                "source": {
+                  "name": "KVK Business Register",
+                  "slug": "kvk-dutch-business-register",
+                  "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+                  "url": "https://developers.kvk.nl/nl/documentation"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "KVK Business Register",
+              "source_slug": "kvk-dutch-business-register",
+              "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+              "capability": "company_registry.lookup",
+              "subject_id": "s1",
+              "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+              "url": "https://developers.kvk.nl/nl/documentation",
+              "method": "GET",
+              "price": "0.076087 USD",
+              "availability": "supported",
+              "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+              "endpoint": {
+                "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+                "capability": "company_registry.lookup",
+                "name": "KVK Business Register",
+                "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+                "input_values": {
+                  "company_registry.kvknummer": "30204462"
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "76087",
+                  "currency": "USDC",
+                  "provider_atomic": "66162"
+                },
+                "source": {
+                  "name": "KVK Business Register",
+                  "slug": "kvk-dutch-business-register",
+                  "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+                  "url": "https://developers.kvk.nl/nl/documentation"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "Overheid.io Public Data",
+              "source_slug": "overheid-io",
+              "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+              "capability": "company_registry.search",
+              "subject_id": "s1",
+              "endpoint_id": "7e58d830-1e94-41ff-9809-66552e9bc431",
+              "url": "https://overheid.io/documentatie/",
+              "method": "GET",
+              "price": "0.057500 USD",
+              "availability": "supported",
+              "logo_url": "https://overheid.io/apple-touch-icon.png",
+              "endpoint": {
+                "endpoint_id": "7e58d830-1e94-41ff-9809-66552e9bc431",
+                "capability": "company_registry.search",
+                "name": "Overheid.io Public Data",
+                "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+                "input_values": {
+                  "company.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "57500",
+                  "currency": "USDC",
+                  "provider_atomic": "50000"
+                },
+                "source": {
+                  "name": "Overheid.io Public Data",
+                  "slug": "overheid-io",
+                  "logo_url": "https://overheid.io/apple-touch-icon.png",
+                  "url": "https://overheid.io/documentatie/"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "Overheid.io Public Data",
+              "source_slug": "overheid-io",
+              "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+              "capability": "company_registry.lookup",
+              "subject_id": "s1",
+              "endpoint_id": "e7b4647f-f2aa-481e-b613-9ffbf4cad6fd",
+              "url": "https://overheid.io/documentatie/",
+              "method": "GET",
+              "price": "0.086250 USD",
+              "availability": "supported",
+              "logo_url": "https://overheid.io/apple-touch-icon.png",
+              "endpoint": {
+                "endpoint_id": "e7b4647f-f2aa-481e-b613-9ffbf4cad6fd",
+                "capability": "company_registry.lookup",
+                "name": "Overheid.io Public Data",
+                "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+                "input_values": {
+                  "company.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "86250",
+                  "currency": "USDC",
+                  "provider_atomic": "75000"
+                },
+                "source": {
+                  "name": "Overheid.io Public Data",
+                  "slug": "overheid-io",
+                  "logo_url": "https://overheid.io/apple-touch-icon.png",
+                  "url": "https://overheid.io/documentatie/"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "Sirenic",
+              "source_slug": "sirenic",
+              "description": "Search European companies across official registers (unified schema) Preserve provenance states, partial coverage, financial quality flags and nulls; null never means zero.",
+              "capability": "company.eu-registry-search",
+              "subject_id": "s1",
+              "endpoint_id": "0e49f48b-ed5f-4f4c-95a3-aa672b875738",
+              "url": "https://api.sirenic.eu/openapi.json",
+              "method": "GET",
+              "price": "0.003450 USD",
+              "availability": "supported",
+              "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+              "endpoint": {
+                "endpoint_id": "0e49f48b-ed5f-4f4c-95a3-aa672b875738",
+                "capability": "company.eu-registry-search",
+                "name": "Sirenic",
+                "description": "Search European companies across official registers (unified schema) Preserve provenance states, partial coverage, financial quality flags and nulls; null never means zero.",
+                "input_values": {
+                  "company.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "3450",
+                  "currency": "USDC",
+                  "provider_atomic": "3000"
+                },
+                "source": {
+                  "name": "Sirenic",
+                  "slug": "sirenic",
+                  "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+                  "url": "https://api.sirenic.eu/openapi.json"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "Sirenic",
+              "source_slug": "sirenic",
+              "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+              "capability": "company.registry-profile",
+              "subject_id": "s1",
+              "endpoint_id": "4e02bf35-6cbd-5231-88f7-1cf9a3893d7d",
+              "url": "https://api.sirenic.eu/openapi.json",
+              "method": "GET",
+              "price": "0.011500 USD",
+              "availability": "supported",
+              "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+              "endpoint": {
+                "endpoint_id": "4e02bf35-6cbd-5231-88f7-1cf9a3893d7d",
+                "capability": "company.registry-profile",
+                "name": "Sirenic",
+                "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+                "input_values": {
+                  "company.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "11500",
+                  "currency": "USDC",
+                  "provider_atomic": "10000"
+                },
+                "source": {
+                  "name": "Sirenic",
+                  "slug": "sirenic",
+                  "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+                  "url": "https://api.sirenic.eu/openapi.json"
+                }
+              }
+            }
+          ],
+          "coinbase": []
+        },
+        {
+          "slug": "compliance.sanctions.check",
+          "query": "Sanctions screening. Screen the company name against sanctions lists. company name",
+          "subject_id": "s1",
+          "coinbase_status": "pending",
+          "apiosk": [
+            {
+              "origin": "apiosk",
+              "name": "OpenSanctions",
+              "source_slug": "opensanctions",
+              "description": "Screen a Company against OpenSanctions sanctions, PEP and watchlists; return candidate matches, not a definitive legal verdict.",
+              "capability": "company.sanctions-screen",
+              "subject_id": "s1",
+              "endpoint_id": "1736cb8a-8611-4ecd-b849-3cdb726e5b3f",
+              "url": "https://www.opensanctions.org/docs/api/",
+              "method": "POST",
+              "price": "0.108696 USD",
+              "availability": "supported",
+              "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/images.jpeg",
+              "endpoint": {
+                "endpoint_id": "1736cb8a-8611-4ecd-b849-3cdb726e5b3f",
+                "capability": "company.sanctions-screen",
+                "name": "OpenSanctions",
+                "description": "Screen a Company against OpenSanctions sanctions, PEP and watchlists; return candidate matches, not a definitive legal verdict.",
+                "input_values": {
+                  "company.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "108696",
+                  "currency": "USDC",
+                  "provider_atomic": "94518"
+                },
+                "source": {
+                  "name": "OpenSanctions",
+                  "slug": "opensanctions",
+                  "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/images.jpeg",
+                  "url": "https://www.opensanctions.org/docs/api/"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "CompliancePulse",
+              "source_slug": "compliancepulse",
+              "description": "Is this person or company sanctioned? Screens a name against the live US Treasury OFAC SDN and Consolidated (non-SDN) lists — sanctions screening, watchlist check, KYC/AML pre-check, counterparty screening before a payment. Fuzzy-matches primary names AND every OFAC alias, so transliteration and word-order variants still hit. Deterministic: no LLM. Returns official OFAC rows verbatim (programs, SD",
+              "capability": "operation.compliancepulse.get-api-screen-sanctions-96e543e5",
+              "subject_id": "s1",
+              "endpoint_id": "96e543e5-6e38-4fe2-818c-e6b2ea6064ab",
+              "url": "https://compliancepulse.theaslangroupllc.com/llms.txt",
+              "method": "GET",
+              "price": "0.023000 USD",
+              "availability": "supported",
+              "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+              "endpoint": {
+                "endpoint_id": "96e543e5-6e38-4fe2-818c-e6b2ea6064ab",
+                "capability": "operation.compliancepulse.get-api-screen-sanctions-96e543e5",
+                "name": "CompliancePulse",
+                "description": "Is this person or company sanctioned? Screens a name against the live US Treasury OFAC SDN and Consolidated (non-SDN) lists — sanctions screening, watchlist check, KYC/AML pre-check, counterparty screening before a payment. Fuzzy-matches primary names AND every OFAC alias, so transliteration and word-order variants still hit. Deterministic: no LLM. Returns official OFAC rows verbatim (programs, SD",
+                "input_values": {
+                  "source_input.e96e543e56e384fe2818ce6b2ea6064ab.name": "Mollie B.V."
+                },
+                "missing_inputs": [],
+                "price": {
+                  "buyer_atomic": "23000",
+                  "currency": "USDC",
+                  "provider_atomic": "20000"
+                },
+                "source": {
+                  "name": "CompliancePulse",
+                  "slug": "compliancepulse",
+                  "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+                  "url": "https://compliancepulse.theaslangroupllc.com/llms.txt"
+                }
+              }
+            },
+            {
+              "origin": "apiosk",
+              "name": "TradePulse",
+              "source_slug": "tradepulse",
+              "description": "Sanctions and trade restriction screening for trade and compliance agents. Screens against OFAC, EU, UN, and UK lists.",
+              "capability": "operation.tradepulse.get-api-trade-sanctions-25c5f48c",
+              "subject_id": "s1",
+              "endpoint_id": "25c5f48c-43d8-4d9a-980e-a9fcb9c7fec2",
+              "url": "https://tradepulse.theaslangroupllc.com/llms.txt",
+              "method": "GET",
+              "price": "0.138000 USD",
+              "availability": "unverified",
+              "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+              "endpoint": {
+                "endpoint_id": "25c5f48c-43d8-4d9a-980e-a9fcb9c7fec2",
+                "capability": "operation.tradepulse.get-api-trade-sanctions-25c5f48c",
+                "name": "TradePulse",
+                "description": "Sanctions and trade restriction screening for trade and compliance agents. Screens against OFAC, EU, UN, and UK lists.",
+                "input_values": {},
+                "missing_inputs": [
+                  "source_input.e25c5f48c43d84d9a980ea9fcb9c7fec2.entity"
+                ],
+                "price": {
+                  "buyer_atomic": "138000",
+                  "currency": "USDC",
+                  "provider_atomic": "120000"
+                },
+                "source": {
+                  "name": "TradePulse",
+                  "slug": "tradepulse",
+                  "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+                  "url": "https://tradepulse.theaslangroupllc.com/llms.txt"
+                }
+              }
+            }
+          ],
+          "coinbase": []
+        }
+      ]
+    },
+    "coinbase": {
+      "matches": [
+        {
+          "slug": "company.profile.get",
+          "query": "Company profile retrieval. Retrieve the registered company profile for the specified company. kvk number",
+          "subject_id": "s1",
+          "coinbase_status": "complete",
+          "apiosk": [],
+          "coinbase": []
+        },
+        {
+          "slug": "compliance.sanctions.check",
+          "query": "Sanctions screening. Screen the company name against sanctions lists. company name",
+          "subject_id": "s1",
+          "coinbase_status": "complete",
+          "apiosk": [],
+          "coinbase": [
+            {
+              "origin": "coinbase",
+              "name": "OFAC Sanctions Name Screen",
+              "source_slug": null,
+              "description": "Screen a person or company name against the US Treasury OFAC SDN list including aliases, with fuzzy matching: match score, entity type, sanctions programs and remarks. Use for KYC, payouts and onboarding.",
+              "capability": null,
+              "subject_id": "s1",
+              "endpoint_id": null,
+              "url": "https://bess-x402.onrender.com/v1/compliance/sanctions-name",
+              "method": "GET",
+              "price": "0.004600 USD",
+              "availability": "discovery_only"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "source_options": [
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company_registry.kvknummer": "30204462"
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "KVK Business Register",
+        "source_slug": "kvk-dutch-business-register",
+        "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+        "capability": "company.registry-profile",
+        "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+        "url": "https://developers.kvk.nl/nl/documentation",
+        "method": "GET",
+        "price": "0.076087 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+        "capability": "company.registry-profile",
+        "name": "KVK Business Register",
+        "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+        "input_values": {
+          "company_registry.kvknummer": "30204462"
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "76087",
+          "currency": "USDC",
+          "provider_atomic": "66162"
+        },
+        "source": {
+          "name": "KVK Business Register",
+          "slug": "kvk-dutch-business-register",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+          "url": "https://developers.kvk.nl/nl/documentation"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company_registry.kvknummer": "30204462"
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "KVK Business Register",
+        "source_slug": "kvk-dutch-business-register",
+        "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+        "capability": "company_registry.lookup",
+        "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+        "url": "https://developers.kvk.nl/nl/documentation",
+        "method": "GET",
+        "price": "0.076087 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "b050c654-284a-49e8-a7ca-0bfca565816e",
+        "capability": "company_registry.lookup",
+        "name": "KVK Business Register",
+        "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+        "input_values": {
+          "company_registry.kvknummer": "30204462"
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "76087",
+          "currency": "USDC",
+          "provider_atomic": "66162"
+        },
+        "source": {
+          "name": "KVK Business Register",
+          "slug": "kvk-dutch-business-register",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+          "url": "https://developers.kvk.nl/nl/documentation"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "Overheid.io Public Data",
+        "source_slug": "overheid-io",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "capability": "company_registry.search",
+        "endpoint_id": "7e58d830-1e94-41ff-9809-66552e9bc431",
+        "url": "https://overheid.io/documentatie/",
+        "method": "GET",
+        "price": "0.057500 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "7e58d830-1e94-41ff-9809-66552e9bc431",
+        "capability": "company_registry.search",
+        "name": "Overheid.io Public Data",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "57500",
+          "currency": "USDC",
+          "provider_atomic": "50000"
+        },
+        "source": {
+          "name": "Overheid.io Public Data",
+          "slug": "overheid-io",
+          "logo_url": "https://overheid.io/apple-touch-icon.png",
+          "url": "https://overheid.io/documentatie/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company_registry.openkvk_slug"
+      ],
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "Overheid.io Public Data",
+        "source_slug": "overheid-io",
+        "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+        "capability": "company_registry.lookup",
+        "endpoint_id": "e7b4647f-f2aa-481e-b613-9ffbf4cad6fd",
+        "url": "https://overheid.io/documentatie/",
+        "method": "GET",
+        "price": "0.086250 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "e7b4647f-f2aa-481e-b613-9ffbf4cad6fd",
+        "capability": "company_registry.lookup",
+        "name": "Overheid.io Public Data",
+        "description": "Retrieve the complete official registration record for one company, including names, activities, legal form, addresses and register identifiers.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "86250",
+          "currency": "USDC",
+          "provider_atomic": "75000"
+        },
+        "source": {
+          "name": "Overheid.io Public Data",
+          "slug": "overheid-io",
+          "logo_url": "https://overheid.io/apple-touch-icon.png",
+          "url": "https://overheid.io/documentatie/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "Sirenic",
+        "source_slug": "sirenic",
+        "description": "Search European companies across official registers (unified schema) Preserve provenance states, partial coverage, financial quality flags and nulls; null never means zero.",
+        "capability": "company.eu-registry-search",
+        "endpoint_id": "0e49f48b-ed5f-4f4c-95a3-aa672b875738",
+        "url": "https://api.sirenic.eu/openapi.json",
+        "method": "GET",
+        "price": "0.003450 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "0e49f48b-ed5f-4f4c-95a3-aa672b875738",
+        "capability": "company.eu-registry-search",
+        "name": "Sirenic",
+        "description": "Search European companies across official registers (unified schema) Preserve provenance states, partial coverage, financial quality flags and nulls; null never means zero.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "3450",
+          "currency": "USDC",
+          "provider_atomic": "3000"
+        },
+        "source": {
+          "name": "Sirenic",
+          "slug": "sirenic",
+          "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+          "url": "https://api.sirenic.eu/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company.country_code",
+        "company.registration.eu.national_id"
+      ],
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "Sirenic",
+        "source_slug": "sirenic",
+        "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+        "capability": "company.registry-profile",
+        "endpoint_id": "4e02bf35-6cbd-5231-88f7-1cf9a3893d7d",
+        "url": "https://api.sirenic.eu/openapi.json",
+        "method": "GET",
+        "price": "0.011500 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "4e02bf35-6cbd-5231-88f7-1cf9a3893d7d",
+        "capability": "company.registry-profile",
+        "name": "Sirenic",
+        "description": "Retrieve the official registration record for a company from a national business register: statutory and trade names, registered activities (SBI codes), employee counts, legal form, registration date, addresses, website and branches. The authoritative record as filed with the chamber of commerce, as opposed to a scraped or inferred firmographic profile. Dutch Handelsregister (KVK) coverage: basisp",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "11500",
+          "currency": "USDC",
+          "provider_atomic": "10000"
+        },
+        "source": {
+          "name": "Sirenic",
+          "slug": "sirenic",
+          "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+          "url": "https://api.sirenic.eu/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "OpenSanctions",
+        "source_slug": "opensanctions",
+        "description": "Screen a Company against OpenSanctions sanctions, PEP and watchlists; return candidate matches, not a definitive legal verdict.",
+        "capability": "company.sanctions-screen",
+        "endpoint_id": "1736cb8a-8611-4ecd-b849-3cdb726e5b3f",
+        "url": "https://www.opensanctions.org/docs/api/",
+        "method": "POST",
+        "price": "0.108696 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "1736cb8a-8611-4ecd-b849-3cdb726e5b3f",
+        "capability": "company.sanctions-screen",
+        "name": "OpenSanctions",
+        "description": "Screen a Company against OpenSanctions sanctions, PEP and watchlists; return candidate matches, not a definitive legal verdict.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "108696",
+          "currency": "USDC",
+          "provider_atomic": "94518"
+        },
+        "source": {
+          "name": "OpenSanctions",
+          "slug": "opensanctions",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/images.jpeg",
+          "url": "https://www.opensanctions.org/docs/api/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "source_input.e96e543e56e384fe2818ce6b2ea6064ab.name": "Mollie B.V."
+      },
+      "reason": "Matches your question",
+      "source": {
+        "origin": "apiosk",
+        "name": "CompliancePulse",
+        "source_slug": "compliancepulse",
+        "description": "Is this person or company sanctioned? Screens a name against the live US Treasury OFAC SDN and Consolidated (non-SDN) lists — sanctions screening, watchlist check, KYC/AML pre-check, counterparty screening before a payment. Fuzzy-matches primary names AND every OFAC alias, so transliteration and word-order variants still hit. Deterministic: no LLM. Returns official OFAC rows verbatim (programs, SD",
+        "capability": "operation.compliancepulse.get-api-screen-sanctions-96e543e5",
+        "endpoint_id": "96e543e5-6e38-4fe2-818c-e6b2ea6064ab",
+        "url": "https://compliancepulse.theaslangroupllc.com/llms.txt",
+        "method": "GET",
+        "price": "0.023000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "96e543e5-6e38-4fe2-818c-e6b2ea6064ab",
+        "capability": "operation.compliancepulse.get-api-screen-sanctions-96e543e5",
+        "name": "CompliancePulse",
+        "description": "Is this person or company sanctioned? Screens a name against the live US Treasury OFAC SDN and Consolidated (non-SDN) lists — sanctions screening, watchlist check, KYC/AML pre-check, counterparty screening before a payment. Fuzzy-matches primary names AND every OFAC alias, so transliteration and word-order variants still hit. Deterministic: no LLM. Returns official OFAC rows verbatim (programs, SD",
+        "input_values": {
+          "source_input.e96e543e56e384fe2818ce6b2ea6064ab.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "23000",
+          "currency": "USDC",
+          "provider_atomic": "20000"
+        },
+        "source": {
+          "name": "CompliancePulse",
+          "slug": "compliancepulse",
+          "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+          "url": "https://compliancepulse.theaslangroupllc.com/llms.txt"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "crunchbase.entity_autocomplete_query": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Crunchbase",
+        "source_slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+        "description": "Find official company identities. Search official Crunchbase names and resolve company, people, location or category identifiers. Returns profile URLs and descriptions; resolve ambiguous matches before fetching a profile.",
+        "capability": "company.crunchbase-official-search",
+        "endpoint_id": "6558d1c2-efdb-493a-939b-1aba3e88e520",
+        "url": "https://data.crunchbase.com/docs/tool-reference",
+        "method": "POST",
+        "price": "0.054347 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "6558d1c2-efdb-493a-939b-1aba3e88e520",
+        "capability": "company.crunchbase-official-search",
+        "name": "Crunchbase",
+        "description": "Find official company identities. Search official Crunchbase names and resolve company, people, location or category identifiers. Returns profile URLs and descriptions; resolve ambiguous matches before fetching a profile.",
+        "input_values": {
+          "crunchbase.entity_autocomplete_limit": 10,
+          "crunchbase.entity_autocomplete_query": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "54347",
+          "currency": "USDC",
+          "provider_atomic": "47258"
+        },
+        "source": {
+          "name": "Crunchbase",
+          "slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+          "logo_url": "https://www.crunchbase.com/favicon.ico",
+          "url": "https://data.crunchbase.com/docs/tool-reference"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "GLEIF",
+        "source_slug": "gleif",
+        "description": "Search the global GLEIF Legal Entity Identifier dataset for a company or other legal entity by name, optionally narrowed by country or entity status. Returns matching LEIs and canonical legal-entity records rather than scraped firmographic guesses.",
+        "capability": "company.legal-entity-search",
+        "endpoint_id": "b2738673-7f30-4c6c-a962-cb83fc71f7b0",
+        "url": "https://www.gleif.org/en/lei-data/gleif-api",
+        "method": "GET",
+        "price": "0.054348 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "b2738673-7f30-4c6c-a962-cb83fc71f7b0",
+        "capability": "company.legal-entity-search",
+        "name": "GLEIF",
+        "description": "Search the global GLEIF Legal Entity Identifier dataset for a company or other legal entity by name, optionally narrowed by country or entity status. Returns matching LEIs and canonical legal-entity records rather than scraped firmographic guesses.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "54348",
+          "currency": "USDC",
+          "provider_atomic": "47259"
+        },
+        "source": {
+          "name": "GLEIF",
+          "slug": "gleif",
+          "logo_url": "https://www.gleif.org/favicon.svg",
+          "url": "https://www.gleif.org/en/lei-data/gleif-api"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "source_input.e22c6c82933545999a55d64ac65128077.query": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "OpenWeb Ninja",
+        "source_slug": "openwebninja",
+        "description": "Search Glassdoor employers by company name, returning employee ratings, review counts, company descriptions and profile links. Results describe employers, not individual branch locations.",
+        "capability": "operation.openwebninja.get-realtime-glassdoor-data-company-search-22c6c829",
+        "endpoint_id": "22c6c829-3354-5999-a55d-64ac65128077",
+        "url": "https://x402.openwebninja.com/llms.txt",
+        "method": "GET",
+        "price": "0.003450 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "22c6c829-3354-5999-a55d-64ac65128077",
+        "capability": "operation.openwebninja.get-realtime-glassdoor-data-company-search-22c6c829",
+        "name": "OpenWeb Ninja",
+        "description": "Search Glassdoor employers by company name, returning employee ratings, review counts, company descriptions and profile links. Results describe employers, not individual branch locations.",
+        "input_values": {
+          "source_input.e22c6c82933545999a55d64ac65128077.query": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "3450",
+          "currency": "USDC",
+          "provider_atomic": "3000"
+        },
+        "source": {
+          "name": "OpenWeb Ninja",
+          "slug": "openwebninja",
+          "logo_url": "https://www.openwebninja.com/openwebninja.png",
+          "url": "https://x402.openwebninja.com/llms.txt"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "StableEnrich",
+        "source_slug": "stableenrich",
+        "description": "Get a best-match CompanyEnrich profile by company name; verify its returned name and domain before reusing it.",
+        "capability": "company.enrich-by-name",
+        "endpoint_id": "c6f67942-288f-4500-8418-3eede3a6eacd",
+        "url": "https://stableenrich.dev/openapi.json",
+        "method": "POST",
+        "price": "0.069000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "c6f67942-288f-4500-8418-3eede3a6eacd",
+        "capability": "company.enrich-by-name",
+        "name": "StableEnrich",
+        "description": "Get a best-match CompanyEnrich profile by company name; verify its returned name and domain before reusing it.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "69000",
+          "currency": "USDC",
+          "provider_atomic": "60000"
+        },
+        "source": {
+          "name": "StableEnrich",
+          "slug": "stableenrich",
+          "logo_url": "https://stableenrich.dev/favicon.ico",
+          "url": "https://stableenrich.dev/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "source_input.ec5383313f36e495499f30c0be7d16aa6.company": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "FilingsPulse",
+        "source_slug": "filingspulse",
+        "description": "Eight quarters of a US public company's reported fundamentals, straight from SEC XBRL. Answers \"Apple revenue last 8 quarters\", \"is NVDA net income growing\", \"MSFT EPS trend\". Revenue, net income, diluted EPS per quarter with computed YoY changes and the exact XBRL tag used — every number verbatim from data.sec.gov companyfacts, nothing modeled. Accepts ticker, company name, or CIK. No LLM, no key",
+        "capability": "operation.filingspulse.get-api-filings-quarterly-c5383313",
+        "endpoint_id": "c5383313-f36e-4954-99f3-0c0be7d16aa6",
+        "url": "https://filingspulse.theaslangroupllc.com/llms.txt",
+        "method": "GET",
+        "price": "0.023000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "c5383313-f36e-4954-99f3-0c0be7d16aa6",
+        "capability": "operation.filingspulse.get-api-filings-quarterly-c5383313",
+        "name": "FilingsPulse",
+        "description": "Eight quarters of a US public company's reported fundamentals, straight from SEC XBRL. Answers \"Apple revenue last 8 quarters\", \"is NVDA net income growing\", \"MSFT EPS trend\". Revenue, net income, diluted EPS per quarter with computed YoY changes and the exact XBRL tag used — every number verbatim from data.sec.gov companyfacts, nothing modeled. Accepts ticker, company name, or CIK. No LLM, no key",
+        "input_values": {
+          "source_input.ec5383313f36e495499f30c0be7d16aa6.company": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "23000",
+          "currency": "USDC",
+          "provider_atomic": "20000"
+        },
+        "source": {
+          "name": "FilingsPulse",
+          "slug": "filingspulse",
+          "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+          "url": "https://filingspulse.theaslangroupllc.com/llms.txt"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company_intel.input.brand"
+      ],
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "ESGPulse",
+        "source_slug": "esgpulse",
+        "description": "Bedrijfsinformatie: toetsen. Zoekwoorden: apparel, availability, bcorp, beauty, blocking, bunny, certification, certifications, child, chocolate, clearance, cobalt.",
+        "capability": "company_intel.check",
+        "endpoint_id": "d523766f-2503-4bb5-a1bc-2a3bcb6cafb1",
+        "url": "https://esgpulse.theaslangroupllc.com/llms.txt",
+        "method": "GET",
+        "price": "0.230000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "d523766f-2503-4bb5-a1bc-2a3bcb6cafb1",
+        "capability": "company_intel.check",
+        "name": "ESGPulse",
+        "description": "Bedrijfsinformatie: toetsen. Zoekwoorden: apparel, availability, bcorp, beauty, blocking, bunny, certification, certifications, child, chocolate, clearance, cobalt.",
+        "input_values": {},
+        "missing_inputs": [
+          "company_intel.input.brand"
+        ],
+        "price": {
+          "buyer_atomic": "230000",
+          "currency": "USDC",
+          "provider_atomic": "200000"
+        },
+        "source": {
+          "name": "ESGPulse",
+          "slug": "esgpulse",
+          "logo_url": "https://pulse.theaslangroupllc.com/favicon.svg",
+          "url": "https://esgpulse.theaslangroupllc.com/llms.txt"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Overheid.io Public Data",
+        "source_slug": "overheid-io",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "capability": "company_registry.search",
+        "endpoint_id": "87098250-cb71-44af-9b12-cd4c5f68f1cb",
+        "url": "https://overheid.io/documentatie/",
+        "method": "GET",
+        "price": "0.057500 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "87098250-cb71-44af-9b12-cd4c5f68f1cb",
+        "capability": "company_registry.search",
+        "name": "Overheid.io Public Data",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "57500",
+          "currency": "USDC",
+          "provider_atomic": "50000"
+        },
+        "source": {
+          "name": "Overheid.io Public Data",
+          "slug": "overheid-io",
+          "logo_url": "https://overheid.io/apple-touch-icon.png",
+          "url": "https://overheid.io/documentatie/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Sirenic",
+        "source_slug": "sirenic",
+        "description": "EU financial authorisation lookup in the official ESMA Registers: search ~14,000 MiFID-regulated entities across the EU/EEA (investment firms, UCITS/AIFM managers) by name or LEI — authorisation status of the regulated entity, home and host member states, competent authority, authorisation dates. One integration covers all 27+ countries of Europe: an investment firm and regulated entity KYB check ",
+        "capability": "company.sirenic-eu-agrements",
+        "endpoint_id": "05ee7c8d-43d3-5573-8550-88a27302e32e",
+        "url": "https://api.sirenic.eu/openapi.json",
+        "method": "GET",
+        "price": "0.011500 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "05ee7c8d-43d3-5573-8550-88a27302e32e",
+        "capability": "company.sirenic-eu-agrements",
+        "name": "Sirenic",
+        "description": "EU financial authorisation lookup in the official ESMA Registers: search ~14,000 MiFID-regulated entities across the EU/EEA (investment firms, UCITS/AIFM managers) by name or LEI — authorisation status of the regulated entity, home and host member states, competent authority, authorisation dates. One integration covers all 27+ countries of Europe: an investment firm and regulated entity KYB check ",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "11500",
+          "currency": "USDC",
+          "provider_atomic": "10000"
+        },
+        "source": {
+          "name": "Sirenic",
+          "slug": "sirenic",
+          "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+          "url": "https://api.sirenic.eu/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "OpenSanctions",
+        "source_slug": "opensanctions",
+        "description": "Search OpenSanctions watchlists by company name; return candidates with source datasets.",
+        "capability": "company.watchlist-search",
+        "endpoint_id": "acd906d7-1a9d-4ac7-b949-a163fe08c678",
+        "url": "https://www.opensanctions.org/docs/api/",
+        "method": "GET",
+        "price": "0.097826 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "acd906d7-1a9d-4ac7-b949-a163fe08c678",
+        "capability": "company.watchlist-search",
+        "name": "OpenSanctions",
+        "description": "Search OpenSanctions watchlists by company name; return candidates with source datasets.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "97826",
+          "currency": "USDC",
+          "provider_atomic": "85066"
+        },
+        "source": {
+          "name": "OpenSanctions",
+          "slug": "opensanctions",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/images.jpeg",
+          "url": "https://www.opensanctions.org/docs/api/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.crunchbase_query": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Crunchbase",
+        "source_slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+        "description": "Find companies on Crunchbase by name and return short company descriptions and profile links. A name can match several different companies; this is not a complete company profile.",
+        "capability": "company.crunchbase-search",
+        "endpoint_id": "8f4e21d7-6c40-57be-8c8e-a582f30327f8",
+        "url": "https://docs.api.market/api-product-docs/magicapi/crunchbase-api",
+        "method": "POST",
+        "price": "0.100000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "8f4e21d7-6c40-57be-8c8e-a582f30327f8",
+        "capability": "company.crunchbase-search",
+        "name": "Crunchbase",
+        "description": "Find companies on Crunchbase by name and return short company descriptions and profile links. A name can match several different companies; this is not a complete company profile.",
+        "input_values": {
+          "company.crunchbase_query": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "100000",
+          "currency": "USDC",
+          "provider_atomic": "86956"
+        },
+        "source": {
+          "name": "Crunchbase",
+          "slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+          "logo_url": "https://www.crunchbase.com/favicon.ico",
+          "url": "https://docs.api.market/api-product-docs/magicapi/crunchbase-api"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company.registration.lei"
+      ],
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "GLEIF",
+        "source_slug": "gleif",
+        "description": "Retrieve GLEIF direct-children for an exact LEI. Accounting consolidation relationships, not a complete UBO register.",
+        "capability": "company.direct-children",
+        "endpoint_id": "964099d5-a445-540f-8966-52ca85aeabd6",
+        "url": "https://www.gleif.org/en/lei-data/gleif-api",
+        "method": "GET",
+        "price": "0.054348 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "964099d5-a445-540f-8966-52ca85aeabd6",
+        "capability": "company.direct-children",
+        "name": "GLEIF",
+        "description": "Retrieve GLEIF direct-children for an exact LEI. Accounting consolidation relationships, not a complete UBO register.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "54348",
+          "currency": "USDC",
+          "provider_atomic": "47259"
+        },
+        "source": {
+          "name": "GLEIF",
+          "slug": "gleif",
+          "logo_url": "https://www.gleif.org/favicon.svg",
+          "url": "https://www.gleif.org/en/lei-data/gleif-api"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "source_input.eeddb418e721e589b9ea21083dee98afd.query": "Mollie B.V."
+      },
+      "missing_inputs": [
+        "source_input.eeddb418e721e589b9ea21083dee98afd.location"
+      ],
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "OpenWeb Ninja",
+        "source_slug": "openwebninja",
+        "description": "Search Yelp businesses by name and location, returning customer ratings, review counts, business details and listing links. These ratings describe individual business locations, not employer satisfaction.",
+        "capability": "operation.openwebninja.get-yelp-business-data-business-search-eddb418e",
+        "endpoint_id": "eddb418e-721e-589b-9ea2-1083dee98afd",
+        "url": "https://x402.openwebninja.com/llms.txt",
+        "method": "GET",
+        "price": "0.003450 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "eddb418e-721e-589b-9ea2-1083dee98afd",
+        "capability": "operation.openwebninja.get-yelp-business-data-business-search-eddb418e",
+        "name": "OpenWeb Ninja",
+        "description": "Search Yelp businesses by name and location, returning customer ratings, review counts, business details and listing links. These ratings describe individual business locations, not employer satisfaction.",
+        "input_values": {
+          "source_input.eeddb418e721e589b9ea21083dee98afd.query": "Mollie B.V."
+        },
+        "missing_inputs": [
+          "source_input.eeddb418e721e589b9ea21083dee98afd.location"
+        ],
+        "price": {
+          "buyer_atomic": "3450",
+          "currency": "USDC",
+          "provider_atomic": "3000"
+        },
+        "source": {
+          "name": "OpenWeb Ninja",
+          "slug": "openwebninja",
+          "logo_url": "https://www.openwebninja.com/openwebninja.png",
+          "url": "https://x402.openwebninja.com/llms.txt"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "StableEnrich",
+        "source_slug": "stableenrich",
+        "description": "Resolve a company name to matching domains; let the user choose when several companies match.",
+        "capability": "company.domain-resolution",
+        "endpoint_id": "a8ebe8c0-0e38-40f3-98ba-be80a40f7d76",
+        "url": "https://stableenrich.dev/openapi.json",
+        "method": "POST",
+        "price": "0.172500 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "a8ebe8c0-0e38-40f3-98ba-be80a40f7d76",
+        "capability": "company.domain-resolution",
+        "name": "StableEnrich",
+        "description": "Resolve a company name to matching domains; let the user choose when several companies match.",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "172500",
+          "currency": "USDC",
+          "provider_atomic": "150000"
+        },
+        "source": {
+          "name": "StableEnrich",
+          "slug": "stableenrich",
+          "logo_url": "https://stableenrich.dev/favicon.ico",
+          "url": "https://stableenrich.dev/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V.",
+        "company_registry.kvknummer": "30204462"
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "KVK Business Register",
+        "source_slug": "kvk-dutch-business-register",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "capability": "company_registry.search",
+        "endpoint_id": "46e9d53a-1942-442a-a310-5e1a6b7f8297",
+        "url": "https://developers.kvk.nl/nl/documentation",
+        "method": "GET",
+        "price": "0.021739 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "46e9d53a-1942-442a-a310-5e1a6b7f8297",
+        "capability": "company_registry.search",
+        "name": "KVK Business Register",
+        "description": "Search an official business register by company name, trade name, registration number, postcode or address and resolve the registered company identifiers.",
+        "input_values": {
+          "company.name": "Mollie B.V.",
+          "company_registry.kvknummer": "30204462"
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "21739",
+          "currency": "USDC",
+          "provider_atomic": "18903"
+        },
+        "source": {
+          "name": "KVK Business Register",
+          "slug": "kvk-dutch-business-register",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/kvk-logo.png",
+          "url": "https://developers.kvk.nl/nl/documentation"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "input_values": {
+        "company.name": "Mollie B.V."
+      },
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Sirenic",
+        "source_slug": "sirenic",
+        "description": "Matches with 0-100 confidence score and level (forte/possible/faible), matched alias, source list, regime, birth year, plus the inventory of loaded lists — each with its entry count, publication date and `precision_publication` saying whether that date is the upstream official publication or Sirenic's ingestion date (OFAC publishes none). Never a bare yes/no. Carries the common `provenance[]` enve",
+        "capability": "company.sirenic-sanctions-check",
+        "endpoint_id": "671184a2-54ab-5692-bc91-d2710b220028",
+        "url": "https://api.sirenic.eu/openapi.json",
+        "method": "GET",
+        "price": "0.023000 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "671184a2-54ab-5692-bc91-d2710b220028",
+        "capability": "company.sirenic-sanctions-check",
+        "name": "Sirenic",
+        "description": "Matches with 0-100 confidence score and level (forte/possible/faible), matched alias, source list, regime, birth year, plus the inventory of loaded lists — each with its entry count, publication date and `precision_publication` saying whether that date is the upstream official publication or Sirenic's ingestion date (OFAC publishes none). Never a bare yes/no. Carries the common `provenance[]` enve",
+        "input_values": {
+          "company.name": "Mollie B.V."
+        },
+        "missing_inputs": [],
+        "price": {
+          "buyer_atomic": "23000",
+          "currency": "USDC",
+          "provider_atomic": "20000"
+        },
+        "source": {
+          "name": "Sirenic",
+          "slug": "sirenic",
+          "logo_url": "https://app.apiosk.com/brands/sirenic.png",
+          "url": "https://api.sirenic.eu/openapi.json"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company.watchlist_entity_id"
+      ],
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "OpenSanctions",
+        "source_slug": "opensanctions",
+        "description": "Read source assertions for one OpenSanctions entity.",
+        "capability": "company.watchlist-statements",
+        "endpoint_id": "a20ff748-d3d5-4550-b413-c939929ba07e",
+        "url": "https://www.opensanctions.org/docs/api/",
+        "method": "GET",
+        "price": "0.065217 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "a20ff748-d3d5-4550-b413-c939929ba07e",
+        "capability": "company.watchlist-statements",
+        "name": "OpenSanctions",
+        "description": "Read source assertions for one OpenSanctions entity.",
+        "input_values": {},
+        "missing_inputs": [
+          "company.watchlist_entity_id"
+        ],
+        "price": {
+          "buyer_atomic": "65217",
+          "currency": "USDC",
+          "provider_atomic": "56710"
+        },
+        "source": {
+          "name": "OpenSanctions",
+          "slug": "opensanctions",
+          "logo_url": "https://api.apiosk.com/storage/v1/object/public/provider-avatars/images.jpeg",
+          "url": "https://www.opensanctions.org/docs/api/"
+        }
+      }
+    },
+    {
+      "subject_id": "s1",
+      "missing_inputs": [
+        "company.crunchbase_entity_id"
+      ],
+      "reason": "Related records for this subject",
+      "source": {
+        "origin": "apiosk",
+        "name": "Crunchbase",
+        "source_slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+        "description": "Fetch company profile, founders, employees, board members, funding rounds and investors. Retrieve one identified organization, its description, website, headquarters, headcount, founders, employee profiles, board members and advisors, funding rounds, raised amounts and investors. Returns the available public relationship cards in one company-profile call; no separate people or funding search is ne",
+        "capability": "company.crunchbase-profile",
+        "endpoint_id": "9651025a-3f42-4d86-aa83-b0a9c05e28c4",
+        "url": "https://data.crunchbase.com/docs/tool-reference",
+        "method": "POST",
+        "price": "0.054347 USD",
+        "availability": "supported"
+      },
+      "endpoint": {
+        "endpoint_id": "9651025a-3f42-4d86-aa83-b0a9c05e28c4",
+        "capability": "company.crunchbase-profile",
+        "name": "Crunchbase",
+        "description": "Fetch company profile, founders, employees, board members, funding rounds and investors. Retrieve one identified organization, its description, website, headquarters, headcount, founders, employee profiles, board members and advisors, funding rounds, raised amounts and investors. Returns the available public relationship cards in one company-profile call; no separate people or funding search is ne",
+        "input_values": {},
+        "missing_inputs": [
+          "company.crunchbase_entity_id"
+        ],
+        "price": {
+          "buyer_atomic": "54347",
+          "currency": "USDC",
+          "provider_atomic": "47258"
+        },
+        "source": {
+          "name": "Crunchbase",
+          "slug": "apimarket-magicapi-crunchbase-bbcca0a6",
+          "logo_url": "https://www.crunchbase.com/favicon.ico",
+          "url": "https://data.crunchbase.com/docs/tool-reference"
+        }
+      }
+    }
+  ]
+}

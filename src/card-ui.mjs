@@ -2,10 +2,15 @@
 // Only the protocol adapter changes: all operations go through MCP 2's durable
 // request/approval journal rather than the original server's tool signatures.
 import { gatewayV2CardHtml, gatewayV2CardMeta } from './ask-ui/gateway-v2-card.mjs';
+import { readFileSync } from 'node:fs';
+import { ASK_PAGE_BRIDGE } from './ask-page-bridge.mjs';
 
-export const CARD_URI = 'ui://apiosk/mcp-2-ask-v2.html';
-export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v2-chatgpt.html';
-export const CURRENT_CARD_COMPATIBILITY_URIS = ['ui://apiosk/mcp-2-ask-v1.html', 'ui://apiosk/mcp-2-ask-v1-chatgpt.html'];
+const ASK_PAGE_BUNDLE = readFileSync(new URL('./ask-page/bundle.js', import.meta.url), 'utf8').replace(/<\/script/gi, '<\\/script');
+const ASK_PAGE_PROPERTIES = readFileSync(new URL('./ask-page/properties.css', import.meta.url), 'utf8');
+
+export const CARD_URI = 'ui://apiosk/mcp-2-ask-v3.html';
+export const CHATGPT_CARD_URI = 'ui://apiosk/mcp-2-ask-v3-chatgpt.html';
+export const CURRENT_CARD_COMPATIBILITY_URIS = [1, 2].flatMap(version => [`ui://apiosk/mcp-2-ask-v${version}.html`, `ui://apiosk/mcp-2-ask-v${version}-chatgpt.html`]);
 export const CARD_READ_TOOL = 'apiosk_card';
 export const CARD_APPROVE_TOOL = 'apiosk_card_approve';
 export const cardToolMeta = { ui: { resourceUri: CARD_URI, visibility: ['model', 'app'] }, 'openai/outputTemplate': CHATGPT_CARD_URI,
@@ -35,8 +40,15 @@ window.apiosk.callTool=async(name,args={})=>{
 // Save live Gateway changes through the same scoped state journal before the
 // UI can act on their newer action IDs or quotes. Events themselves never buy.
 let mcp2LiveRead=null;
+const mcp2LiveVersion=data=>JSON.stringify([data?.state?.state_ref,data?.state?.revision,data?.status,
+ !!data?.context_view?.worker_active,!!data?.billing?.authorization_active,data?.billing?.total_charged,
+ data?.proposal?.quote_ref,(data?.next_actions||[]).map(action=>action.action_id),
+ (data?.context_view?.results||[]).map(result=>result.result_ref),data?.result?.result_ref]);
 async function mcp2AcceptLiveTask(next){
  if(!next?.state?.state_ref||mcp2LiveRead)return;
+ // Each signed SSE connection begins with its current snapshot. Reading that
+ // unchanged snapshot would rotate the signed URL and reconnect forever.
+ if(mcp2LiveVersion(next)===mcp2LiveVersion(output))return;
  const ref=next.state.state_ref;
  mcp2LiveRead=window.apiosk.callTool('apiosk_status',{task_ref:ref});
  try{const saved=await mcp2LiveRead;if(output?.state?.state_ref===ref)acceptResponse(saved)}
@@ -109,9 +121,11 @@ export function createLegacyCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
 
 export function createCardHtml(gatewayUrl = 'http://127.0.0.1:8082') {
   return createLegacyCardHtml(gatewayUrl)
+    .replace('</style>', () => `${ASK_PAGE_PROPERTIES}\n.card.ask-page-discovery{border:0;border-radius:0;padding:0;background:transparent}.ask-page-discovery>.shell{display:none}.ask-page-discovery>#sections{padding:0}.ask-page-mount{width:100%;min-width:0}</style>`)
+    .replace('<script>', () => `<script>window.apioskAskPageLogoOrigins=${JSON.stringify(SOURCE_LOGO_ORIGINS)};window.apioskAskPageGatewayUrl=${JSON.stringify(new URL(gatewayUrl).origin)};if(document.createElement('div').attachShadow){${ASK_PAGE_BUNDLE}}</script><script>`)
     .replace('   acceptResponse(next);\n  }catch{recover()}', '   void mcp2AcceptLiveTask(next);\n  }catch{recover()}')
     .replace('const byId=id=>', `${ADAPTER}\nconst byId=id=>`)
-    .replace('const recoveredCards=new Set();', `${BASKET_ADAPTER}\nconst recoveredCards=new Set();`);
+    .replace('const recoveredCards=new Set();', `${BASKET_ADAPTER}\n${ASK_PAGE_BRIDGE}\nconst recoveredCards=new Set();`);
 }
 
 export function legacyCardResources(gatewayUrl, { legacyUiMime = false } = {}) {

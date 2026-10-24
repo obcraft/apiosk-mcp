@@ -367,8 +367,8 @@ async function chatEvent(event) {
   }
 }
 async function sendChat(text) {
-  const message = String(text ?? $('message').value).trim();
-  if (!message) return;
+  const message = String(text ?? $('message').value);
+  if (!message.trim()) return;
   if (state.chatBusy || state.serverBusy || state.toolBusy || state.activeCardCalls || state.resetting) { toast('Wait for the current request to finish. Stopping the model keeps in-flight tool responses available.'); return; }
   if (!state.session.connected) { toast('Connect to Apiosk before sending a message.'); return; }
   if (!state.config?.modelConfigured || !state.selectedModel) { toast('Configure a model API key and choose a model. Direct tool testing is available in the inspector.'); return; }
@@ -436,8 +436,8 @@ async function sendChat(text) {
   }
 }
 async function sendCardMessage(text) {
-  const message = String(text || '').trim();
-  if (!message || message.length > 16000) throw new Error('The card follow-up must contain 1 to 16,000 characters.');
+  const message = String(text || '');
+  if (!message.trim() || message.length > 16000) throw new Error('The card follow-up must contain 1 to 16,000 characters.');
   if (!state.session.connected || !state.config?.modelConfigured || !state.selectedModel) throw new Error('Connect and configure a chat model to continue from this card.');
   if (state.resetting || state.stopping) throw new Error('The current chat is stopping. Send a follow-up after it finishes.');
   if (state.chatBusy || state.serverBusy || state.toolBusy || state.activeCardCalls) {

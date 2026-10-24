@@ -16,7 +16,13 @@ export function readConfig(inherited = process.env) {
   if (url.username || url.password || url.search || url.hash || !(url.protocol === 'https:' || url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) {
     throw new Error('MCP_DEV_URL must be HTTPS or loopback HTTP, without credentials, query or fragment.');
   }
-  return { port, origin: `http://127.0.0.1:${port}`, mcpUrl: url.href,
+  const displayGateway = new URL(env.MCP_DEV_GATEWAY_URL || env.APIOSK_GATEWAY_V2_URL ||
+    (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) ? 'http://127.0.0.1:8082' : 'https://gateway.apiosk.com'));
+  if (displayGateway.username || displayGateway.password || displayGateway.search || displayGateway.hash || displayGateway.pathname !== '/'
+    || !(displayGateway.protocol === 'https:' || displayGateway.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(displayGateway.hostname))) {
+    throw new Error('MCP_DEV_GATEWAY_URL must be an HTTPS or loopback HTTP origin without credentials.');
+  }
+  return { port, origin: `http://127.0.0.1:${port}`, mcpUrl: url.href, gatewayOrigin: displayGateway.origin,
     modelKey: env.OPENROUTER_API_KEY || gateway.OPENROUTER_API_KEY || gateway.INTENT_API_KEY || '',
     defaultModel: env.MCP_DEV_MODEL || 'openai/gpt-oss-120b',
     bearer: env.MCP_DEV_TOKEN || '', publicDir: fileURLToPath(new URL('public/', import.meta.url)) };
